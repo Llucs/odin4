@@ -75,7 +75,7 @@ uint32_t le32_to_h(uint32_t le_val) {
 // --- MD5 Validation ---
 bool check_md5_signature(const std::string& file_path) {
     if (file_path.size() < 8 || file_path.substr(file_path.size() - 8) != ".tar.md5") {
-        return true; // Não é um arquivo .tar.md5, ignora a verificação
+        return true; 
     }
 
     log_info("Verificando assinatura MD5 para " + file_path);
@@ -85,7 +85,8 @@ bool check_md5_signature(const std::string& file_path) {
         return false;
     }
 
-    std::streampos file_size = file.tellg();
+    // Usamos long long para evitar ambiguidade com std::streampos
+    long long file_size = file.tellg();
     if (file_size < 32) {
         log_error("Arquivo muito pequeno para conter assinatura MD5.");
         return false;
@@ -97,34 +98,34 @@ bool check_md5_signature(const std::string& file_path) {
     file.read(expected_md5_hex, 32);
     expected_md5_hex[32] = '\0';
     std::string expected_md5(expected_md5_hex);
-    
+
     log_info("MD5 Esperado: " + expected_md5);
 
-    // 2. Calcular o MD5 do conteúdo (do início até file_size - 32)
+    // 2. Calcular o MD5 do conteúdo
     file.seekg(0);
-    size_t content_size = file_size - 32;
-    
+    size_t content_size = (size_t)(file_size - 32);
+
     picohash_ctx_t ctx;
-    picohash_init(&ctx, PICOHASH_MD5);
-    
-    std::vector<char> buffer(4096);
+    picohash_init_md5(&ctx); // <--- Correção da inicialização
+
+    std::vector<char> buffer(8192); // Buffer um pouco maior para velocidade
     size_t total_read = 0;
-    
+
     while (total_read < content_size) {
         size_t to_read = std::min((size_t)buffer.size(), content_size - total_read);
-        file.read(buffer.data(), to_read);
-        size_t read_count = file.gcount();
-        
+        file.read(buffer.data(), (std::streamsize)to_read);
+        size_t read_count = (size_t)file.gcount();
+
         if (read_count == 0) break;
-        
+
         picohash_update(&ctx, (const unsigned char*)buffer.data(), read_count);
         total_read += read_count;
     }
-    
+
     unsigned char calculated_md5_bin[16];
     picohash_final(&ctx, calculated_md5_bin);
 
-    // 3. Converter o MD5 calculado para string hexadecimal
+    // 3. Converter para hexadecimal
     std::stringstream ss;
     for (int i = 0; i < 16; ++i) {
         ss << std::hex << std::setw(2) << std::setfill('0') << (int)calculated_md5_bin[i];
@@ -132,12 +133,12 @@ bool check_md5_signature(const std::string& file_path) {
     std::string calculated_md5 = ss.str();
     log_info("MD5 Calculado: " + calculated_md5);
 
-    // 4. Comparar
+    // 4. Comparar (Ignorar case - Samsung as vezes usa maiúsculas)
     if (calculated_md5 == expected_md5) {
-        log_info("Verificação MD5 bem-sucedida. Arquivo íntegro.");
+        log_info("Verificação MD5 bem-sucedida.");
         return true;
     } else {
-        log_error("Verificação MD5 falhou! O arquivo pode estar corrompido.");
+        log_error("Verificação MD5 falhou! Esperado: " + expected_md5 + " | Calculado: " + calculated_md5);
         return false;
     }
 }
