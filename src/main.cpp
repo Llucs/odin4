@@ -476,7 +476,7 @@ public:
         ThorPacketHeader pkt;
         pkt.packet_size = sizeof(ThorPacketHeader);
         pkt.packet_type = THOR_PACKET_DEVICE_TYPE;
-        pkt.header.packet_flags = 0;
+        pkt.packet_flags = 0;
 
         if (!send_packet(&pkt, sizeof(pkt), true)) return false;
 
