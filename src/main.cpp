@@ -886,7 +886,7 @@ void print_usage() {
     std::cout << "PATH_OF_DEVICE_B" << std::endl;
     std::cout << "$odin4 -b BL_XXXX.tar.md5 -a AP_XXXX.tar.md5 -c CP_XXXX.tar.md5 -s CSC_XXXX.tar.md5 -d PATH_OF_DEVICE_A" << std::endl;
     std::cout << std::endl;
-    std::cout << "Odin Repository: https://github.com/Llucs/odin4 << std::endl;
+    std::cout << "Odin Repository: https://github.com/Llucs/odin4" << std::endl;
 }
 
 // --- Version Info ---
