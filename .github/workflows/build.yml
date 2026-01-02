@@ -13,43 +13,49 @@ jobs:
 
       - name: Patch picohash for C++ Compatibility
         run: |
-          # Este comando aplica os casts necessários no header picohash para compilar em C++
+          # Corrige os erros de conversão de tipos no picohash.h
           sed -i 's/ptr = data;/ptr = (const unsigned char *)data;/g' lib/picohash/picohash.h
           sed -i 's/unsigned char \*digest = _digest;/unsigned char *digest = (unsigned char *)_digest;/g' lib/picohash/picohash.h
           sed -i 's/const uint8_t \*data = _data;/const uint8_t *data = (const uint8_t *)_data;/g' lib/picohash/picohash.h
           sed -i 's/unsigned char \*out = digest;/unsigned char *out = (unsigned char *)digest;/g' lib/picohash/picohash.h
           sed -i 's/const unsigned char \*in = data;/const unsigned char *in = (const unsigned char *)data;/g' lib/picohash/picohash.h
-          # Corrige os ponteiros de função
           sed -i 's/ctx->_reset = (void \*)/ctx->_reset = (void (*)(void *))/g' lib/picohash/picohash.h
           sed -i 's/ctx->_update = (void \*)/ctx->_update = (void (*)(void *, const void *, size_t))/g' lib/picohash/picohash.h
           sed -i 's/ctx->_final = (void \*)/ctx->_final = (void (*)(void *, void *))/g' lib/picohash/picohash.h
 
-        - name: Install dependencies
+      - name: Install dependencies
         run: |
-          # 1. Instala dependências básicas na arquitetura nativa (amd64)
+          # 1. Instala ferramentas nativas primeiro
           sudo apt update
           sudo apt install -y build-essential cmake zip pkg-config libusb-1.0-0-dev
 
-          # 2. Habilita suporte a ARM64
+          # 2. Adiciona arquitetura e configura repositórios de forma limpa
           sudo dpkg --add-architecture arm64
-
-          # 3. Limpa as fontes atuais para evitar conflitos de arquitetura (404 Not Found)
-          # No Ubuntu Noble, as fontes ficam em arquivos .sources
-          sudo find /etc/apt/sources.list.d/ -type f -name "*.sources" -exec sed -i 's/Architectures: amd64/Architectures: amd64/g' {} +
           
-          # 4. Adiciona o repositório correto para ARM64 (Ubuntu Ports)
-          sudo tee /etc/apt/sources.list.d/arm64.sources <<EOF
-          Types: deb
-          URIs: http://ports.ubuntu.com/ubuntu-ports
-          Suites: noble noble-updates noble-security
-          Components: main restricted universe multiverse
-          Architectures: arm64
+          # Criar uma configuração que diz ao APT para não buscar arm64 nos mirrors padrão de amd64
+          sudo tee /etc/apt/sources.list.d/arm64-ports.list <<EOF
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
           EOF
 
-          # 5. Atualiza o cache especificando apenas o que precisamos
-          sudo apt update
+          # O SEGREDO: Forçar o mirror padrão a ser apenas amd64 para evitar o erro 404
+          # Removemos a detecção automática de arquitetura do arquivo principal
+          sudo sed -i 's/deb http/deb [arch=amd64] http/g' /etc/apt/sources.list || true
+          if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+            sudo sed -i 's/Architectures: amd64 arm64/Architectures: amd64/g' /etc/apt/sources.list.d/ubuntu.sources || true
+          fi
+
+          sudo apt update || true # Ignora erros de 404 se houver, pois os pacotes virão do ports
           sudo apt install -y libusb-1.0-0-dev:arm64 gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
+      - name: Build linux-amd64
+        run: |
+          mkdir -p build_amd64 dist
+          cd build_amd64
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          make -j$(nproc)
+          cp odin4 ../dist/odin4-linux-amd64
 
       - name: Build linux-arm64
         run: |
@@ -76,5 +82,5 @@ jobs:
       - name: Add artifact link to summary
         run: |
           echo "## 🚀 Odin4 Build Finished" >> $GITHUB_STEP_SUMMARY
-          echo "Binários gerados com sucesso para AMD64 e ARM64." >> $GITHUB_STEP_SUMMARY
+          echo "Binários gerados para AMD64 e ARM64." >> $GITHUB_STEP_SUMMARY
           echo "- [Baixar Artefatos](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
