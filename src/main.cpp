@@ -319,7 +319,7 @@ public:
     }
 
     // --- Device Detection & Connection ---
-    bool open_device(const std::string& device_path = "") {
+    bool open_device(const std::string& /* device_path */ = "") {
         libusb_device **list = nullptr;
         ssize_t cnt = libusb_get_device_list(NULL, &list);
         if (cnt < 0) {
