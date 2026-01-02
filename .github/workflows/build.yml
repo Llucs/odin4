@@ -11,12 +11,28 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+            - name: Install dependencies
         run: |
           sudo apt update
           sudo apt install -y build-essential cmake zip pkg-config libusb-1.0-0-dev
-          # Adiciona suporte multi-arch para baixar a libusb de ARM64
+          
+          # 1. Adiciona a arquitetura arm64
           sudo dpkg --add-architecture arm64
+          
+          # 2. Configura os repositórios para buscar arm64 no ports.ubuntu.com
+          # Isso cria um arquivo de fontes específico para a arquitetura ARM
+          sudo tee /etc/apt/sources.list.d/arm64-ports.list <<EOF
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
+          EOF
+
+          # 3. Ajusta o arquivo principal para procurar APENAS amd64 (evita o erro 404)
+          # Note: Em runners mais novos do Ubuntu, o arquivo pode estar em /etc/apt/sources.list.d/ubuntu.sources (formato deb822)
+          # Mas este comando abaixo resolve para a maioria dos casos:
+          sudo sed -i 's/deb http/deb [arch=amd64] http/g' /etc/apt/sources.list || true
+
+          # 4. Atualiza e instala
           sudo apt update
           sudo apt install -y libusb-1.0-0-dev:arm64 gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
