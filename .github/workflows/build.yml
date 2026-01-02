@@ -24,7 +24,7 @@ jobs:
           sed -i 's/ctx->_update = (void \*)/ctx->_update = (void (*)(void *, const void *, size_t))/g' lib/picohash/picohash.h
           sed -i 's/ctx->_final = (void \*)/ctx->_final = (void (*)(void *, void *))/g' lib/picohash/picohash.h
 
-            - name: Install dependencies
+        - name: Install dependencies
         run: |
           # 1. Instala dependências básicas na arquitetura nativa (amd64)
           sudo apt update
