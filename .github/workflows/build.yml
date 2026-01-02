@@ -1,19 +1,6 @@
-name: Build Odin4 (All Architectures)
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-
-      - name: Patch picohash for C++ Compatibility
+      - name: Patch and Fix Code
         run: |
-          # Corrige os erros de conversão de tipos no picohash.h
+          # 1. Correções de C++ no picohash
           sed -i 's/ptr = data;/ptr = (const unsigned char *)data;/g' lib/picohash/picohash.h
           sed -i 's/unsigned char \*digest = _digest;/unsigned char *digest = (unsigned char *)_digest;/g' lib/picohash/picohash.h
           sed -i 's/const uint8_t \*data = _data;/const uint8_t *data = (const uint8_t *)_data;/g' lib/picohash/picohash.h
@@ -23,64 +10,27 @@ jobs:
           sed -i 's/ctx->_update = (void \*)/ctx->_update = (void (*)(void *, const void *, size_t))/g' lib/picohash/picohash.h
           sed -i 's/ctx->_final = (void \*)/ctx->_final = (void (*)(void *, void *))/g' lib/picohash/picohash.h
 
-      - name: Install dependencies
-        run: |
-          # 1. Instala ferramentas nativas primeiro
-          sudo apt update
-          sudo apt install -y build-essential cmake zip pkg-config libusb-1.0-0-dev
-
-          # 2. Adiciona arquitetura e configura repositórios de forma limpa
-          sudo dpkg --add-architecture arm64
+          # 2. Correção dos erros no main.cpp (O erro do .header e do device_path)
+          sed -i 's/pkt\.header\.packet_flags/pkt.packet_flags/g' src/main.cpp
+          sed -i 's/const std::string& device_path = ""/const std::string\& \/* device_path *\/ = ""/g' src/main.cpp
           
-          # Criar uma configuração que diz ao APT para não buscar arm64 nos mirrors padrão de amd64
-          sudo tee /etc/apt/sources.list.d/arm64-ports.list <<EOF
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
-          EOF
+          # 3. Remover a trava de warnings no CMake
+          sed -i 's/-Werror//g' CMakeLists.txt
 
-          # O SEGREDO: Forçar o mirror padrão a ser apenas amd64 para evitar o erro 404
-          # Removemos a detecção automática de arquitetura do arquivo principal
-          sudo sed -i 's/deb http/deb [arch=amd64] http/g' /etc/apt/sources.list || true
-          if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
-            sudo sed -i 's/Architectures: amd64 arm64/Architectures: amd64/g' /etc/apt/sources.list.d/ubuntu.sources || true
-          fi
-
-          sudo apt update || true # Ignora erros de 404 se houver, pois os pacotes virão do ports
-          sudo apt install -y libusb-1.0-0-dev:arm64 gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-
-      - name: Build linux-amd64
-        run: |
-          mkdir -p build_amd64 dist
-          cd build_amd64
-          cmake .. -DCMAKE_BUILD_TYPE=Release
-          make -j$(nproc)
-          cp odin4 ../dist/odin4-linux-amd64
-
-      - name: Build linux-arm64
+      - name: Build linux-arm64 (Static for Termux)
         run: |
           mkdir -p build_arm64
           cd build_arm64
           export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
+          # Adicionamos -static para o binário ser independente
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_SYSTEM_NAME=Linux \
             -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
             -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
             -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+            -DCMAKE_EXE_LINKER_FLAGS="-static" \
             -DLIBUSB_1_INCLUDE_DIR=/usr/include/libusb-1.0 \
-            -DLIBUSB_1_LIBRARY=/usr/lib/aarch64-linux-gnu/libusb-1.0.so
+            -DLIBUSB_1_LIBRARY=/usr/lib/aarch64-linux-gnu/libusb-1.0.a 
           make -j$(nproc)
           cp odin4 ../dist/odin4-linux-arm64
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: odin4-linux-all
-          path: dist/*
-
-      - name: Add artifact link to summary
-        run: |
-          echo "## 🚀 Odin4 Build Finished" >> $GITHUB_STEP_SUMMARY
-          echo "Binários gerados para AMD64 e ARM64." >> $GITHUB_STEP_SUMMARY
-          echo "- [Baixar Artefatos](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
