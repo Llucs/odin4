@@ -11,34 +11,33 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-            - name: Install dependencies
+      - name: Patch picohash for C++ Compatibility
+        run: |
+          # Este comando aplica os casts necessários no header picohash para compilar em C++
+          sed -i 's/ptr = data;/ptr = (const unsigned char *)data;/g' lib/picohash/picohash.h
+          sed -i 's/unsigned char \*digest = _digest;/unsigned char *digest = (unsigned char *)_digest;/g' lib/picohash/picohash.h
+          sed -i 's/const uint8_t \*data = _data;/const uint8_t *data = (const uint8_t *)_data;/g' lib/picohash/picohash.h
+          sed -i 's/unsigned char \*out = digest;/unsigned char *out = (unsigned char *)digest;/g' lib/picohash/picohash.h
+          sed -i 's/const unsigned char \*in = data;/const unsigned char *in = (const unsigned char *)data;/g' lib/picohash/picohash.h
+          # Corrige os ponteiros de função
+          sed -i 's/ctx->_reset = (void \*)/ctx->_reset = (void (*)(void *))/g' lib/picohash/picohash.h
+          sed -i 's/ctx->_update = (void \*)/ctx->_update = (void (*)(void *, const void *, size_t))/g' lib/picohash/picohash.h
+          sed -i 's/ctx->_final = (void \*)/ctx->_final = (void (*)(void *, void *))/g' lib/picohash/picohash.h
+
+      - name: Install dependencies
         run: |
           sudo apt update
           sudo apt install -y build-essential cmake zip pkg-config libusb-1.0-0-dev
-          
-          # 1. Adiciona a arquitetura arm64
           sudo dpkg --add-architecture arm64
-          
-          # 2. Configura os repositórios para buscar arm64 no ports.ubuntu.com
-          # Isso cria um arquivo de fontes específico para a arquitetura ARM
           sudo tee /etc/apt/sources.list.d/arm64-ports.list <<EOF
           deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
           deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
           deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
           EOF
-
-          # 3. Ajusta o arquivo principal para procurar APENAS amd64 (evita o erro 404)
-          # Note: Em runners mais novos do Ubuntu, o arquivo pode estar em /etc/apt/sources.list.d/ubuntu.sources (formato deb822)
-          # Mas este comando abaixo resolve para a maioria dos casos:
           sudo sed -i 's/deb http/deb [arch=amd64] http/g' /etc/apt/sources.list || true
-
-          # 4. Atualiza e instala
           sudo apt update
           sudo apt install -y libusb-1.0-0-dev:arm64 gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
-      # =======================
-      # Build linux-amd64
-      # =======================
       - name: Build linux-amd64
         run: |
           mkdir -p build_amd64 dist
@@ -47,21 +46,19 @@ jobs:
           make -j$(nproc)
           cp odin4 ../dist/odin4-linux-amd64
 
-      # =======================
-      # Build linux-arm64
-      # =======================
       - name: Build linux-arm64
         run: |
           mkdir -p build_arm64
           cd build_arm64
-          # PKG_CONFIG_PATH aponta para a biblioteca de ARM64 instalada anteriormente
           export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_SYSTEM_NAME=Linux \
             -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
             -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
-            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
+            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+            -DLIBUSB_1_INCLUDE_DIR=/usr/include/libusb-1.0 \
+            -DLIBUSB_1_LIBRARY=/usr/lib/aarch64-linux-gnu/libusb-1.0.so
           make -j$(nproc)
           cp odin4 ../dist/odin4-linux-arm64
 
