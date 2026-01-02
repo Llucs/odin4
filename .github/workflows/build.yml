@@ -12,38 +12,34 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies
-  run: |
-    sudo apt update
-    sudo apt install -y \
-      build-essential \
-      cmake \
-      zip \
-      pkg-config \
-      libusb-1.0-0-dev \
-      gcc-aarch64-linux-gnu \
-      g++-aarch64-linux-gnu
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential cmake zip pkg-config libusb-1.0-0-dev
+          # Adiciona suporte multi-arch para baixar a libusb de ARM64
+          sudo dpkg --add-architecture arm64
+          sudo apt update
+          sudo apt install -y libusb-1.0-0-dev:arm64 gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
       # =======================
       # Build linux-amd64
       # =======================
       - name: Build linux-amd64
         run: |
-          rm -rf build dist
-          mkdir -p build dist
-          cd build
+          mkdir -p build_amd64 dist
+          cd build_amd64
           cmake .. -DCMAKE_BUILD_TYPE=Release
           make -j$(nproc)
           cp odin4 ../dist/odin4-linux-amd64
-          chmod +x ../dist/odin4-linux-amd64
 
       # =======================
       # Build linux-arm64
       # =======================
       - name: Build linux-arm64
         run: |
-          rm -rf build
-          mkdir build
-          cd build
+          mkdir -p build_arm64
+          cd build_arm64
+          # PKG_CONFIG_PATH aponta para a biblioteca de ARM64 instalada anteriormente
+          export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_SYSTEM_NAME=Linux \
@@ -52,36 +48,15 @@ jobs:
             -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
           make -j$(nproc)
           cp odin4 ../dist/odin4-linux-arm64
-          chmod +x ../dist/odin4-linux-arm64
 
-      # =======================
-      # Upload artifacts (ZIP automático)
-      # =======================
-      - name: Upload artifacts (all architectures)
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: odin4-linux-all
           path: dist/*
 
-      # =======================
-      # Mostrar link do ZIP no log
-      # =======================
-      - name: Show artifact download link
-        run: |
-          echo "========================================"
-          echo "Artifact ZIP generated:"
-          echo "odin4-linux-all.zip"
-          echo ""
-          echo "Download link:"
-          echo "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          echo "========================================"
-
-      # =======================
-      # Summary clicável
-      # =======================
       - name: Add artifact link to summary
         run: |
-          echo "## Odin4 build finished" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- Artifact: **odin4-linux-all.zip**" >> $GITHUB_STEP_SUMMARY
-          echo "- Download: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Odin4 Build Finished" >> $GITHUB_STEP_SUMMARY
+          echo "Binários gerados com sucesso para AMD64 e ARM64." >> $GITHUB_STEP_SUMMARY
+          echo "- [Baixar Artefatos](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
