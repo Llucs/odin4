@@ -24,22 +24,18 @@ jobs:
           sed -i 's/ctx->_final = (void \*)/ctx->_final = (void (*)(void *, void *))/g' lib/picohash/picohash.h
 
           # 2. Correções cirúrgicas no main.cpp
-          # Fecha aspas da URL do GitHub
           sed -i 's|github.com/Llucs/odin4 <<|github.com/Llucs/odin4" <<|g' src/main.cpp
-          
-          # Resolve o erro de ambiguidade do MD5 e inicialização
           sed -i 's/file_size - 32/(long long)file_size - 32/g' src/main.cpp
           sed -i 's/picohash_init(&ctx, PICOHASH_MD5);/picohash_init_md5(&ctx);/g' src/main.cpp
           
-          # CORREÇÃO CHAVE: Remove .header apenas onde ele falhou (Linhas 479 e 546)
-          # Isso evita quebrar o handshake, session, etc.
+          # Remove .header apenas onde ele falhou (Linhas 479 e 546)
           sed -i '479s/pkt\.header\.packet_flags/pkt.packet_flags/' src/main.cpp
           sed -i '546s/pkt\.header\.packet_flags/pkt.packet_flags/' src/main.cpp
 
           # Silencia o parâmetro device_path não utilizado
           sed -i 's/const std::string& device_path = ""/const std::string\& \/* device_path *\/ = ""/g' src/main.cpp
           
-          # 3. Remove o -Werror para avisos não pararem o build
+          # 3. Remove o -Werror
           sed -i 's/-Werror//g' CMakeLists.txt
 
       - name: Install dependencies
@@ -63,13 +59,14 @@ jobs:
           mkdir -p build_arm64 dist
           cd build_arm64
           export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
+          # FLAGS ADICIONADAS PARA CORRIGIR TLS ALIGNMENT NO ANDROID
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_SYSTEM_NAME=Linux \
             -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
             -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
             -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
-            -DCMAKE_EXE_LINKER_FLAGS="-Wl,--dynamic-linker=/system/bin/linker64"
+            -DCMAKE_EXE_LINKER_FLAGS="-Wl,--dynamic-linker=/system/bin/linker64 -Wl,-z,common-page-size=65536 -Wl,-z,max-page-size=65536"
           make -j$(nproc)
           cp odin4 ../dist/odin4-linux-arm64
 
