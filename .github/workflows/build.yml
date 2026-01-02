@@ -1,39 +1,40 @@
-      - name: Patch and Fix Code
-        run: |
-          # 1. Correções do picohash
-          sed -i 's/ptr = data;/ptr = (const unsigned char *)data;/g' lib/picohash/picohash.h
-          sed -i 's/unsigned char \*digest = _digest;/unsigned char *digest = (unsigned char *)_digest;/g' lib/picohash/picohash.h
-          sed -i 's/const uint8_t \*data = _data;/const uint8_t *data = (const uint8_t *)_data;/g' lib/picohash/picohash.h
-          sed -i 's/unsigned char \*out = digest;/unsigned char *out = (unsigned char *)digest;/g' lib/picohash/picohash.h
-          sed -i 's/const unsigned char \*in = data;/const unsigned char *in = (const unsigned char *)data;/g' lib/picohash/picohash.h
-          sed -i 's/ctx->_reset = (void \*)/ctx->_reset = (void (*)(void *))/g' lib/picohash/picohash.h
-          sed -i 's/ctx->_update = (void \*)/ctx->_update = (void (*)(void *, const void *, size_t))/g' lib/picohash/picohash.h
-          sed -i 's/ctx->_final = (void \*)/ctx->_final = (void (*)(void *, void *))/g' lib/picohash/picohash.h
+- name: Patch and Fix Code
+    run: |
+      # 1. Correções do picohash
+      sed -i 's/ptr = data;/ptr = (const unsigned char *)data;/g' lib/picohash/picohash.h
+      sed -i 's/unsigned char \*digest = _digest;/unsigned char *digest = (unsigned char *)_digest;/g' lib/picohash/picohash.h
+      sed -i 's/const uint8_t \*data = _data;/const uint8_t *data = (const uint8_t *)_data;/g' lib/picohash/picohash.h
+      sed -i 's/unsigned char \*out = digest;/unsigned char *out = (unsigned char *)digest;/g' lib/picohash/picohash.h
+      sed -i 's/const unsigned char \*in = data;/const unsigned char *in = (const unsigned char *)data;/g' lib/picohash/picohash.h
+      sed -i 's/ctx->_reset = (void \*)/ctx->_reset = (void (*)(void *))/g' lib/picohash/picohash.h
+      sed -i 's/ctx->_update = (void \*)/ctx->_update = (void (*)(void *, const void *, size_t))/g' lib/picohash/picohash.h
+      sed -i 's/ctx->_final = (void \*)/ctx->_final = (void (*)(void *, void *))/g' lib/picohash/picohash.h
 
-          # 2. Correções do main.cpp (Membro .header, device_path, URL e MD5)
-          sed -i 's/pkt\.header\.packet_flags/pkt.packet_flags/g' src/main.cpp
-          sed -i 's/const std::string& device_path = ""/const std::string\& \/* device_path *\/ = ""/g' src/main.cpp
-          sed -i 's|github.com/Llucs/odin4 <<|github.com/Llucs/odin4" <<|g' src/main.cpp
-          sed -i 's/file_size - 32/(long long)file_size - 32/g' src/main.cpp
-          sed -i 's/picohash_init(&ctx, PICOHASH_MD5);/picohash_init_md5(&ctx);/g' src/main.cpp
-          
-          # 3. Remover trava de avisos
-          sed -i 's/-Werror//g' CMakeLists.txt
+      # 2. Correções do main.cpp (Membro .header, device_path, URL e MD5)
+      sed -i 's/pkt\.header\.packet_flags/pkt.packet_flags/g' src/main.cpp
+      sed -i 's/const std::string& device_path = ""/const std::string\& \/* device_path *\/ = ""/g' src/main.cpp
+      sed -i 's|github.com/Llucs/odin4 <<|github.com/Llucs/odin4" <<|g' src/main.cpp
+      sed -i 's/file_size - 32/(long long)file_size - 32/g' src/main.cpp
+      sed -i 's/picohash_init(&ctx, PICOHASH_MD5);/picohash_init_md5(&ctx);/g' src/main.cpp
+      
+      # 3. Remover trava de avisos
+      sed -i 's/-Werror//g' CMakeLists.txt
 
-      - name: Build linux-arm64
-        run: |
-          mkdir -p build_arm64 dist
-          cd build_arm64
-          export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
-          
-          # Mudança estratégica: Usamos o Linker para ignorar dependências de sistema não encontradas
-          cmake .. \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_SYSTEM_NAME=Linux \
-            -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-            -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
-            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
-            -DCMAKE_EXE_LINKER_FLAGS="-Wl,--dynamic-linker=/system/bin/linker64"
-          
-          make -j$(nproc)
-          cp odin4 ../dist/odin4-linux-arm64
+  - name: Build linux-arm64
+    run: |
+      mkdir -p build_arm64 dist
+      cd build_arm64
+      export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
+      
+      # Mudança estratégica: Configuramos o sysroot para cross-compilation apropriada
+      cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_SYSTEM_NAME=Linux \
+        -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+        -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+        -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+        -DCMAKE_SYSROOT=/usr/aarch64-linux-gnu \
+        -DCMAKE_FIND_ROOT_PATH=/usr/aarch64-linux-gnu
+      
+      make -j$(nproc)
+      cp odin4 ../dist/odin4-linux-arm64
