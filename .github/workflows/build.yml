@@ -23,14 +23,23 @@ jobs:
           sed -i 's/ctx->_update = (void \*)/ctx->_update = (void (*)(void *, const void *, size_t))/g' lib/picohash/picohash.h
           sed -i 's/ctx->_final = (void \*)/ctx->_final = (void (*)(void *, void *))/g' lib/picohash/picohash.h
 
-          # 2. Correções de sintaxe no main.cpp (URL, MD5 e Struct)
+          # 2. Correções cirúrgicas no main.cpp
+          # Fecha aspas da URL do GitHub
           sed -i 's|github.com/Llucs/odin4 <<|github.com/Llucs/odin4" <<|g' src/main.cpp
+          
+          # Resolve o erro de ambiguidade do MD5 e inicialização
           sed -i 's/file_size - 32/(long long)file_size - 32/g' src/main.cpp
           sed -i 's/picohash_init(&ctx, PICOHASH_MD5);/picohash_init_md5(&ctx);/g' src/main.cpp
-          sed -i 's/pkt\.header\.packet_flags/pkt.packet_flags/g' src/main.cpp
+          
+          # CORREÇÃO CHAVE: Remove .header apenas onde ele falhou (Linhas 479 e 546)
+          # Isso evita quebrar o handshake, session, etc.
+          sed -i '479s/pkt\.header\.packet_flags/pkt.packet_flags/' src/main.cpp
+          sed -i '546s/pkt\.header\.packet_flags/pkt.packet_flags/' src/main.cpp
+
+          # Silencia o parâmetro device_path não utilizado
           sed -i 's/const std::string& device_path = ""/const std::string\& \/* device_path *\/ = ""/g' src/main.cpp
           
-          # 3. Remover trava de erros de compilação
+          # 3. Remove o -Werror para avisos não pararem o build
           sed -i 's/-Werror//g' CMakeLists.txt
 
       - name: Install dependencies
