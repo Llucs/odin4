@@ -1,0 +1,81 @@
+name: Build Odin4 (All Architectures)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential cmake zip \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      # =======================
+      # Build linux-amd64
+      # =======================
+      - name: Build linux-amd64
+        run: |
+          rm -rf build dist
+          mkdir -p build dist
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          make -j$(nproc)
+          cp odin4 ../dist/odin4-linux-amd64
+          chmod +x ../dist/odin4-linux-amd64
+
+      # =======================
+      # Build linux-arm64
+      # =======================
+      - name: Build linux-arm64
+        run: |
+          rm -rf build
+          mkdir build
+          cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+            -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
+          make -j$(nproc)
+          cp odin4 ../dist/odin4-linux-arm64
+          chmod +x ../dist/odin4-linux-arm64
+
+      # =======================
+      # Upload artifacts (ZIP automático)
+      # =======================
+      - name: Upload artifacts (all architectures)
+        uses: actions/upload-artifact@v4
+        with:
+          name: odin4-linux-all
+          path: dist/*
+
+      # =======================
+      # Mostrar link do ZIP no log
+      # =======================
+      - name: Show artifact download link
+        run: |
+          echo "========================================"
+          echo "Artifact ZIP generated:"
+          echo "odin4-linux-all.zip"
+          echo ""
+          echo "Download link:"
+          echo "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "========================================"
+
+      # =======================
+      # Summary clicável
+      # =======================
+      - name: Add artifact link to summary
+        run: |
+          echo "## Odin4 build finished" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Artifact: **odin4-linux-all.zip**" >> $GITHUB_STEP_SUMMARY
+          echo "- Download: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
