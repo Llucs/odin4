@@ -50,7 +50,12 @@ set_target_properties(odin4 PROPERTIES OUTPUT_NAME "odin4")
 # =========================
 # Compile options
 # =========================
-target_compile_options(odin4 PRIVATE -Wall -Wextra)
+target_compile_options(odin4 PRIVATE
+    -Wall
+    -Wextra
+    -fpermissive
+    -Wno-cast-function-type
+)
 
 # =========================
 # Includes
