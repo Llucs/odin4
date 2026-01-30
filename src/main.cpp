@@ -11,15 +11,17 @@
 #include <cstring>
 #include <map>
 #include <algorithm>
-#include <libusb-1.0/libusb.h>
+#include <libusb.h>
 #include <lz4.h>
 #include <stdexcept>
-#include <iomanip> // Para hexdump
-#include <thread>  // Para std::this_thread::sleep_for
-#include <chrono>  // Para std::chrono::milliseconds
-#include <cmath>   // Para std::min
-#include <sstream> // Para std::stringstream
-#include "picohash.h" // Biblioteca MD5
+#include <iomanip>
+#include <thread>
+#include <chrono>
+#include <cmath>
+#include <sstream>
+#define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
+#include <cryptopp/md5.h>
+#include <cryptopp/hex.h>
 
 // ============================================================================
 // CONSTANTS & DEFINITIONS
@@ -28,8 +30,8 @@
 #define ODIN4_VERSION "1.3.0 (4634111)"
 #define SAMSUNG_VID 0x04E8
 #define USB_RETRY_COUNT 3
-#define USB_TIMEOUT_BULK 60000 // 60 segundos para bulk transfer
-#define USB_TIMEOUT_CONTROL 5000 // 5 segundos para control/handshake
+#define USB_TIMEOUT_BULK 60000 // 60 
+#define USB_TIMEOUT_CONTROL 5000 // 5 
 
 // ============================================================================
 // UTILITIES
@@ -105,10 +107,11 @@ bool check_md5_signature(const std::string& file_path) {
     file.seekg(0);
     size_t content_size = (size_t)(file_size - 32);
 
-    picohash_ctx_t ctx;
-    picohash_init_md5(&ctx); // <--- Correção da inicialização
+    CryptoPP::Weak::MD5 hash;
+    std::vector<unsigned char> digest(hash.DigestSize());
 
-    std::vector<char> buffer(8192); // Buffer um pouco maior para velocidade
+    std::vector<char> buffer(1048576);
+
     size_t total_read = 0;
 
     while (total_read < content_size) {
@@ -118,27 +121,34 @@ bool check_md5_signature(const std::string& file_path) {
 
         if (read_count == 0) break;
 
-        picohash_update(&ctx, (const unsigned char*)buffer.data(), read_count);
+        hash.Update((const unsigned char*)buffer.data(), read_count);
         total_read += read_count;
     }
 
-    unsigned char calculated_md5_bin[16];
-    picohash_final(&ctx, calculated_md5_bin);
+    hash.Final(digest.data());
 
     // 3. Converter para hexadecimal
-    std::stringstream ss;
-    for (int i = 0; i < 16; ++i) {
-        ss << std::hex << std::setw(2) << std::setfill('0') << (int)calculated_md5_bin[i];
-    }
-    std::string calculated_md5 = ss.str();
+    std::string calculated_md5;
+    CryptoPP::HexEncoder encoder;
+    encoder.Attach(new CryptoPP::StringSink(calculated_md5));
+    encoder.Put(digest.data(), digest.size());
+    encoder.MessageEnd();
+
+    // Converter para minúsculas para comparação
+    std::transform(calculated_md5.begin(), calculated_md5.end(), calculated_md5.begin(), ::tolower);
+    
+    // Normalizar expected_md5 também
+    std::string expected_md5_lower = expected_md5;
+    std::transform(expected_md5_lower.begin(), expected_md5_lower.end(), expected_md5_lower.begin(), ::tolower);
+
     log_info("MD5 Calculado: " + calculated_md5);
 
     // 4. Comparar (Ignorar case - Samsung as vezes usa maiúsculas)
-    if (calculated_md5 == expected_md5) {
+    if (calculated_md5 == expected_md5_lower) {
         log_info("Verificação MD5 bem-sucedida.");
         return true;
     } else {
-        log_error("Verificação MD5 falhou! Esperado: " + expected_md5 + " | Calculado: " + calculated_md5);
+        log_error("Verificação MD5 falhou! Esperado: " + expected_md5_lower + " | Calculado: " + calculated_md5);
         return false;
     }
 }
@@ -319,7 +329,7 @@ public:
     }
 
     // --- Device Detection & Connection ---
-    bool open_device(const std::string& /* device_path */ = "") {
+        bool open_device(const std::string& specific_path = "") {
         libusb_device **list = nullptr;
         ssize_t cnt = libusb_get_device_list(NULL, &list);
         if (cnt < 0) {
@@ -327,7 +337,6 @@ public:
             return false;
         }
 
-        // RAII-like cleanup for device list
         struct ListCleanup {
             libusb_device **list;
             ListCleanup(libusb_device **l) : list(l) {}
@@ -339,6 +348,11 @@ public:
             if (libusb_get_device_descriptor(list[i], &desc) < 0) continue;
 
             if (desc.idVendor == SAMSUNG_VID) {
+                if (!specific_path.empty()) {
+                    std::stringstream path_ss;
+                    path_ss << "/dev/bus/usb/" << (int)libusb_get_bus_number(list[i]) << "/" << (int)libusb_get_device_address(list[i]);
+                    if (path_ss.str() != specific_path) continue;
+                }
                 for (uint16_t pid : DOWNLOAD_PIDS) {
                     if (desc.idProduct == pid) {
                         device = list[i];
@@ -565,9 +579,36 @@ public:
         if (!receive_packet(&pit_size_pkt, sizeof(pit_size_pkt), &actual_length, true)) return false;
 
         uint32_t pit_data_size = le32_to_h(pit_size_pkt.pit_file_size);
+        if (pit_data_size == 0 || pit_data_size > 1048576) {
+            log_error("Tamanho de PIT invalido ou muito grande.");
+            return false;
+        }
+
         log_info("Tamanho do PIT: " + std::to_string(pit_data_size) + " bytes.");
         
-        std::vector<unsigned char> pit_data(pit_data_size);
+                    try {
+                std::vector<unsigned char> compressed_data(data_size);
+                file.read((char*)compressed_data.data(), data_size);
+                
+                std::vector<unsigned char> final_data = decompress_lz4_block(compressed_data, filename);
+                std::vector<unsigned char>().swap(compressed_data); 
+
+                if (final_data.empty()) {
+                    file.ignore((512 - (data_size % 512)) % 512);
+                    continue;
+                }
+                
+                if (!usb_device.send_file_part_header(final_data.size())) return false;
+
+                for (size_t i = 0; i < final_data.size(); i += CHUNK_SIZE) {
+                    size_t to_send = std::min(CHUNK_SIZE, final_data.size() - i);
+                    if (!usb_device.send_file_part_chunk(&final_data[i], to_send)) return false;
+                }
+            } catch (const std::bad_alloc& e) {
+                log_error("Memoria insuficiente para descomprimir " + filename);
+                return false;
+            }
+             char> pit_data(pit_data_size);
         if (!receive_packet(pit_data.data(), pit_data_size, &actual_length)) return false;
 
         // Validação de tamanho mínimo
@@ -756,7 +797,7 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
     uint32_t part_index = 0;
     const size_t CHUNK_SIZE = 1048576; // 1MB para leitura/envio
 
-    while (file.read(header, 512)) {
+        while (file.tellg() < max_read_pos && file.read(header, 512)) {
         std::string filename(header, 100);
         filename = filename.c_str();
 
@@ -796,13 +837,27 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
             // antes de descompactar, pois o LZ4 Frame é um bloco único.
             // Isso ainda é um problema de memória, mas é a limitação da API LZ4_decompress_safe.
             
-            std::vector<unsigned char> compressed_data(data_size);
-            file.read((char*)compressed_data.data(), data_size);
-            
-            std::vector<unsigned char> final_data = decompress_lz4_block(compressed_data, filename);
-            if (final_data.empty()) {
-                file.ignore((512 - (data_size % 512)) % 512);
-                continue;
+            try {
+                std::vector<unsigned char> compressed_data(data_size);
+                file.read((char*)compressed_data.data(), data_size);
+                
+                std::vector<unsigned char> final_data = decompress_lz4_block(compressed_data, filename);
+                std::vector<unsigned char>().swap(compressed_data); 
+
+                if (final_data.empty()) {
+                    file.ignore((512 - (data_size % 512)) % 512);
+                    continue;
+                }
+                
+                if (!usb_device.send_file_part_header(final_data.size())) return false;
+
+                for (size_t i = 0; i < final_data.size(); i += CHUNK_SIZE) {
+                    size_t to_send = std::min(CHUNK_SIZE, final_data.size() - i);
+                    if (!usb_device.send_file_part_chunk(&final_data[i], to_send)) return false;
+                }
+            } catch (const std::bad_alloc& e) {
+                log_error("Memoria insuficiente para descomprimir " + filename);
+                return false;
             }
             
             // Envia o cabeçalho com o tamanho TOTAL DESCOMPRIMIDO
@@ -998,13 +1053,20 @@ int run_flash_logic(const OdinConfig& config) {
         {"UMS", config.ums}
     };
 
+        bool success = true;
     for (const auto& f : files) {
         if (!f.second.empty()) {
             if (!process_tar_file(f.second, usb_device, pit_table)) {
                 log_error("Flash failed during file processing. " + f.first + ".");
-                return 1;
+                success = false;
+                break;
             }
         }
+    }
+
+    if (!success) {
+        usb_device.end_session();
+        return 1;
     }
 
     if (config.reboot) {
