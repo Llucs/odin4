@@ -22,6 +22,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 # =========================
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+pkg_check_modules(CRYPTOPP REQUIRED libcryptopp)
 
 # =========================
 # LZ4 static library (C)
@@ -32,14 +33,6 @@ add_library(lz4_lib STATIC
     lib/lz4/xxhash.c
 )
 target_include_directories(lz4_lib PUBLIC lib/lz4)
-
-# =========================
-# PICOHASH static library (C)  <<< PARTE CRÍTICA
-# =========================
-add_library(picohash STATIC
-    lib/picohash/picohash.c
-)
-target_include_directories(picohash PUBLIC lib/picohash)
 
 # =========================
 # Main executable (C++)
@@ -62,6 +55,7 @@ target_compile_options(odin4 PRIVATE
 # =========================
 target_include_directories(odin4 PRIVATE
     ${LIBUSB_INCLUDE_DIRS}
+    ${CRYPTOPP_INCLUDE_DIRS}
 )
 
 # =========================
@@ -70,7 +64,7 @@ target_include_directories(odin4 PRIVATE
 target_link_libraries(odin4 PRIVATE
     ${LIBUSB_LIBRARIES}
     lz4_lib
-    picohash
+    ${CRYPTOPP_LIBRARIES}
     -static-libgcc
     -static-libstdc++
 )
