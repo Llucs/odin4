@@ -1,12 +1,37 @@
-# odin4
+# Odin4
 
-Odin4 is an open-source flash tool for Samsung devices.
+Odin4 is an open-source flashing tool for Samsung devices.
 
-### Status
-This project is under active development. It currently contains bugs and unfinished parts, and some builds may fail depending on the environment.
+## Status
+This project is under active development and has undergone significant improvements.  
+The cryptographic implementation has been successfully migrated to **Crypto++**, and multiple build and stability issues have been fixed.
 
-### Help wanted
-We are migrating cryptographic code to **Crypto++**, fixing build issues, and cleaning up the codebase (standardizing English comments, improving stability).
+While the project is now more stable, there may still be remaining bugs, edge cases, and environment-specific build issues.
 
-If you have experience with C/C++, libusb, Crypto++, or reverse engineering, **contributions are very welcome**.
-Please check the Issues and submit a Pull Request.
+## What's new
+- Cryptographic code fully migrated to **Crypto++**
+- Numerous build errors and warnings fixed
+- Improved code stability and internal cleanup
+- Better consistency in code and comments
+
+## Help wanted
+Even with recent improvements, community contributions are still highly appreciated.
+
+You can help by:
+- Finding and fixing remaining bugs
+- Improving cross-platform build compatibility
+- Code cleanup and refactoring
+- Reverse engineering improvements
+- Testing on different Samsung devices and environments
+
+If you have experience with **C/C++**, **libusb**, **Crypto++**, or reverse engineering, your contributions are very welcome.
+
+Please check the Issues and feel free to submit a Pull Request.
+
+## License
+This project is licensed under the **Apache License 2.0**.  
+See the `LICENSE` file in the root of the repository for full license text.
+
+## Disclaimer
+This tool is provided as-is. Flashing firmware always carries risks.  
+Use at your own risk. The authors are not responsible for any damage to devices.
