@@ -1,77 +1,63 @@
-name: Build Odin4 (All Architectures)
+name: Build Odin4
 
 on:
+  push:
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-linux:
+    name: Build for Linux (${{ matrix.arch }})
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+
     steps:
-      - name: Checkout source
+      - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Patch and Fix Code
-        run: |
-          # 1. Correções do picohash para compatibilidade C++
-          sed -i 's/ptr = data;/ptr = (const unsigned char *)data;/g' lib/picohash/picohash.h
-          sed -i 's/unsigned char \*digest = _digest;/unsigned char *digest = (unsigned char *)_digest;/g' lib/picohash/picohash.h
-          sed -i 's/const uint8_t \*data = _data;/const uint8_t *data = (const uint8_t *)_data;/g' lib/picohash/picohash.h
-          sed -i 's/unsigned char \*out = digest;/unsigned char *out = (unsigned char *)digest;/g' lib/picohash/picohash.h
-          sed -i 's/const unsigned char \*in = data;/const unsigned char *in = (const unsigned char *)data;/g' lib/picohash/picohash.h
-          sed -i 's/ctx->_reset = (void \*)/ctx->_reset = (void (*)(void *))/g' lib/picohash/picohash.h
-          sed -i 's/ctx->_update = (void \*)/ctx->_update = (void (*)(void *, const void *, size_t))/g' lib/picohash/picohash.h
-          sed -i 's/ctx->_final = (void \*)/ctx->_final = (void (*)(void *, void *))/g' lib/picohash/picohash.h
-
-          # 2. Correções cirúrgicas no main.cpp
-          sed -i 's|github.com/Llucs/odin4 <<|github.com/Llucs/odin4" <<|g' src/main.cpp
-          sed -i 's/file_size - 32/(long long)file_size - 32/g' src/main.cpp
-          sed -i 's/picohash_init(&ctx, PICOHASH_MD5);/picohash_init_md5(&ctx);/g' src/main.cpp
-          
-          # Remove .header apenas onde ele falhou (Linhas 479 e 546)
-          sed -i '479s/pkt\.header\.packet_flags/pkt.packet_flags/' src/main.cpp
-          sed -i '546s/pkt\.header\.packet_flags/pkt.packet_flags/' src/main.cpp
-
-          # Silencia o parâmetro device_path não utilizado
-          sed -i 's/const std::string& device_path = ""/const std::string\& \/* device_path *\/ = ""/g' src/main.cpp
-          
-          # 3. Remove o -Werror
-          sed -i 's/-Werror//g' CMakeLists.txt
 
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y build-essential cmake zip pkg-config libusb-1.0-0-dev
-          sudo dpkg --add-architecture arm64
-          sudo tee /etc/apt/sources.list.d/arm64.sources <<EOF
-          Types: deb
-          URIs: http://ports.ubuntu.com/ubuntu-ports
-          Suites: noble noble-updates noble-security
-          Components: main restricted universe multiverse
-          Architectures: arm64
-          EOF
-          sudo find /etc/apt/sources.list.d/ -type f -name "*.sources" -not -name "arm64.sources" -exec sed -i 's/Architectures: amd64 arm64/Architectures: amd64/g' {} +
-          sudo apt update || true
-          sudo apt install -y libusb-1.0-0-dev:arm64 gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sudo apt install -y cmake g++ libusb-1.0-0-dev libcrypto++-dev zip
 
-      - name: Build linux-arm64
+      - name: Set up ARM64 toolchain
+        if: matrix.arch == 'arm64'
         run: |
-          mkdir -p build_arm64 dist
-          cd build_arm64
-          export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
-          # FLAGS ADICIONADAS PARA CORRIGIR TLS ALIGNMENT NO ANDROID
-          cmake .. \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_SYSTEM_NAME=Linux \
-            -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-            -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
-            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
-            -DCMAKE_EXE_LINKER_FLAGS="-Wl,--dynamic-linker=/system/bin/linker64 -Wl,-z,common-page-size=65536 -Wl,-z,max-page-size=65536"
-          make -j$(nproc)
-          cp odin4 ../dist/odin4-linux-arm64
+          sudo apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
-      - name: Upload artifacts
+      - name: Configure (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: |
+          mkdir build
+          cd build
+          cmake ..
+
+      - name: Configure (ARM64)
+        if: matrix.arch == 'arm64'
+        run: |
+          mkdir build
+          cd build
+          cmake .. \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
+
+      - name: Build
+        run: |
+          cd build
+          make -j$(nproc)
+
+      - name: Package
+        run: |
+          mkdir dist
+          cp build/odin4 dist/
+          zip -r odin4-linux-${{ matrix.arch }}.zip dist
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: odin4-linux-all
-          path: dist/*
+          name: odin4-linux-${{ matrix.arch }}
+          path: odin4-linux-${{ matrix.arch }}.zip
