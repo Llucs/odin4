@@ -18,15 +18,28 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      # x86_64 deps
+      - name: Install dependencies (x86_64)
+        if: matrix.arch == 'x86_64'
         run: |
           sudo apt update
-          sudo apt install -y cmake g++ libusb-1.0-0-dev libcrypto++-dev zip
+          sudo apt install -y \
+            cmake g++ zip \
+            libusb-1.0-0-dev \
+            libcrypto++-dev
 
-      - name: Set up ARM64 toolchain
+      # ARM64 deps (multi-arch real)
+      - name: Install dependencies (ARM64)
         if: matrix.arch == 'arm64'
         run: |
-          sudo apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sudo dpkg --add-architecture arm64
+          sudo apt update
+          sudo apt install -y \
+            cmake zip \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            libusb-1.0-0-dev:arm64 \
+            libcrypto++-dev:arm64
 
       - name: Configure (x86_64)
         if: matrix.arch == 'x86_64'
