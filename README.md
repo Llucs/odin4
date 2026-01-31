@@ -1,4 +1,4 @@
-# Odin4
+# odin4 (WIP)
 
 Odin4 is an open-source flashing tool for Samsung devices.
 
