@@ -22,7 +22,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 # =========================
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
-pkg_check_modules(CRYPTOPP REQUIRED libcryptopp)
+pkg_check_modules(CRYPTOPP REQUIRED libcrypto++)
 
 # =========================
 # LZ4 static library (C)
