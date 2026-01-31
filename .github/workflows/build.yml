@@ -18,59 +18,76 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # x86_64 deps
-      - name: Install dependencies (x86_64)
-        if: matrix.arch == 'x86_64'
+      # Instalar dependências comuns + específicas por arch
+      - name: Install dependencies
         run: |
           sudo apt update
+          sudo apt install -y cmake zip make ninja-build pkg-config
+
+      - name: Install x86_64 dependencies
+        if: matrix.arch == 'x86_64'
+        run: |
           sudo apt install -y \
-            cmake g++ zip \
+            g++ \
             libusb-1.0-0-dev \
             libcrypto++-dev
 
-      # ARM64 deps (multi-arch real)
-      - name: Install dependencies (ARM64)
+      - name: Install arm64 cross-compile dependencies
         if: matrix.arch == 'arm64'
         run: |
           sudo dpkg --add-architecture arm64
           sudo apt update
           sudo apt install -y \
-            cmake zip \
             gcc-aarch64-linux-gnu \
             g++-aarch64-linux-gnu \
             libusb-1.0-0-dev:arm64 \
             libcrypto++-dev:arm64
 
-      - name: Configure (x86_64)
-        if: matrix.arch == 'x86_64'
+      # Preparar build dir
+      - name: Prepare build directory
         run: |
+          rm -rf build
           mkdir build
-          cd build
-          cmake ..
 
-      - name: Configure (ARM64)
-        if: matrix.arch == 'arm64'
+      # Configure CMake
+      - name: Configure CMake
+        working-directory: build
         run: |
-          mkdir build
-          cd build
-          cmake .. \
-            -DCMAKE_SYSTEM_NAME=Linux \
-            -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
-            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
+          if [ "${{ matrix.arch }}" = "x86_64" ]; then
+            cmake .. -DCMAKE_BUILD_TYPE=Release
+          else
+            cmake .. -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_SYSTEM_NAME=Linux \
+              -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+              -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+              -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+              -DCMAKE_SYSROOT=/ \
+              -DCMAKE_FIND_ROOT_PATH=/usr/aarch64-linux-gnu \
+              -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+              -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+              -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
+              -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY
+          fi
 
+      # Build
       - name: Build
-        run: |
-          cd build
-          make -j$(nproc)
+        working-directory: build
+        run: cmake --build . --parallel $(nproc) --config Release
 
-      - name: Package
+      # Package
+      - name: Package artifact
         run: |
-          mkdir dist
-          cp build/odin4 dist/
+          rm -rf dist
+          mkdir -p dist
+          cp build/odin4 dist/odin4  # ou o nome do seu binário executável
+          # Se quiser strip para reduzir tamanho (opcional)
+          # if [ "${{ matrix.arch }}" = "arm64" ]; then aarch64-linux-gnu-strip dist/odin4; else strip dist/odin4; fi
           zip -r odin4-linux-${{ matrix.arch }}.zip dist
 
+      # Upload
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: odin4-linux-${{ matrix.arch }}
           path: odin4-linux-${{ matrix.arch }}.zip
+          if-no-files-found: error
