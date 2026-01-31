@@ -2,7 +2,9 @@ name: Build Odin4
 
 on:
   push:
+    branches: [ main, master ]
   pull_request:
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -11,6 +13,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     strategy:
+      fail-fast: false
       matrix:
         arch: [x86_64, arm64]
 
@@ -20,57 +23,48 @@ jobs:
 
       - name: Install common dependencies
         run: |
-          sudo apt update
-          sudo apt install -y cmake zip make pkg-config ninja-build
+          sudo apt-get update
+          sudo apt-get install -y cmake zip make pkg-config ninja-build
 
       - name: Install x86_64 dependencies
         if: matrix.arch == 'x86_64'
         run: |
-          sudo apt install -y \
+          sudo apt-get install -y \
             g++ \
             libusb-1.0-0-dev \
             libcrypto++-dev
 
-      - name: Restrict default repositories to amd64 (prevent 404s on security/archive)
-        if: matrix.arch == 'arm64'
-        run: |
-          sudo sed -i '/^deb /s/^deb /deb [arch=amd64] /' /etc/apt/sources.list
-          # Debug opcional: verifique as mudanças
-          # cat /etc/apt/sources.list
-
       - name: Setup arm64 multiarch and repositories
         if: matrix.arch == 'arm64'
         run: |
+          # Restringir amd64 para evitar erros nos repositórios de ports
+          sudo sed -i '/^deb /s/^deb /deb [arch=amd64] /' /etc/apt/sources.list
+          
+          # Adicionar arquitetura e repositórios ARM64
           sudo dpkg --add-architecture arm64
-          cat <<EOF | sudo tee /etc/apt/sources.list.d/arm64-ports.list
-deb [arch=arm64] https://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
-deb [arch=arm64] https://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
-deb [arch=arm64] https://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
-deb [arch=arm64] https://ports.ubuntu.com/ubuntu-ports jammy-backports main restricted universe multiverse
-EOF
-          sudo apt update
-
-      - name: Install arm64 dependencies
-        if: matrix.arch == 'arm64'
-        run: |
-          sudo apt install -y \
+          sudo tee /etc/apt/sources.list.d/arm64-ports.list <<EOF
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-backports main restricted universe multiverse
+          EOF
+          
+          sudo apt-get update
+          sudo apt-get install -y \
             gcc-aarch64-linux-gnu \
             g++-aarch64-linux-gnu \
             libusb-1.0-0-dev:arm64 \
             libcrypto++-dev:arm64
 
-      - name: Prepare build directory
-        run: rm -rf build && mkdir build
-
       - name: Configure CMake
-        working-directory: build
         run: |
+          mkdir -p build
+          cd build
           if [ "${{ matrix.arch }}" = "x86_64" ]; then
             cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja
           else
             export PKG_CONFIG_SYSROOT_DIR=/
             export PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
-            export PKG_CONFIG_PATH=
             cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja \
               -DCMAKE_SYSTEM_NAME=Linux \
               -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
@@ -81,25 +75,31 @@ EOF
               -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
               -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
               -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
-              -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY \
-              -DCMAKE_PREFIX_PATH=/usr/aarch64-linux-gnu
+              -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY
           fi
 
       - name: Build
-        working-directory: build
-        run: cmake --build . --parallel $(nproc) --config Release
+        run: cmake --build build --parallel $(nproc) --config Release
 
       - name: Package artifact
         run: |
-          rm -rf dist && mkdir -p dist
-          cp build/odin4 dist/odin4  # ajuste se o nome do binário for diferente (verifique com ls build/)
-          # Strip para reduzir tamanho (essencial para cross-compile)
+          mkdir -p dist
+          # Tenta copiar o binário (ajuste o nome se necessário)
+          if [ -f build/odin4 ]; then
+            cp build/odin4 dist/
+          else
+            # Caso o binário tenha outro nome ou esteja em subpasta
+            find build -maxdepth 2 -type f -executable -not -name "*.so" -exec cp {} dist/odin4 \;
+          fi
+          
+          # Strip para reduzir tamanho
           if [ "${{ matrix.arch }}" = "arm64" ]; then
             aarch64-linux-gnu-strip dist/odin4
           else
             strip dist/odin4
           fi
-          zip -r odin4-linux-${{ matrix.arch }}.zip dist
+          
+          cd dist && zip ../odin4-linux-${{ matrix.arch }}.zip odin4
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
