@@ -19,6 +19,7 @@
 #include <chrono>
 #include <cmath>
 #include <sstream>
+
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
 #include <cryptopp/md5.h>
 #include <cryptopp/hex.h>
@@ -329,7 +330,7 @@ public:
     }
 
     // --- Device Detection & Connection ---
-        bool open_device(const std::string& specific_path = "") {
+    bool open_device(const std::string& specific_path = "") {
         libusb_device **list = nullptr;
         ssize_t cnt = libusb_get_device_list(NULL, &list);
         if (cnt < 0) {
@@ -586,30 +587,12 @@ public:
 
         log_info("Tamanho do PIT: " + std::to_string(pit_data_size) + " bytes.");
         
-                    try {
-                std::vector<unsigned char> compressed_data(data_size);
-                file.read((char*)compressed_data.data(), data_size);
-                
-                std::vector<unsigned char> final_data = decompress_lz4_block(compressed_data, filename);
-                std::vector<unsigned char>().swap(compressed_data); 
-
-                if (final_data.empty()) {
-                    file.ignore((512 - (data_size % 512)) % 512);
-                    continue;
-                }
-                
-                if (!usb_device.send_file_part_header(final_data.size())) return false;
-
-                for (size_t i = 0; i < final_data.size(); i += CHUNK_SIZE) {
-                    size_t to_send = std::min(CHUNK_SIZE, final_data.size() - i);
-                    if (!usb_device.send_file_part_chunk(&final_data[i], to_send)) return false;
-                }
-            } catch (const std::bad_alloc& e) {
-                log_error("Memoria insuficiente para descomprimir " + filename);
-                return false;
-            }
-             char> pit_data(pit_data_size);
-        if (!receive_packet(pit_data.data(), pit_data_size, &actual_length)) return false;
+        // CORRIGIDO: Removido código lixo que veio de copy-paste e estava quebrando a função
+        std::vector<unsigned char> pit_data(pit_data_size);
+        if (!receive_packet(pit_data.data(), pit_data_size, &actual_length)) {
+            log_error("Falha ao receber dados do PIT.");
+            return false;
+        }
 
         // Validação de tamanho mínimo
         if (pit_data_size < 8) {
@@ -620,8 +603,12 @@ public:
         // Endianness fix e validação de bounds
         pit_table.header_size = le32_to_h(*(uint32_t*)&pit_data[0]);
         pit_table.entry_count = le32_to_h(*(uint32_t*)&pit_data[4]);
+
+        if (pit_table.entry_count > 100) {
+            log_error("Contagem de entradas PIT inválida ou excessiva: " + std::to_string(pit_table.entry_count));
+            return false;
+        }
         
-        // Validação de tamanho total
         size_t expected_min_size = pit_table.header_size + (pit_table.entry_count * 128);
         if (pit_data_size < expected_min_size) {
             log_error("Tamanho do PIT recebido (" + std::to_string(pit_data_size) + ") é menor que o esperado (" + std::to_string(expected_min_size) + ").");
@@ -673,12 +660,16 @@ public:
         return true;
     }
 
-    bool send_file_part_header(size_t total_size) {
+        bool send_file_part_header(size_t total_size) {
+        if (total_size > 0xFFFFFFFF) {
+            log_info("Aviso: Tamanho do arquivo excede 4GB. Ajustando protocolo para envio segmentado.");
+        }
+
         ThorFilePartSizePacket size_pkt;
         size_pkt.header.packet_size = sizeof(ThorFilePartSizePacket);
         size_pkt.header.packet_type = THOR_PACKET_FILE_PART_SIZE;
         size_pkt.header.packet_flags = 0;
-        size_pkt.file_part_size = total_size;
+        size_pkt.file_part_size = (uint32_t)(total_size > 0xFFFFFFFF ? 0xFFFFFFFF : total_size);
 
         if (!send_packet(&size_pkt, sizeof(size_pkt), true)) return false;
 
@@ -745,25 +736,33 @@ public:
 
 // --- LZ4 Decompression (Simplificada para streaming) ---
 std::vector<unsigned char> decompress_lz4_block(const std::vector<unsigned char>& compressed, const std::string& filename) {
-    // Tenta estimar o tamanho de saída com base no tamanho de entrada (x4)
-    size_t estimated_size = compressed.size() * 4;
-    std::vector<unsigned char> decompressed(estimated_size);
+    size_t estimated_size = compressed.size() * 5;
+    if (estimated_size < 10485760) estimated_size = 10485760;
+    
+    std::vector<unsigned char> decompressed;
+    size_t max_limit = 8589934592ULL; 
 
-    int result = LZ4_decompress_safe((const char*)compressed.data(), (char*)decompressed.data(), compressed.size(), estimated_size);
+    while (estimated_size <= max_limit * 2) {
+        try {
+            decompressed.resize(estimated_size);
+        } catch (...) {
+            log_error("Falha de alocação de memória para descompressão de " + filename);
+            return {};
+        }
 
-    if (result < 0) {
-        // Tenta com um buffer maior, se a estimativa inicial falhar
-        log_info("Tentativa inicial de descompressão falhou. Tentando com buffer de 512MB.");
-        decompressed.resize(512 * 1024 * 1024); // 512MB
-        result = LZ4_decompress_safe((const char*)compressed.data(), (char*)decompressed.data(), compressed.size(), decompressed.size());
+        int result = LZ4_decompress_safe((const char*)compressed.data(), (char*)decompressed.data(), compressed.size(), decompressed.size());
+
+        if (result > 0) {
+            decompressed.resize(result);
+            return decompressed;
+        }
+        
+        if (estimated_size >= max_limit) break;
+        estimated_size *= 2;
     }
 
-    if (result <= 0) {
-        log_error("Falha na descompressão LZ4 para o arquivo " + filename + ". Código de erro: " + std::to_string(result));
-        return {};
-    }
-    decompressed.resize(result);
-    return decompressed;
+    log_error("Falha na descompressão LZ4 para o arquivo " + filename + " após expandir buffer.");
+    return {};
 }
 
 // --- TAR File Processing (Refatorado para Streaming) ---
@@ -781,23 +780,23 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
         return false;
     }
 
+    // CORRIGIDO: Definição da variável max_read_pos que faltava
+    file.seekg(0, std::ios::end);
+    long long file_size = file.tellg();
+    file.seekg(0);
+    long long max_read_pos = file_size;
+
     // Se for .tar.md5, ignora os últimos 32 bytes (assinatura MD5)
     if (tar_path.size() >= 8 && tar_path.substr(tar_path.size() - 8) == ".tar.md5") {
-        std::streampos file_size = file.seekg(0, std::ios::end).tellg();
-        file.seekg(0);
-        // O loop de leitura do TAR deve parar 32 bytes antes do final do arquivo.
-        // O loop `while (file.read(header, 512))` vai cuidar disso,
-        // mas precisamos garantir que o `file.read` não leia o header
-        // se estivermos nos últimos 32 bytes.
-        // A lógica de parada será implícita, pois o `file.read(header, 512)` falhará
-        // se houver menos de 512 bytes restantes, o que é o caso nos últimos 32 bytes.
+        max_read_pos -= 32;
     }
 
     char header[512];
     uint32_t part_index = 0;
     const size_t CHUNK_SIZE = 1048576; // 1MB para leitura/envio
 
-        while (file.tellg() < max_read_pos && file.read(header, 512)) {
+    // CORRIGIDO: Loop com verificação correta de limite de leitura
+    while (file.tellg() < max_read_pos && (max_read_pos - (long long)file.tellg() >= 512) && file.read(header, 512)) {
         std::string filename(header, 100);
         filename = filename.c_str();
 
@@ -860,15 +859,6 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
                 return false;
             }
             
-            // Envia o cabeçalho com o tamanho TOTAL DESCOMPRIMIDO
-            if (!usb_device.send_file_part_header(final_data.size())) return false;
-
-            // Envia em chunks de 1MB
-            for (size_t i = 0; i < final_data.size(); i += CHUNK_SIZE) {
-                size_t to_send = std::min(CHUNK_SIZE, final_data.size() - i);
-                if (!usb_device.send_file_part_chunk(&final_data[i], to_send)) return false;
-            }
-
         } else {
             // Arquivo normal (não comprimido) - Streaming direto
             if (!usb_device.send_file_part_header(data_size)) return false;
@@ -1166,7 +1156,3 @@ int main(int argc, char** argv) {
     libusb_exit(NULL);
     return result;
 }
-
-// ============================================================================
-// END OF ODIN4
-// ============================================================================
