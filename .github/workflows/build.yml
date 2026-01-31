@@ -8,102 +8,61 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-linux:
+  build:
     name: Build for Linux (${{ matrix.arch }})
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.runner }}
 
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86_64, arm64]
+        include:
+          - arch: x86_64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm64
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install common dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake zip make pkg-config ninja-build
-
-      - name: Install x86_64 dependencies
-        if: matrix.arch == 'x86_64'
-        run: |
           sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            zip \
+            make \
+            pkg-config \
             g++ \
             libusb-1.0-0-dev \
             libcrypto++-dev
 
-      - name: Setup arm64 multiarch and repositories
-        if: matrix.arch == 'arm64'
-        run: |
-          # Restringir amd64 para evitar erros nos repositórios de ports
-          sudo sed -i '/^deb /s/^deb /deb [arch=amd64] /' /etc/apt/sources.list
-          
-          # Adicionar arquitetura e repositórios ARM64
-          sudo dpkg --add-architecture arm64
-          sudo tee /etc/apt/sources.list.d/arm64-ports.list <<EOF
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-backports main restricted universe multiverse
-          EOF
-          
-          sudo apt-get update
-          sudo apt-get install -y \
-            gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu \
-            libusb-1.0-0-dev:arm64 \
-            libcrypto++-dev:arm64
-
       - name: Configure CMake
         run: |
-          mkdir -p build
-          cd build
-          if [ "${{ matrix.arch }}" = "x86_64" ]; then
-            cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja
-          else
-            export PKG_CONFIG_SYSROOT_DIR=/
-            export PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
-            cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja \
-              -DCMAKE_SYSTEM_NAME=Linux \
-              -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-              -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
-              -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
-              -DCMAKE_SYSROOT=/ \
-              -DCMAKE_FIND_ROOT_PATH=/usr/aarch64-linux-gnu \
-              -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
-              -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
-              -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
-              -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY
-          fi
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: cmake --build build --parallel $(nproc) --config Release
+        run: |
+          cmake --build build --parallel $(nproc)
 
       - name: Package artifact
         run: |
           mkdir -p dist
-          # Tenta copiar o binário (ajuste o nome se necessário)
+
+          # Ajusta se o binário tiver outro nome
           if [ -f build/odin4 ]; then
             cp build/odin4 dist/
           else
-            # Caso o binário tenha outro nome ou esteja em subpasta
-            find build -maxdepth 2 -type f -executable -not -name "*.so" -exec cp {} dist/odin4 \;
+            find build -type f -executable -not -name "*.so*" -exec cp {} dist/odin4 \;
           fi
-          
-          # Strip para reduzir tamanho
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            aarch64-linux-gnu-strip dist/odin4
-          else
-            strip dist/odin4
-          fi
-          
-          cd dist && zip ../odin4-linux-${{ matrix.arch }}.zip odin4
+
+          strip dist/odin4 || true
+          cd dist
+          zip ../odin4-linux-${{ matrix.arch }}.zip odin4
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: odin4-linux-${{ matrix.arch }}
           path: odin4-linux-${{ matrix.arch }}.zip
-          if-no-files-found: error
