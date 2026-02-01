@@ -13,6 +13,7 @@ While the project is now more stable, there may still be remaining bugs, edge ca
 - Numerous build errors and warnings fixed
 - Improved code stability and internal cleanup
 - Better consistency in code and comments
+- Complete migration of everything to English
 
 ## Help wanted
 Even with recent improvements, community contributions are still highly appreciated.
