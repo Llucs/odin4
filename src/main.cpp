@@ -1,6 +1,6 @@
 // ============================================================================
 // ODIN4 - Samsung Device Flashing Tool
-// Version: 1.3.1 (4634111)
+// Version: 1.3.2 (4634112)
 // Protocol: Thor USB Communication
 // ============================================================================
 
@@ -28,11 +28,11 @@
 // CONSTANTS & DEFINITIONS
 // ============================================================================
 
-#define ODIN4_VERSION "1.3.1 (4634111)"
+#define ODIN4_VERSION "1.3.2 (4634112)"
 #define SAMSUNG_VID 0x04E8
 #define USB_RETRY_COUNT 3
-#define USB_TIMEOUT_BULK 60000 // 60 
-#define USB_TIMEOUT_CONTROL 5000 // 5 
+#define USB_TIMEOUT_BULK 60000 // 60000 ms (60 seconds)
+#define USB_TIMEOUT_CONTROL 5000 // 5000 ms (5 seconds)
 
 // ============================================================================
 // UTILITIES
@@ -65,13 +65,13 @@ void log_hexdump(const std::string& title, const void* data, size_t size) {
 // --- Endianness Helper (Samsung protocol is Little Endian) ---
 uint32_t le32_to_h(uint32_t le_val) {
     uint32_t host_val = 1;
-    if (*(char*)&host_val == 1) { // Host is Little Endian
+    if (*(char*)&host_val == 1) {
         return le_val;
-    } else { // Host is Big Endian
-        return (le_val >> 24) | 
-               ((le_val >> 8) & 0x0000FF00) | 
-               ((le_val << 8) & 0x00FF0000) | 
-               (le_val << 24);
+    } else {
+        return ((le_val >> 24) & 0x000000FF) | 
+               ((le_val >> 8)  & 0x0000FF00) | 
+               ((le_val << 8)  & 0x00FF0000) | 
+               ((le_val << 24) & 0xFF000000);
     }
 }
 
@@ -81,38 +81,33 @@ bool check_md5_signature(const std::string& file_path) {
         return true; 
     }
 
-    log_info("Verificando assinatura MD5 para " + file_path);
+    log_info("Verifying MD5 signature for " + file_path);
     std::ifstream file(file_path, std::ios::binary | std::ios::ate);
     if (!file) {
-        log_error("Não foi possível abrir o arquivo para verificação MD5: " + file_path);
+        log_error("Could not open file for MD5 verification: " + file_path);
         return false;
     }
 
-    // Usamos long long para evitar ambiguidade com std::streampos
     long long file_size = file.tellg();
     if (file_size < 32) {
-        log_error("Arquivo muito pequeno para conter assinatura MD5.");
+        log_error("File too small to contain MD5 signature.");
         return false;
     }
 
-    // 1. Ler a assinatura MD5 esperada (últimos 32 bytes)
     file.seekg(file_size - 32);
     char expected_md5_hex[33];
     file.read(expected_md5_hex, 32);
     expected_md5_hex[32] = '\0';
     std::string expected_md5(expected_md5_hex);
 
-    log_info("MD5 Esperado: " + expected_md5);
+    log_info("Expected MD5: " + expected_md5);
 
-    // 2. Calcular o MD5 do conteúdo
     file.seekg(0);
     size_t content_size = (size_t)(file_size - 32);
 
     CryptoPP::Weak::MD5 hash;
     std::vector<unsigned char> digest(hash.DigestSize());
-
     std::vector<char> buffer(1048576);
-
     size_t total_read = 0;
 
     while (total_read < content_size) {
@@ -128,28 +123,24 @@ bool check_md5_signature(const std::string& file_path) {
 
     hash.Final(digest.data());
 
-    // 3. Converter para hexadecimal
     std::string calculated_md5;
     CryptoPP::HexEncoder encoder;
     encoder.Attach(new CryptoPP::StringSink(calculated_md5));
     encoder.Put(digest.data(), digest.size());
     encoder.MessageEnd();
 
-    // Converter para minúsculas para comparação
     std::transform(calculated_md5.begin(), calculated_md5.end(), calculated_md5.begin(), ::tolower);
     
-    // Normalizar expected_md5 também
     std::string expected_md5_lower = expected_md5;
     std::transform(expected_md5_lower.begin(), expected_md5_lower.end(), expected_md5_lower.begin(), ::tolower);
 
-    log_info("MD5 Calculado: " + calculated_md5);
+    log_info("Calculated MD5: " + calculated_md5);
 
-    // 4. Comparar (Ignorar case - Samsung as vezes usa maiúsculas)
     if (calculated_md5 == expected_md5_lower) {
-        log_info("Verificação MD5 bem-sucedida.");
+        log_info("MD5 verification successful.");
         return true;
     } else {
-        log_error("Verificação MD5 falhou! Esperado: " + expected_md5_lower + " | Calculado: " + calculated_md5);
+        log_error("MD5 verification failed! Expected: " + expected_md5_lower + " | Calculated: " + calculated_md5);
         return false;
     }
 }
@@ -302,161 +293,145 @@ struct PitTable {
 class UsbDevice {
 private:
     libusb_device_handle *handle = nullptr;
-    libusb_device *device = nullptr;
+    libusb_device **device_list = nullptr;
     const std::vector<uint16_t> DOWNLOAD_PIDS = {0x685D, 0x6600, 0x6860, 0x6861, 0x6862};
     
     const uint8_t ENDPOINT_OUT = 0x01;
     const uint8_t ENDPOINT_IN = 0x81;
 
-    // RAII wrapper para libusb_device_handle
-    struct HandleCloser {
-        libusb_device_handle *&h;
-        HandleCloser(libusb_device_handle *&handle_ref) : h(handle_ref) {}
-        ~HandleCloser() {
-            if (h) {
-                libusb_release_interface(h, 0);
-                libusb_close(h);
-                h = nullptr;
-            }
-        }
-    };
-
 public:
     UsbDevice() = default;
     ~UsbDevice() {
-        // O destrutor da classe UsbDevice não precisa fazer nada,
-        // pois o HandleCloser local em open_device e a refatoração
-        // do open_device já garantem o cleanup.
+        if (handle) {
+            libusb_release_interface(handle, 0);
+            libusb_close(handle);
+            handle = nullptr;
+        }
+        if (device_list) {
+            libusb_free_device_list(device_list, 1);
+            device_list = nullptr;
+        }
     }
 
-    // --- Device Detection & Connection ---
     bool open_device(const std::string& specific_path = "") {
-        libusb_device **list = nullptr;
-        ssize_t cnt = libusb_get_device_list(NULL, &list);
+        ssize_t cnt = libusb_get_device_list(NULL, &device_list);
         if (cnt < 0) {
-            log_error("Falha ao obter lista de dispositivos USB", (int)cnt);
+            log_error("Failed to get USB device list", (int)cnt);
             return false;
         }
 
-        struct ListCleanup {
-            libusb_device **list;
-            ListCleanup(libusb_device **l) : list(l) {}
-            ~ListCleanup() { if (list) libusb_free_device_list(list, 1); }
-        } list_cleanup(list);
-
+        libusb_device *target_device = nullptr;
         for (ssize_t i = 0; i < cnt; i++) {
             libusb_device_descriptor desc;
-            if (libusb_get_device_descriptor(list[i], &desc) < 0) continue;
+            if (libusb_get_device_descriptor(device_list[i], &desc) < 0) continue;
 
             if (desc.idVendor == SAMSUNG_VID) {
                 if (!specific_path.empty()) {
                     std::stringstream path_ss;
-                    path_ss << "/dev/bus/usb/" << (int)libusb_get_bus_number(list[i]) << "/" << (int)libusb_get_device_address(list[i]);
+                    path_ss << "/dev/bus/usb/" << (int)libusb_get_bus_number(device_list[i]) << "/" << (int)libusb_get_device_address(device_list[i]);
                     if (path_ss.str() != specific_path) continue;
                 }
                 for (uint16_t pid : DOWNLOAD_PIDS) {
                     if (desc.idProduct == pid) {
-                        device = list[i];
+                        target_device = device_list[i];
                         break;
                     }
                 }
             }
-            if (device) break;
+            if (target_device) break;
         }
 
-        if (!device) {
-            log_info("Nenhum dispositivo Samsung em modo download encontrado.");
+        if (!target_device) {
+            log_info("No Samsung device in download mode found.");
             return false;
         }
 
-        int err = libusb_open(device, &handle);
+        int err = libusb_open(target_device, &handle);
         if (err < 0) {
-            log_error("Falha ao abrir dispositivo USB", err);
+            log_error("Failed to open USB device", err);
             return false;
         }
-
-        // RAII para garantir o fechamento do handle em caso de falha posterior
-        HandleCloser closer(handle);
 
         if (libusb_kernel_driver_active(handle, 0) == 1) {
             int detach_err = libusb_detach_kernel_driver(handle, 0);
             if (detach_err < 0) {
-                log_error("Falha ao desanexar driver do kernel", detach_err);
+                log_error("Failed to detach kernel driver", detach_err);
                 return false;
             }
         }
 
         err = libusb_claim_interface(handle, 0);
         if (err < 0) {
-            log_error("Falha ao reivindicar interface USB", err);
+            log_error("Failed to claim USB interface", err);
             return false;
         }
         
-        // Se tudo deu certo, desativa o RAII local para que o handle seja gerenciado pelo UsbDevice
-        closer.h = nullptr;
         return true;
     }
 
-    // --- Low-level USB Communication ---
-    bool send_packet(const void *data, size_t size, bool log_dump = false) {
+    bool send_packet(const void *data, size_t size, bool is_control = false) {
         int actual_length;
         int err = 0;
-        int timeout = log_dump ? USB_TIMEOUT_CONTROL : USB_TIMEOUT_BULK;
+        int timeout = is_control ? USB_TIMEOUT_CONTROL : USB_TIMEOUT_BULK;
         
         for (int attempt = 0; attempt < USB_RETRY_COUNT; ++attempt) {
             err = libusb_bulk_transfer(handle, ENDPOINT_OUT, (unsigned char*)data, size, &actual_length, timeout);
             
             if (err == 0 && actual_length == (int)size) {
-                if (log_dump) log_hexdump("Pacote Enviado (Controle)", data, size);
-                return true; // Sucesso
+                if (is_control) log_hexdump("Packet Sent (Control)", data, size);
+                return true;
             }
             
             if (err != 0) {
-                log_error("Falha no envio de pacote USB (tentativa " + std::to_string(attempt + 1) + ")", err);
+                log_error("USB packet send failed (attempt " + std::to_string(attempt + 1) + ")", err);
             } else {
-                log_error("Tamanho de envio incorreto (tentativa " + std::to_string(attempt + 1) + "): esperado " + std::to_string(size) + ", enviado " + std::to_string(actual_length));
+                log_error("Incorrect send size (attempt " + std::to_string(attempt + 1) + "): expected " + std::to_string(size) + ", sent " + std::to_string(actual_length));
             }
             
             if (attempt < USB_RETRY_COUNT - 1) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Pequena pausa antes de tentar novamente
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         }
         
-        return false; // Falha após todas as tentativas
+        return false;
     }
 
-    bool receive_packet(void *data, size_t size, int *actual_length, bool log_dump = false) {
+    bool receive_packet(void *data, size_t size, int *actual_length, bool is_control = false) {
         int err = 0;
-        int timeout = log_dump ? USB_TIMEOUT_CONTROL : USB_TIMEOUT_BULK;
+        int timeout = is_control ? USB_TIMEOUT_CONTROL : USB_TIMEOUT_BULK;
         
         for (int attempt = 0; attempt < USB_RETRY_COUNT; ++attempt) {
             err = libusb_bulk_transfer(handle, ENDPOINT_IN, (unsigned char*)data, size, actual_length, timeout);
             
-            if (err == 0) {
-                if (log_dump) log_hexdump("Pacote Recebido (Controle)", data, *actual_length);
-                return true; // Sucesso
+            if (err == 0 && *actual_length == (int)size) {
+                if (is_control) log_hexdump("Packet Received (Control)", data, *actual_length);
+                return true;
             }
             
-            log_error("Falha no recebimento de pacote USB (tentativa " + std::to_string(attempt + 1) + ")", err);
+            if (err != 0) {
+                log_error("USB packet receive failed (attempt " + std::to_string(attempt + 1) + ")", err);
+            } else {
+                log_error("Incorrect receive size (attempt " + std::to_string(attempt + 1) + "): expected " + std::to_string(size) + ", received " + std::to_string(*actual_length));
+            }
             
             if (attempt < USB_RETRY_COUNT - 1) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Pequena pausa antes de tentar novamente
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         }
         
-        return false; // Falha após todas as tentativas
+        return false;
     }
 
     // --- Thor Protocol Handshake ---
     bool handshake() {
-        log_info("Iniciando Handshake...");
+        log_info("Starting handshake...");
         ThorHandshakePacket pkt;
         pkt.header.packet_size = sizeof(ThorHandshakePacket);
         pkt.header.packet_type = THOR_PACKET_HANDSHAKE;
         pkt.header.packet_flags = 0;
-        pkt.magic = 0x00000001;
-        pkt.version = 0x00000001;
-        pkt.packet_size = 0x00400000;
+        pkt.magic = 0x4F44494E; // 'ODIN'
+        pkt.version = 0x00010000;
+        pkt.packet_size = sizeof(ThorHandshakePacket);
 
         if (!send_packet(&pkt, sizeof(pkt), true)) return false;
 
@@ -465,29 +440,25 @@ public:
         if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
         
         if (response.header.packet_type != THOR_PACKET_RESPONSE || response.response_code != 0) {
-            log_error("Handshake falhou. Tipo de pacote: " + std::to_string(response.header.packet_type) + ", Código de resposta: " + std::to_string(response.response_code));
+            log_error("Handshake failed. Response code: " + std::to_string(response.response_code));
             
-            // Tenta limpar o buffer de entrada USB e retentar o Handshake
-            log_info("Tentando limpar o buffer de entrada USB e retentar o Handshake...");
+            log_info("Attempting to clear USB halt and retry handshake...");
             libusb_clear_halt(handle, ENDPOINT_IN);
             
-            // Tenta o handshake novamente (retry manual)
             if (!send_packet(&pkt, sizeof(pkt), true)) return false;
-
             if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
             
             if (response.header.packet_type != THOR_PACKET_RESPONSE || response.response_code != 0) {
-                log_error("Handshake falhou após retry. Tipo de pacote: " + std::to_string(response.header.packet_type) + ", Código de resposta: " + std::to_string(response.response_code));
+                log_error("Handshake failed after retry. Response code: " + std::to_string(response.response_code));
                 return false;
             }
         }
-        log_info("Handshake bem-sucedido.");
+        log_info("Handshake successful.");
         return true;
     }
 
-    // --- Device Type Request ---
     bool request_device_type() {
-        log_info("Solicitando tipo de dispositivo...");
+        log_info("Requesting device type...");
         ThorPacketHeader pkt;
         pkt.packet_size = sizeof(ThorPacketHeader);
         pkt.packet_type = THOR_PACKET_DEVICE_TYPE;
@@ -500,16 +471,15 @@ public:
         if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
 
         if (response.header.packet_type != THOR_PACKET_DEVICE_TYPE) {
-            log_error("Solicitação de tipo de dispositivo falhou. Tipo de pacote inesperado: " + std::to_string(response.header.packet_type));
+            log_error("Device type request failed. Unexpected packet type: " + std::to_string(response.header.packet_type));
             return false;
         }
-        log_info("Tipo de dispositivo recebido.");
+        log_info("Device type received.");
         return true;
     }
 
-    // --- Session Management ---
     bool begin_session() {
-        log_info("Iniciando sessão...");
+        log_info("Beginning session...");
         ThorBeginSessionPacket pkt;
         pkt.header.packet_size = sizeof(ThorBeginSessionPacket);
         pkt.header.packet_type = THOR_PACKET_BEGIN_SESSION;
@@ -524,15 +494,15 @@ public:
         if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
 
         if (response.header.packet_type != THOR_PACKET_RESPONSE || response.response_code != 0) {
-            log_error("Início de sessão falhou. Código de resposta: " + std::to_string(response.response_code));
+            log_error("Session begin failed. Response code: " + std::to_string(response.response_code));
             return false;
         }
-        log_info("Sessão iniciada com sucesso.");
+        log_info("Session started successfully.");
         return true;
     }
 
     bool end_session() {
-        log_info("Encerrando sessão...");
+        log_info("Ending session...");
         ThorEndSessionPacket pkt;
         pkt.header.packet_size = sizeof(ThorEndSessionPacket);
         pkt.header.packet_type = THOR_PACKET_END_SESSION;
@@ -545,16 +515,15 @@ public:
         if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
 
         if (response.header.packet_type != THOR_PACKET_RESPONSE || response.response_code != 0) {
-            log_error("Encerramento de sessão falhou. Código de resposta: " + std::to_string(response.response_code));
+            log_error("Session end failed. Response code: " + std::to_string(response.response_code));
             return false;
         }
-        log_info("Sessão encerrada com sucesso.");
+        log_info("Session ended successfully.");
         return true;
     }
 
-    // --- PIT (Partition Information Table) Operations ---
     bool request_pit() {
-        log_info("Solicitando PIT...");
+        log_info("Requesting PIT...");
         ThorPacketHeader pkt;
         pkt.packet_size = sizeof(ThorPacketHeader);
         pkt.packet_type = THOR_PACKET_PIT_FILE;
@@ -567,10 +536,10 @@ public:
         if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
 
         if (response.header.packet_type != THOR_PACKET_PIT_FILE) {
-            log_error("Solicitação de PIT falhou. Tipo de pacote inesperado: " + std::to_string(response.header.packet_type));
+            log_error("PIT request failed. Unexpected packet type: " + std::to_string(response.header.packet_type));
             return false;
         }
-        log_info("Pacote de tamanho do PIT recebido.");
+        log_info("PIT size packet received.");
         return true;
     }
 
@@ -581,88 +550,81 @@ public:
 
         uint32_t pit_data_size = le32_to_h(pit_size_pkt.pit_file_size);
         if (pit_data_size == 0 || pit_data_size > 1048576) {
-            log_error("Tamanho de PIT invalido ou muito grande.");
+            log_error("Invalid or too large PIT size.");
             return false;
         }
 
-        log_info("Tamanho do PIT: " + std::to_string(pit_data_size) + " bytes.");
+        log_info("PIT size: " + std::to_string(pit_data_size) + " bytes.");
         
-        // CORRIGIDO: Removido código lixo que veio de copy-paste e estava quebrando a função
         std::vector<unsigned char> pit_data(pit_data_size);
         if (!receive_packet(pit_data.data(), pit_data_size, &actual_length)) {
-            log_error("Falha ao receber dados do PIT.");
+            log_error("Failed to receive PIT data.");
             return false;
         }
 
-        // Validação de tamanho mínimo
         if (pit_data_size < 8) {
-            log_error("Tamanho do PIT recebido muito pequeno.");
+            log_error("Received PIT size too small.");
             return false;
         }
 
-        // Endianness fix e validação de bounds
         pit_table.header_size = le32_to_h(*(uint32_t*)&pit_data[0]);
         pit_table.entry_count = le32_to_h(*(uint32_t*)&pit_data[4]);
 
         if (pit_table.entry_count > 100) {
-            log_error("Contagem de entradas PIT inválida ou excessiva: " + std::to_string(pit_table.entry_count));
+            log_error("Invalid or excessive PIT entry count: " + std::to_string(pit_table.entry_count));
             return false;
         }
         
         size_t expected_min_size = pit_table.header_size + (pit_table.entry_count * 128);
         if (pit_data_size < expected_min_size) {
-            log_error("Tamanho do PIT recebido (" + std::to_string(pit_data_size) + ") é menor que o esperado (" + std::to_string(expected_min_size) + ").");
+            log_error("Received PIT size (" + std::to_string(pit_data_size) + ") is smaller than expected (" + std::to_string(expected_min_size) + ").");
             return false;
         }
 
         pit_table.entries.resize(pit_table.entry_count);
-        log_info("Lendo " + std::to_string(pit_table.entry_count) + " entradas PIT.");
+        log_info("Reading " + std::to_string(pit_table.entry_count) + " PIT entries.");
 
         for (uint32_t i = 0; i < pit_table.entry_count; ++i) {
             size_t offset = pit_table.header_size + (i * 128);
             
             if (offset + 128 > pit_data_size) {
-                log_error("Acesso fora dos limites ao ler a entrada PIT " + std::to_string(i) + ".");
+                log_error("Out of bounds access reading PIT entry " + std::to_string(i) + ".");
                 return false;
             }
 
-            // Endianness fix aplicado
             pit_table.entries[i].identifier = le32_to_h(*(uint32_t*)&pit_data[offset + 0]);
             pit_table.entries[i].flash_type = le32_to_h(*(uint32_t*)&pit_data[offset + 8]);
             pit_table.entries[i].file_size = le32_to_h(*(uint32_t*)&pit_data[offset + 12]);
             pit_table.entries[i].block_size = le32_to_h(*(uint32_t*)&pit_data[offset + 16]);
             
-            // Correção: Garante o terminador nulo (\0)
-            strncpy(pit_table.entries[i].partition_name, (char*)&pit_data[offset + 32], 31);
-            pit_table.entries[i].partition_name[31] = '\0';
+            strncpy(pit_table.entries[i].partition_name, (char*)&pit_data[offset + 32], sizeof(pit_table.entries[i].partition_name) - 1);
+            pit_table.entries[i].partition_name[sizeof(pit_table.entries[i].partition_name) - 1] = '\0';
             
-            strncpy(pit_table.entries[i].file_name, (char*)&pit_data[offset + 64], 31);
-            pit_table.entries[i].file_name[31] = '\0';
+            strncpy(pit_table.entries[i].file_name, (char*)&pit_data[offset + 64], sizeof(pit_table.entries[i].file_name) - 1);
+            pit_table.entries[i].file_name[sizeof(pit_table.entries[i].file_name) - 1] = '\0';
         }
-        log_info("PIT lido com sucesso.");
+        log_info("PIT read successfully.");
         return true;
     }
 
-    // --- File Transfer Operations ---
     bool send_file_part_chunk(const void* data, size_t size) {
-        // Envia um chunk de dados. Não é idempotente, então não deve ter retry.
         int actual_length;
         int err = libusb_bulk_transfer(handle, ENDPOINT_OUT, (unsigned char*)data, size, &actual_length, USB_TIMEOUT_BULK);
         
         if (err != 0) {
-            log_error("Falha no envio de chunk USB", err);
+            log_error("USB chunk send failed", err);
             return false;
         }
         if (actual_length != (int)size) {
-            log_error("Tamanho de chunk enviado incorreto: esperado " + std::to_string(size) + ", enviado " + std::to_string(actual_length));
+            log_error("Incorrect chunk send size: expected " + std::to_string(size) + ", sent " + std::to_string(actual_length));
             return false;
         }
         return true;
     }
 
-        bool send_file_part_header(size_t total_size) {
+    bool send_file_part_header(size_t total_size) {
         if (total_size > 0xFFFFFFFF) {
-            log_info("Aviso: Tamanho do arquivo excede 4GB. Ajustando protocolo para envio segmentado.");
+            log_info("Warning: File size exceeds 4GB. Adjusting protocol for segmented transfer.");
         }
 
         ThorFilePartSizePacket size_pkt;
@@ -678,14 +640,14 @@ public:
         if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
 
         if (response.header.packet_type != THOR_PACKET_RESPONSE || response.response_code != 0) {
-            log_error("Resposta inesperada ao enviar tamanho da parte do arquivo. Código: " + std::to_string(response.response_code));
+            log_error("Unexpected response sending file part size. Code: " + std::to_string(response.response_code));
             return false;
         }
         return true;
     }
 
     bool end_file_transfer(uint32_t partition_id) {
-        log_info("Finalizando transferência de arquivo para partição ID: " + std::to_string(partition_id));
+        log_info("Finalizing file transfer for partition ID: " + std::to_string(partition_id));
         ThorEndFileTransferPacket pkt;
         pkt.header.packet_size = sizeof(ThorEndFileTransferPacket);
         pkt.header.packet_type = THOR_PACKET_END_FILE_TRANSFER;
@@ -699,16 +661,15 @@ public:
         if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
 
         if (response.header.packet_type != THOR_PACKET_RESPONSE || response.response_code != 0) {
-            log_error("Finalização de transferência falhou. Código de resposta: " + std::to_string(response.response_code));
+            log_error("File transfer finalization failed. Response code: " + std::to_string(response.response_code));
             return false;
         }
-        log_info("Transferência finalizada com sucesso.");
+        log_info("Transfer finalized successfully.");
         return true;
     }
 
-    // --- Control Commands ---
     bool send_control(uint32_t control_type) {
-        log_info("Enviando comando de controle: " + std::to_string(control_type));
+        log_info("Sending control command: " + std::to_string(control_type));
         ThorControlPacket pkt;
         pkt.header.packet_size = sizeof(ThorControlPacket);
         pkt.header.packet_type = THOR_PACKET_CONTROL;
@@ -722,10 +683,10 @@ public:
         if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
 
         if (response.header.packet_type != THOR_PACKET_RESPONSE || response.response_code != 0) {
-            log_error("Comando de controle falhou. Código de resposta: " + std::to_string(response.response_code));
+            log_error("Control command failed. Response code: " + std::to_string(response.response_code));
             return false;
         }
-        log_info("Comando de controle enviado com sucesso.");
+        log_info("Control command sent successfully.");
         return true;
     }
 };
@@ -734,115 +695,109 @@ public:
 // COMPRESSION & FILE PROCESSING
 // ============================================================================
 
-// --- LZ4 Decompression (Simplificada para streaming) ---
 std::vector<unsigned char> decompress_lz4_block(const std::vector<unsigned char>& compressed, const std::string& filename) {
-    size_t estimated_size = compressed.size() * 5;
-    if (estimated_size < 10485760) estimated_size = 10485760;
+    if (compressed.empty()) return {};
+
+    size_t estimated_size = compressed.size() * 4;
+    if (estimated_size < 1048576) estimated_size = 1048576;
     
     std::vector<unsigned char> decompressed;
-    size_t max_limit = 8589934592ULL; 
+    const size_t max_limit = 1024 * 1024 * 1024; // 1GB limit for a single block
 
-    while (estimated_size <= max_limit * 2) {
+    while (estimated_size <= max_limit) {
         try {
             decompressed.resize(estimated_size);
-        } catch (...) {
-            log_error("Falha de alocação de memória para descompressão de " + filename);
+        } catch (const std::bad_alloc&) {
+            log_error("Memory allocation failed for decompression of " + filename);
             return {};
         }
 
-        int result = LZ4_decompress_safe((const char*)compressed.data(), (char*)decompressed.data(), compressed.size(), decompressed.size());
+        int result = LZ4_decompress_safe((const char*)compressed.data(), (char*)decompressed.data(), (int)compressed.size(), (int)decompressed.size());
 
-        if (result > 0) {
+        if (result >= 0) {
             decompressed.resize(result);
             return decompressed;
         }
         
-        if (estimated_size >= max_limit) break;
+        // If result < 0, it might be because the buffer is too small or data is corrupt.
+        // We try to expand the buffer.
         estimated_size *= 2;
     }
 
-    log_error("Falha na descompressão LZ4 para o arquivo " + filename + " após expandir buffer.");
+    log_error("LZ4 decompression failed for " + filename + " (buffer limit reached or corrupt data).");
     return {};
 }
 
-// --- TAR File Processing (Refatorado para Streaming) ---
 bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const PitTable& pit_table) {
-    log_info("Processando arquivo TAR: " + tar_path);
+    log_info("Processing TAR file: " + tar_path);
     
-    // 1. Verificação de MD5
-    if (!check_md5_signature(tar_path)) {
-        return false;
-    }
+    if (!check_md5_signature(tar_path)) return false;
 
     std::ifstream file(tar_path, std::ios::binary);
     if (!file) {
-        log_error("Não foi possível abrir o arquivo TAR: " + tar_path);
+        log_error("Could not open TAR file: " + tar_path);
         return false;
     }
 
-    // CORRIGIDO: Definição da variável max_read_pos que faltava
     file.seekg(0, std::ios::end);
     long long file_size = file.tellg();
     file.seekg(0);
     long long max_read_pos = file_size;
 
-    // Se for .tar.md5, ignora os últimos 32 bytes (assinatura MD5)
     if (tar_path.size() >= 8 && tar_path.substr(tar_path.size() - 8) == ".tar.md5") {
         max_read_pos -= 32;
     }
 
     char header[512];
-    uint32_t part_index = 0;
-    const size_t CHUNK_SIZE = 1048576; // 1MB para leitura/envio
+    const size_t CHUNK_SIZE = 1048576;
 
-    // CORRIGIDO: Loop com verificação correta de limite de leitura
-    while (file.tellg() < max_read_pos && (max_read_pos - (long long)file.tellg() >= 512) && file.read(header, 512)) {
-        std::string filename(header, 100);
-        filename = filename.c_str();
+    while (file.tellg() < max_read_pos) {
+        if (!file.read(header, 512)) break;
 
-        if (filename.empty()) break;
+        std::string filename_str(header, 100);
+        std::string filename = filename_str.c_str();
+
+        if (filename.empty()) {
+            bool all_zeros = true;
+            for (int k = 0; k < 512; ++k) if (header[k] != 0) { all_zeros = false; break; }
+            if (all_zeros) break;
+            continue;
+        }
 
         std::string size_str(header + 124, 12);
         size_t data_size = 0;
-        try { data_size = std::stoull(size_str, nullptr, 8); } catch (...) { break; }
+        try { data_size = std::stoull(size_str, nullptr, 8); } catch (...) { 
+            log_error("Invalid file size in TAR header for " + filename);
+            break; 
+        }
 
-        log_info("Encontrado arquivo no TAR: " + filename + " (tamanho: " + std::to_string(data_size) + " bytes)");
+        log_info("Found file in TAR: " + filename + " (" + std::to_string(data_size) + " bytes)");
 
-        // 2. Encontrar a partição no PIT
         uint32_t partition_id = 0;
         std::string base_name = filename;
         bool is_lz4 = base_name.find(".lz4") != std::string::npos;
-        if (is_lz4) {
-            base_name = base_name.substr(0, base_name.find(".lz4"));
-        }
+        if (is_lz4) base_name = base_name.substr(0, base_name.find(".lz4"));
 
         for (const auto& entry : pit_table.entries) {
             if (std::string(entry.file_name) == base_name || std::string(entry.file_name) == filename) {
                 partition_id = entry.identifier;
-                log_info("Partição encontrada no PIT: " + std::string(entry.partition_name) + " (ID: " + std::to_string(partition_id) + ")");
+                log_info("Partition found in PIT: " + std::string(entry.partition_name) + " (ID: " + std::to_string(partition_id) + ")");
                 break;
             }
         }
 
         if (partition_id == 0) {
-            log_info("Arquivo " + filename + " ignorado: Partição não encontrada no PIT.");
+            log_info("File " + filename + " ignored: Partition not found in PIT.");
             file.ignore(data_size + (512 - (data_size % 512)) % 512);
             continue;
         }
 
-        // 3. Lógica de Streaming
         if (is_lz4) {
-            // Se for LZ4, precisamos ler o arquivo COMPRIMIDO inteiro para a memória
-            // antes de descompactar, pois o LZ4 Frame é um bloco único.
-            // Isso ainda é um problema de memória, mas é a limitação da API LZ4_decompress_safe.
-            
             try {
                 std::vector<unsigned char> compressed_data(data_size);
                 file.read((char*)compressed_data.data(), data_size);
                 
                 std::vector<unsigned char> final_data = decompress_lz4_block(compressed_data, filename);
-                std::vector<unsigned char>().swap(compressed_data); 
-
                 if (final_data.empty()) {
                     file.ignore((512 - (data_size % 512)) % 512);
                     continue;
@@ -854,13 +809,11 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
                     size_t to_send = std::min(CHUNK_SIZE, final_data.size() - i);
                     if (!usb_device.send_file_part_chunk(&final_data[i], to_send)) return false;
                 }
-            } catch (const std::bad_alloc& e) {
-                log_error("Memoria insuficiente para descomprimir " + filename);
+            } catch (const std::bad_alloc&) {
+                log_error("Insufficient memory to decompress " + filename);
                 return false;
             }
-            
         } else {
-            // Arquivo normal (não comprimido) - Streaming direto
             if (!usb_device.send_file_part_header(data_size)) return false;
 
             size_t remaining_size = data_size;
@@ -872,7 +825,7 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
                 size_t read_count = file.gcount();
 
                 if (read_count == 0) {
-                    log_error("Erro de leitura inesperado no arquivo TAR.");
+                    log_error("Unexpected read error in TAR file.");
                     return false;
                 }
 
@@ -881,12 +834,10 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
             }
         }
 
-        // 4. Ignorar padding e finalizar transferência
         size_t padding = (512 - (data_size % 512)) % 512;
         file.ignore(padding);
 
         if (!usb_device.end_file_transfer(partition_id)) return false;
-        part_index++;
     }
 
     return true;
@@ -898,39 +849,33 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
 
 // --- Help Menu ---
 void print_usage() {
-    std::cout << "Usage : odin4 [args...]" << std::endl;
-    std::cout << "Odin4 downloader. odin4 version " << ODIN4_VERSION << std::endl;
-    std::cout << " -v        SHOW VERSION" << std::endl;
-    std::cout << " -w        Show License" << std::endl;
+    std::cout << "Usage: odin4 [args...]" << std::endl;
+    std::cout << "Odin4 downloader. Version: " << ODIN4_VERSION << std::endl;
+    std::cout << " -v        Show version" << std::endl;
+    std::cout << " -w        Show license" << std::endl;
     std::cout << " -b        Add Bootloader file" << std::endl;
     std::cout << " -a        Add AP image file" << std::endl;
     std::cout << " -c        Add CP image file" << std::endl;
     std::cout << " -s        Add CSC file" << std::endl;
     std::cout << " -u        Add UMS file" << std::endl;
     std::cout << " -e        Set Nand erase option" << std::endl;
-    std::cout << " -V        Home binary validation check with pit file" << std::endl;
+    std::cout << " -V        Home binary validation check with PIT file" << std::endl;
     std::cout << " --reboot  Reboot into normal mode" << std::endl;
-    std::cout << " --redownload   Reboot into download mode if it possible (not working in normal case)" << std::endl;
+    // --redownload is a special command for some devices to return to download mode
+    std::cout << " --redownload   Reboot into download mode if possible" << std::endl;
     std::cout << " -d        Set a device path (detect automatically without this option)" << std::endl;
     std::cout << " -l        Show downloadable devices path" << std::endl;
     std::cout << std::endl;
-    std::cout << "IMPORTANT : You must set up your system to detect your device on LINUX host." << std::endl;
-    std::cout << " create this file: /etc/udev/rules.d/51-android.rules" << std::endl;
-    std::cout << " to add a line to the file:" << std::endl;
-    std::cout << " SUBSYSTEM==\"usb\", ATTR{idVendor}==\"04e8\", MODE=\"0666\", GROUP=\"plugdev\"" << std::endl;
-    std::cout << "   (http://developer.android.com/tools/device.html)" << std::endl;
-    std::cout << " And you maybe need to unload a module cdc_acm before downloading. (This is only needed for older kernels.)" << std::endl;
-    std::cout << "   $sudo rmmod cdc_acm" << std::endl;
-    std::cout << " OR" << std::endl;
-    std::cout << "   echo \"blacklist cdc_acm\" > /etc/modprobe.d/cdc_acm-blacklist.conf" << std::endl;
+    std::cout << "IMPORTANT: You must set up your system to detect your device on LINUX host." << std::endl;
+    std::cout << "Create this file: /etc/udev/rules.d/51-android.rules" << std::endl;
+    std::cout << "Add this line to the file:" << std::endl;
+    std::cout << "SUBSYSTEM==\"usb\", ATTR{idVendor}==\"04e8\", MODE=\"0666\", GROUP=\"plugdev\"" << std::endl;
     std::cout << std::endl;
-    std::cout << "Example :" << std::endl;
-    std::cout << "$odin4 -b BL_XXXX.tar.md5 -a AP_XXXX.tar.md5 -c CP_XXXX.tar.md5 -s CSC_XXXX.tar.md5" << std::endl;
+    std::cout << "Example:" << std::endl;
+    std::cout << "$ odin4 -b BL_XXXX.tar.md5 -a AP_XXXX.tar.md5 -c CP_XXXX.tar.md5 -s CSC_XXXX.tar.md5" << std::endl;
     std::cout << "Example (Select One Device):" << std::endl;
-    std::cout << "$odin4 -l" << std::endl;
-    std::cout << "PATH_OF_DEVICE_A" << std::endl;
-    std::cout << "PATH_OF_DEVICE_B" << std::endl;
-    std::cout << "$odin4 -b BL_XXXX.tar.md5 -a AP_XXXX.tar.md5 -c CP_XXXX.tar.md5 -s CSC_XXXX.tar.md5 -d PATH_OF_DEVICE_A" << std::endl;
+    std::cout << "$ odin4 -l" << std::endl;
+    std::cout << "$ odin4 -b BL_XXXX.tar.md5 -a AP_XXXX.tar.md5 -c CP_XXXX.tar.md5 -s CSC_XXXX.tar.md5 -d /dev/bus/usb/001/002" << std::endl;
     std::cout << std::endl;
     std::cout << "Odin Repository: https://github.com/Llucs/odin4" << std::endl;
 }
@@ -944,23 +889,16 @@ void print_version() {
 void print_license() {
     std::cout << "Odin4 — Open Odin Reimplementation" << std::endl;
     std::cout << std::endl;
-    std::cout << "Copyright (c) 2026 Leandro Lucas Mendes de Souza"
-              << std::endl;
+    std::cout << "Copyright (c) 2026 Llucs" << std::endl;
     std::cout << std::endl;
-    std::cout << "Licensed under the Apache License, Version 2.0 (the \"License\");"
-              << std::endl;
-    std::cout << "you may not use this software except in compliance with the License."
-              << std::endl;
-    std::cout << "You may obtain a copy of the License at:"
-              << std::endl;
+    std::cout << "Licensed under the Apache License, Version 2.0 (the \"License\");" << std::endl;
+    std::cout << "you may not use this software except in compliance with the License." << std::endl;
+    std::cout << "You may obtain a copy of the License at:" << std::endl;
     std::cout << std::endl;
-    std::cout << "  http://www.apache.org/licenses/LICENSE-2.0"
-              << std::endl;
+    std::cout << "  http://www.apache.org/licenses/LICENSE-2.0" << std::endl;
     std::cout << std::endl;
-    std::cout << "This software is provided \"AS IS\", WITHOUT WARRANTIES OR CONDITIONS"
-              << std::endl;
-    std::cout << "OF ANY KIND, either express or implied."
-              << std::endl;
+    std::cout << "This software is provided \"AS IS\", WITHOUT WARRANTIES OR CONDITIONS" << std::endl;
+    std::cout << "OF ANY KIND, either express or implied." << std::endl;
 }
 
 // --- List Connected Devices ---
@@ -1020,7 +958,7 @@ int run_flash_logic(const OdinConfig& config) {
     }
 
     if (!usb_device.begin_session()) {
-        log_error("Login failed.");
+        log_error("Session begin failed.");
         return 1;
     }
 
@@ -1043,11 +981,11 @@ int run_flash_logic(const OdinConfig& config) {
         {"UMS", config.ums}
     };
 
-        bool success = true;
+    bool success = true;
     for (const auto& f : files) {
         if (!f.second.empty()) {
             if (!process_tar_file(f.second, usb_device, pit_table)) {
-                log_error("Flash failed during file processing. " + f.first + ".");
+                log_error("Flash failed during file processing: " + f.first);
                 success = false;
                 break;
             }
@@ -1081,10 +1019,6 @@ int run_flash_logic(const OdinConfig& config) {
     log_info("Flash process completed successfully.");
     return 0;
 }
-
-// ============================================================================
-// ARGUMENT PARSING & MAIN
-// ============================================================================
 
 int process_arguments_and_run(int argc, char** argv) {
     OdinConfig config;
@@ -1125,7 +1059,11 @@ int process_arguments_and_run(int argc, char** argv) {
             continue; 
         }
 
-        if ((arg == "-b" || arg == "-a" || arg == "-c" || arg == "-s" || arg == "-u" || arg == "-d") && i + 1 < argc) {
+        if (arg == "-b" || arg == "-a" || arg == "-c" || arg == "-s" || arg == "-u" || arg == "-d") {
+            if (i + 1 >= argc) {
+                std::cerr << "Error: Option '" << arg << "' requires an argument." << std::endl;
+                return 1;
+            }
             if (arg == "-b") config.bootloader = argv[++i];
             else if (arg == "-a") config.ap = argv[++i];
             else if (arg == "-c") config.cp = argv[++i];
