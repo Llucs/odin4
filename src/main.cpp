@@ -1,6 +1,6 @@
 // ============================================================================
 // ODIN4 - Samsung Device Flashing Tool
-// Version: 1.3.2-db54ec2
+// Version: 2.0.0-db54ec2
 // Protocol: Thor USB Communication
 // ============================================================================
 
@@ -19,6 +19,7 @@
 #include <chrono>
 #include <cmath>
 #include <sstream>
+#include <endian.h>
 
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
 #include <cryptopp/md5.h>
@@ -28,7 +29,7 @@
 // CONSTANTS & DEFINITIONS
 // ============================================================================
 
-#define ODIN4_VERSION "1.3.2-db54ec2"
+#define ODIN4_VERSION "2.0.0-db54ec2"
 #define SAMSUNG_VID 0x04E8
 #define USB_RETRY_COUNT 3
 #define USB_TIMEOUT_BULK 60000 // 60000 ms (60 seconds)
@@ -62,18 +63,10 @@ void log_hexdump(const std::string& title, const void* data, size_t size) {
     std::cout << std::dec;
 }
 
-// --- Endianness Helper (Samsung protocol is Little Endian) ---
-uint32_t le32_to_h(uint32_t le_val) {
-    uint32_t host_val = 1;
-    if (*(char*)&host_val == 1) {
-        return le_val;
-    } else {
-        return ((le_val >> 24) & 0x000000FF) | 
-               ((le_val >> 8)  & 0x0000FF00) | 
-               ((le_val << 8)  & 0x00FF0000) | 
-               ((le_val << 24) & 0xFF000000);
-    }
-}
+// --- Endianness ---
+uint32_t le32_to_h(uint32_t val) { return le32toh(val); }
+uint32_t h_to_le32(uint32_t val) { return htole32(val); }
+uint16_t h_to_le16(uint16_t val) { return htole16(val); }
 
 // --- MD5 Validation ---
 bool check_md5_signature(const std::string& file_path) {
@@ -426,12 +419,12 @@ public:
     bool handshake() {
         log_info("Starting handshake...");
         ThorHandshakePacket pkt;
-        pkt.header.packet_size = sizeof(ThorHandshakePacket);
-        pkt.header.packet_type = THOR_PACKET_HANDSHAKE;
+        pkt.header.packet_size = h_to_le32(sizeof(ThorHandshakePacket));
+        pkt.header.packet_type = h_to_le16(THOR_PACKET_HANDSHAKE);
         pkt.header.packet_flags = 0;
-        pkt.magic = 0x4F44494E; // 'ODIN'
-        pkt.version = 0x00010000;
-        pkt.packet_size = sizeof(ThorHandshakePacket);
+        pkt.magic = h_to_le32(0x4F44494E); // 'ODIN'
+        pkt.version = h_to_le32(0x00010000);
+        pkt.packet_size = h_to_le32(sizeof(ThorHandshakePacket));
 
         if (!send_packet(&pkt, sizeof(pkt), true)) return false;
 
@@ -439,8 +432,8 @@ public:
         int actual_length;
         if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
         
-        if (response.header.packet_type != THOR_PACKET_RESPONSE || response.response_code != 0) {
-            log_error("Handshake failed. Response code: " + std::to_string(response.response_code));
+        if (le16toh(response.header.packet_type) != THOR_PACKET_RESPONSE || le32toh(response.response_code) != 0) {
+            log_error("Handshake failed. Response code: " + std::to_string(le32toh(response.response_code)));
             
             log_info("Attempting to clear USB halt and retry handshake...");
             libusb_clear_halt(handle, ENDPOINT_IN);
@@ -448,8 +441,8 @@ public:
             if (!send_packet(&pkt, sizeof(pkt), true)) return false;
             if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
             
-            if (response.header.packet_type != THOR_PACKET_RESPONSE || response.response_code != 0) {
-                log_error("Handshake failed after retry. Response code: " + std::to_string(response.response_code));
+            if (le16toh(response.header.packet_type) != THOR_PACKET_RESPONSE || le32toh(response.response_code) != 0) {
+                log_error("Handshake failed after retry. Response code: " + std::to_string(le32toh(response.response_code)));
                 return false;
             }
         }
@@ -460,8 +453,8 @@ public:
     bool request_device_type() {
         log_info("Requesting device type...");
         ThorPacketHeader pkt;
-        pkt.packet_size = sizeof(ThorPacketHeader);
-        pkt.packet_type = THOR_PACKET_DEVICE_TYPE;
+        pkt.packet_size = h_to_le32(sizeof(ThorPacketHeader));
+        pkt.packet_type = h_to_le16(THOR_PACKET_DEVICE_TYPE);
         pkt.packet_flags = 0;
 
         if (!send_packet(&pkt, sizeof(pkt), true)) return false;
@@ -470,8 +463,8 @@ public:
         int actual_length;
         if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
 
-        if (response.header.packet_type != THOR_PACKET_DEVICE_TYPE) {
-            log_error("Device type request failed. Unexpected packet type: " + std::to_string(response.header.packet_type));
+        if (le16toh(response.header.packet_type) != THOR_PACKET_DEVICE_TYPE) {
+            log_error("Device type request failed. Unexpected packet type: " + std::to_string(le16toh(response.header.packet_type)));
             return false;
         }
         log_info("Device type received.");
@@ -481,8 +474,8 @@ public:
     bool begin_session() {
         log_info("Beginning session...");
         ThorBeginSessionPacket pkt;
-        pkt.header.packet_size = sizeof(ThorBeginSessionPacket);
-        pkt.header.packet_type = THOR_PACKET_BEGIN_SESSION;
+        pkt.header.packet_size = h_to_le32(sizeof(ThorBeginSessionPacket));
+        pkt.header.packet_type = h_to_le16(THOR_PACKET_BEGIN_SESSION);
         pkt.header.packet_flags = 0;
         pkt.unknown1 = 0;
         pkt.unknown2 = 0;
@@ -493,8 +486,8 @@ public:
         int actual_length;
         if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
 
-        if (response.header.packet_type != THOR_PACKET_RESPONSE || response.response_code != 0) {
-            log_error("Session begin failed. Response code: " + std::to_string(response.response_code));
+        if (le16toh(response.header.packet_type) != THOR_PACKET_RESPONSE || le32toh(response.response_code) != 0) {
+            log_error("Session begin failed. Response code: " + std::to_string(le32toh(response.response_code)));
             return false;
         }
         log_info("Session started successfully.");
@@ -504,8 +497,8 @@ public:
     bool end_session() {
         log_info("Ending session...");
         ThorEndSessionPacket pkt;
-        pkt.header.packet_size = sizeof(ThorEndSessionPacket);
-        pkt.header.packet_type = THOR_PACKET_END_SESSION;
+        pkt.header.packet_size = h_to_le32(sizeof(ThorEndSessionPacket));
+        pkt.header.packet_type = h_to_le16(THOR_PACKET_END_SESSION);
         pkt.header.packet_flags = 0;
 
         if (!send_packet(&pkt, sizeof(pkt), true)) return false;
@@ -514,8 +507,8 @@ public:
         int actual_length;
         if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
 
-        if (response.header.packet_type != THOR_PACKET_RESPONSE || response.response_code != 0) {
-            log_error("Session end failed. Response code: " + std::to_string(response.response_code));
+        if (le16toh(response.header.packet_type) != THOR_PACKET_RESPONSE || le32toh(response.response_code) != 0) {
+            log_error("Session end failed. Response code: " + std::to_string(le32toh(response.response_code)));
             return false;
         }
         log_info("Session ended successfully.");
@@ -525,8 +518,8 @@ public:
     bool request_pit() {
         log_info("Requesting PIT...");
         ThorPacketHeader pkt;
-        pkt.packet_size = sizeof(ThorPacketHeader);
-        pkt.packet_type = THOR_PACKET_PIT_FILE;
+        pkt.packet_size = h_to_le32(sizeof(ThorPacketHeader));
+        pkt.packet_type = h_to_le16(THOR_PACKET_PIT_FILE);
         pkt.packet_flags = 0;
 
         if (!send_packet(&pkt, sizeof(pkt), true)) return false;
@@ -535,8 +528,8 @@ public:
         int actual_length;
         if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
 
-        if (response.header.packet_type != THOR_PACKET_PIT_FILE) {
-            log_error("PIT request failed. Unexpected packet type: " + std::to_string(response.header.packet_type));
+        if (le16toh(response.header.packet_type) != THOR_PACKET_PIT_FILE) {
+            log_error("PIT request failed. Unexpected packet type: " + std::to_string(le16toh(response.header.packet_type)));
             return false;
         }
         log_info("PIT size packet received.");
@@ -622,16 +615,16 @@ public:
         return true;
     }
 
-    bool send_file_part_header(size_t total_size) {
+    bool send_file_part_header(uint64_t total_size) {
         if (total_size > 0xFFFFFFFF) {
-            log_info("Warning: File size exceeds 4GB. Adjusting protocol for segmented transfer.");
+            log_info("Warning: File size exceeds 4GB. Using 32-bit truncated size for protocol compatibility.");
         }
 
         ThorFilePartSizePacket size_pkt;
-        size_pkt.header.packet_size = sizeof(ThorFilePartSizePacket);
-        size_pkt.header.packet_type = THOR_PACKET_FILE_PART_SIZE;
+        size_pkt.header.packet_size = h_to_le32(sizeof(ThorFilePartSizePacket));
+        size_pkt.header.packet_type = h_to_le16(THOR_PACKET_FILE_PART_SIZE);
         size_pkt.header.packet_flags = 0;
-        size_pkt.file_part_size = (uint32_t)(total_size > 0xFFFFFFFF ? 0xFFFFFFFF : total_size);
+        size_pkt.file_part_size = h_to_le32((uint32_t)total_size);
 
         if (!send_packet(&size_pkt, sizeof(size_pkt), true)) return false;
 
@@ -639,8 +632,8 @@ public:
         int actual_length;
         if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
 
-        if (response.header.packet_type != THOR_PACKET_RESPONSE || response.response_code != 0) {
-            log_error("Unexpected response sending file part size. Code: " + std::to_string(response.response_code));
+        if (le16toh(response.header.packet_type) != THOR_PACKET_RESPONSE || le32toh(response.response_code) != 0) {
+            log_error("Unexpected response sending file part size. Code: " + std::to_string(le32toh(response.response_code)));
             return false;
         }
         return true;
@@ -649,10 +642,10 @@ public:
     bool end_file_transfer(uint32_t partition_id) {
         log_info("Finalizing file transfer for partition ID: " + std::to_string(partition_id));
         ThorEndFileTransferPacket pkt;
-        pkt.header.packet_size = sizeof(ThorEndFileTransferPacket);
-        pkt.header.packet_type = THOR_PACKET_END_FILE_TRANSFER;
+        pkt.header.packet_size = h_to_le32(sizeof(ThorEndFileTransferPacket));
+        pkt.header.packet_type = h_to_le16(THOR_PACKET_END_FILE_TRANSFER);
         pkt.header.packet_flags = 0;
-        pkt.partition_id = partition_id;
+        pkt.partition_id = h_to_le32(partition_id);
 
         if (!send_packet(&pkt, sizeof(pkt), true)) return false;
 
@@ -660,21 +653,21 @@ public:
         int actual_length;
         if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
 
-        if (response.header.packet_type != THOR_PACKET_RESPONSE || response.response_code != 0) {
-            log_error("File transfer finalization failed. Response code: " + std::to_string(response.response_code));
+        if (le16toh(response.header.packet_type) != THOR_PACKET_RESPONSE || le32toh(response.response_code) != 0) {
+            log_error("File transfer finalization failed. Code: " + std::to_string(le32toh(response.response_code)));
             return false;
         }
-        log_info("Transfer finalized successfully.");
+        log_info("File transfer finalized.");
         return true;
     }
 
     bool send_control(uint32_t control_type) {
         log_info("Sending control command: " + std::to_string(control_type));
         ThorControlPacket pkt;
-        pkt.header.packet_size = sizeof(ThorControlPacket);
-        pkt.header.packet_type = THOR_PACKET_CONTROL;
+        pkt.header.packet_size = h_to_le32(sizeof(ThorControlPacket));
+        pkt.header.packet_type = h_to_le16(THOR_PACKET_CONTROL);
         pkt.header.packet_flags = 0;
-        pkt.control_type = control_type;
+        pkt.control_type = h_to_le32(control_type);
 
         if (!send_packet(&pkt, sizeof(pkt), true)) return false;
 
@@ -682,11 +675,11 @@ public:
         int actual_length;
         if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
 
-        if (response.header.packet_type != THOR_PACKET_RESPONSE || response.response_code != 0) {
-            log_error("Control command failed. Response code: " + std::to_string(response.response_code));
+        if (le16toh(response.header.packet_type) != THOR_PACKET_RESPONSE || le32toh(response.response_code) != 0) {
+            log_error("Control command failed. Code: " + std::to_string(le32toh(response.response_code)));
             return false;
         }
-        log_info("Control command sent successfully.");
+        log_info("Control command successful.");
         return true;
     }
 };
@@ -695,37 +688,101 @@ public:
 // COMPRESSION & FILE PROCESSING
 // ============================================================================
 
-std::vector<unsigned char> decompress_lz4_block(const std::vector<unsigned char>& compressed, const std::string& filename) {
-    if (compressed.empty()) return {};
+#include <lz4frame.h>
 
-    size_t estimated_size = compressed.size() * 4;
-    if (estimated_size < 1048576) estimated_size = 1048576;
-    
-    std::vector<unsigned char> decompressed;
-    const size_t max_limit = 1024 * 1024 * 1024; // 1GB limit for a single block
-
-    while (estimated_size <= max_limit) {
-        try {
-            decompressed.resize(estimated_size);
-        } catch (const std::bad_alloc&) {
-            log_error("Memory allocation failed for decompression of " + filename);
-            return {};
-        }
-
-        int result = LZ4_decompress_safe((const char*)compressed.data(), (char*)decompressed.data(), (int)compressed.size(), (int)decompressed.size());
-
-        if (result >= 0) {
-            decompressed.resize(result);
-            return decompressed;
-        }
-        
-        // If result < 0, it might be because the buffer is too small or data is corrupt.
-        // We try to expand the buffer.
-        estimated_size *= 2;
+bool process_lz4_streaming(std::ifstream& file, size_t compressed_size, UsbDevice& usb_device, const std::string& filename) {
+    LZ4F_decompressionContext_t dctx;
+    LZ4F_errorCode_t err = LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
+    if (LZ4F_isError(err)) {
+        log_error("Failed to create LZ4 decompression context: " + std::string(LZ4F_getErrorName(err)));
+        return false;
     }
 
-    log_error("LZ4 decompression failed for " + filename + " (buffer limit reached or corrupt data).");
-    return {};
+    struct DctxCleanup {
+        LZ4F_decompressionContext_t ctx;
+        DctxCleanup(LZ4F_decompressionContext_t c) : ctx(c) {}
+        ~DctxCleanup() { LZ4F_freeDecompressionContext(ctx); }
+    } cleanup(dctx);
+
+    const size_t IN_BUF_SIZE = 1024 * 1024;
+    const size_t OUT_BUF_SIZE = 4 * 1024 * 1024;
+    std::vector<unsigned char> in_buf(IN_BUF_SIZE);
+    std::vector<unsigned char> out_buf(OUT_BUF_SIZE);
+
+    size_t remaining_compressed = compressed_size;
+    bool header_sent = false;
+    size_t total_uncompressed_sent = 0;
+
+    // First pass: Get uncompressed size if possible
+    // Note: Samsung LZ4 frames usually have content size in header.
+    // If not, we might need a different approach, but Thor protocol needs size upfront.
+    // For simplicity and correctness, we'll assume the frame has content size or we'll have to decompress twice or buffer.
+    // Actually, Thor protocol can handle "unknown" size by sending a large enough size, but it's risky.
+    // Better: Read the frame header to get content size.
+    
+    std::streampos start_pos = file.tellg();
+    size_t header_read = std::min((size_t)1024, compressed_size);
+    std::vector<unsigned char> header_buf(header_read);
+    file.read((char*)header_buf.data(), header_read);
+    file.seekg(start_pos);
+
+    LZ4F_frameInfo_t frame_info;
+    size_t consumed = header_read;
+    err = LZ4F_getFrameInfo(dctx, &frame_info, header_buf.data(), &consumed);
+    if (LZ4F_isError(err)) {
+        log_error("Failed to get LZ4 frame info for " + filename + ": " + std::string(LZ4F_getErrorName(err)));
+        return false;
+    }
+
+    if (frame_info.contentSize == 0) {
+        log_error("LZ4 frame for " + filename + " does not contain uncompressed size. Streaming not possible without pre-scanning.");
+        return false;
+    }
+
+    if (!usb_device.send_file_part_header(frame_info.contentSize)) return false;
+    header_sent = true;
+
+    size_t src_offset = 0;
+    size_t src_size = 0;
+    
+    while (remaining_compressed > 0 || src_size > 0) {
+        if (src_size == 0 && remaining_compressed > 0) {
+            src_size = std::min(IN_BUF_SIZE, remaining_compressed);
+            file.read((char*)in_buf.data(), src_size);
+            src_size = file.gcount();
+            remaining_compressed -= src_size;
+            src_offset = 0;
+        }
+
+        while (src_size > 0) {
+            size_t dst_size = OUT_BUF_SIZE;
+            size_t src_consumed = src_size;
+            err = LZ4F_decompress(dctx, out_buf.data(), &dst_size, in_buf.data() + src_offset, &src_consumed, nullptr);
+            
+            if (LZ4F_isError(err)) {
+                log_error("LZ4 decompression error for " + filename + ": " + std::string(LZ4F_getErrorName(err)));
+                return false;
+            }
+
+            if (dst_size > 0) {
+                if (!usb_device.send_file_part_chunk(out_buf.data(), dst_size)) return false;
+                total_uncompressed_sent += dst_size;
+            }
+
+            src_offset += src_consumed;
+            src_size -= src_consumed;
+
+            if (err == 0) break; // End of frame
+        }
+        if (err == 0) break;
+    }
+
+    if (total_uncompressed_sent != frame_info.contentSize) {
+        log_error("Decompressed size mismatch for " + filename + ": expected " + std::to_string(frame_info.contentSize) + ", got " + std::to_string(total_uncompressed_sent));
+        return false;
+    }
+
+    return true;
 }
 
 bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const PitTable& pit_table) {
@@ -793,26 +850,7 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
         }
 
         if (is_lz4) {
-            try {
-                std::vector<unsigned char> compressed_data(data_size);
-                file.read((char*)compressed_data.data(), data_size);
-                
-                std::vector<unsigned char> final_data = decompress_lz4_block(compressed_data, filename);
-                if (final_data.empty()) {
-                    file.ignore((512 - (data_size % 512)) % 512);
-                    continue;
-                }
-                
-                if (!usb_device.send_file_part_header(final_data.size())) return false;
-
-                for (size_t i = 0; i < final_data.size(); i += CHUNK_SIZE) {
-                    size_t to_send = std::min(CHUNK_SIZE, final_data.size() - i);
-                    if (!usb_device.send_file_part_chunk(&final_data[i], to_send)) return false;
-                }
-            } catch (const std::bad_alloc&) {
-                log_error("Insufficient memory to decompress " + filename);
-                return false;
-            }
+            if (!process_lz4_streaming(file, data_size, usb_device, filename)) return false;
         } else {
             if (!usb_device.send_file_part_header(data_size)) return false;
 
@@ -1089,8 +1127,14 @@ int process_arguments_and_run(int argc, char** argv) {
 // ============================================================================
 
 int main(int argc, char** argv) {
-    libusb_init(NULL);
+    int err = libusb_init(NULL);
+    if (err < 0) {
+        std::cerr << "[ERROR] Failed to initialize libusb: " << libusb_error_name(err) << std::endl;
+        return 1;
+    }
+    
     int result = process_arguments_and_run(argc, argv);
+    
     libusb_exit(NULL);
     return result;
 }
