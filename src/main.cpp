@@ -1,7 +1,8 @@
 // ============================================================================
 // odin4 - Samsung Device Flashing Tool
-// Version: 2.0.0-07840c6
+// Version: 2.1.0-07840c6
 // Protocol: Thor USB Communication
+// Developer: Llucs
 // ============================================================================
 
 #include <iostream>
@@ -29,7 +30,7 @@
 // CONSTANTS & DEFINITIONS
 // ============================================================================
 
-#define ODIN4_VERSION "2.0.0-07840c6"
+#define ODIN4_VERSION "2.1.0-07840c6"
 #define SAMSUNG_VID 0x04E8
 #define USB_RETRY_COUNT 3
 #define USB_TIMEOUT_BULK 60000 // 60000 ms (60 seconds)
@@ -59,6 +60,7 @@ void log_hexdump(const std::string& title, const void* data, size_t size) {
     // Save current cout state
     std::ios_base::fmtflags f(std::cout.flags());
     char fill = std::cout.fill();
+    std::streamsize old_width = std::cout.width();
     
     std::cout << "[DEBUG] " << title << " (" << size << " bytes):" << std::endl;
     std::cout << std::hex << std::setfill('0');
@@ -71,6 +73,7 @@ void log_hexdump(const std::string& title, const void* data, size_t size) {
     // Restore cout state
     std::cout.flags(f);
     std::cout.fill(fill);
+    std::cout.width(old_width);
 }
 
 // --- Endianness ---
@@ -122,7 +125,13 @@ bool check_md5_signature(const std::string& file_path) {
         file.read(buffer.data(), (std::streamsize)to_read);
         size_t read_count = (size_t)file.gcount();
 
-        if (read_count == 0) break;
+        if (read_count == 0) {
+            if (total_read < content_size) {
+                log_error("Premature read error during MD5 check.");
+                return false;
+            }
+            break;
+        }
 
         hash.Update((const unsigned char*)buffer.data(), read_count);
         total_read += read_count;
@@ -142,7 +151,7 @@ bool check_md5_signature(const std::string& file_path) {
     encoder.MessageEnd();
 
     auto to_lower = [](std::string s) {
-        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return std::tolower(c); });
+        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return static_cast<char>(::tolower(static_cast<unsigned char>(c))); });
         return s;
     };
 
@@ -388,7 +397,12 @@ public:
                 }
                 if (found) break;
             }
+            if (!found) {
+                log_info("Endpoints not found in config descriptor. Using defaults (0x01/0x81).");
+            }
             libusb_free_config_descriptor(config);
+        } else {
+            log_info("Failed to get config descriptor. Using defaults (0x01/0x81).");
         }
 
         int err = libusb_open(target_device, &handle);
