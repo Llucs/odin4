@@ -1,6 +1,6 @@
 // ============================================================================
 // odin4 - Samsung Device Flashing Tool
-// Version: 3.0.0-4ce69e2
+// Version: 3.0.0-648f483
 // Protocol: Thor USB Communication
 // Developer: Llucs
 // ============================================================================
@@ -28,7 +28,7 @@
 
 // Constants & Definitions
 
-#define ODIN4_VERSION "3.0.0-4ce69e2"
+#define ODIN4_VERSION "3.0.0-648f483"
 #define SAMSUNG_VID 0x04E8
 #define USB_RETRY_COUNT 3
 #define USB_TIMEOUT_BULK 60000 // 60000 ms (60 seconds)
