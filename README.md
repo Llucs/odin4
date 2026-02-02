@@ -20,7 +20,6 @@ Even with recent improvements, community contributions are still highly apprecia
 
 You can help by:
 - Finding and fixing remaining bugs
-- Improving cross-platform build compatibility
 - Code cleanup and refactoring
 - Reverse engineering improvements
 - Testing on different Samsung devices and environments
