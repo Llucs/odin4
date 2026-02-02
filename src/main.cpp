@@ -491,7 +491,7 @@ public:
             log_error("Handshake failed. Response code: " + std::to_string(le32toh(response.response_code)));
             
             log_info("Attempting to clear USB halt and retry handshake...");
-            libusb_clear_halt(handle, ENDPOINT_IN);
+            libusb_clear_halt(handle, LIBUSB_ENDPOINT_IN);
             
             if (!send_packet(&pkt, sizeof(pkt), true)) return false;
             if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
@@ -671,7 +671,7 @@ public:
         int err = 0;
         
         for (int attempt = 0; attempt < USB_RETRY_COUNT; ++attempt) {
-            err = libusb_bulk_transfer(handle, ENDPOINT_OUT, (unsigned char*)data, size, &actual_length, USB_TIMEOUT_BULK);
+            err = libusb_bulk_transfer(handle, LIBUSB_ENDPOINT_OUT, (unsigned char*)data, size, &actual_length, USB_TIMEOUT_BULK);
             if (err == 0 && actual_length == (int)size) return true;
             
             log_error("USB chunk send failed (attempt " + std::to_string(attempt + 1) + ")", err);
