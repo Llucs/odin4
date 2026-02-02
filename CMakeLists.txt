@@ -29,6 +29,7 @@ pkg_check_modules(CRYPTOPP REQUIRED libcrypto++)
 # =========================
 add_library(lz4_lib STATIC
     lib/lz4/lz4.c
+    lib/lz4/lz4hc.c
     lib/lz4/lz4frame.c
     lib/lz4/xxhash.c
 )
