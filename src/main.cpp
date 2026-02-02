@@ -1,6 +1,6 @@
 // ============================================================================
 // odin4 - Samsung Device Flashing Tool
-// Version: 2.1.0-4ce69e2
+// Version: 3.0.0-4ce69e2
 // Protocol: Thor USB Communication
 // Developer: Llucs
 // ============================================================================
@@ -26,21 +26,17 @@
 #include <cryptopp/md5.h>
 #include <cryptopp/hex.h>
 
-// ============================================================================
-// CONSTANTS & DEFINITIONS
-// ============================================================================
+// Constants & Definitions
 
-#define ODIN4_VERSION "2.1.0-4ce69e2"
+#define ODIN4_VERSION "3.0.0-4ce69e2"
 #define SAMSUNG_VID 0x04E8
 #define USB_RETRY_COUNT 3
 #define USB_TIMEOUT_BULK 60000 // 60000 ms (60 seconds)
 #define USB_TIMEOUT_CONTROL 5000 // 5000 ms (5 seconds)
 
-// ============================================================================
-// UTILITIES
-// ============================================================================
+// Utilities
 
-// --- Logging ---
+
 void log_info(const std::string& msg) {
     std::cout << "[INFO] " << msg << std::endl;
 }
@@ -76,12 +72,26 @@ void log_hexdump(const std::string& title, const void* data, size_t size) {
     std::cout.width(old_width);
 }
 
-// --- Endianness ---
+
 uint32_t le32_to_h(uint32_t val) { return le32toh(val); }
 uint32_t h_to_le32(uint32_t val) { return htole32(val); }
 uint16_t h_to_le16(uint16_t val) { return htole16(val); }
 
-// --- MD5 Validation ---
+std::string sanitize_filename(const std::string& filename) {
+    std::string sanitized = filename;
+    size_t last_dot = sanitized.find_last_of('.');
+    while (last_dot != std::string::npos) {
+        std::string ext = sanitized.substr(last_dot);
+        if (ext == ".lz4" || ext == ".ext4" || ext == ".img" || ext == ".bin") {
+            sanitized = sanitized.substr(0, last_dot);
+            last_dot = sanitized.find_last_of('.');
+        } else {
+            break;
+        }
+    }
+    return sanitized;
+}
+
 bool check_md5_signature(const std::string& file_path) {
     if (file_path.size() < 8 || file_path.substr(file_path.size() - 8) != ".tar.md5") {
         return true; 
@@ -117,8 +127,10 @@ bool check_md5_signature(const std::string& file_path) {
 
     CryptoPP::Weak::MD5 hash;
     std::vector<unsigned char> digest(hash.DigestSize());
-    std::vector<char> buffer(1048576);
+    size_t buffer_size = (content_size > 1024 * 1024 * 1024) ? (32 * 1024 * 1024) : 1048576;
+    std::vector<char> buffer(buffer_size);
     size_t total_read = 0;
+    int last_progress = -1;
 
     while (total_read < content_size) {
         size_t to_read = std::min((size_t)buffer.size(), content_size - total_read);
@@ -135,7 +147,14 @@ bool check_md5_signature(const std::string& file_path) {
 
         hash.Update((const unsigned char*)buffer.data(), read_count);
         total_read += read_count;
+
+        int progress = (int)((double)total_read / content_size * 100);
+        if (progress != last_progress) {
+            std::cout << "\r[MD5] Verifying integrity... " << progress << "%" << std::flush;
+            last_progress = progress;
+        }
     }
+    std::cout << std::endl;
 
     if (total_read != content_size) {
         log_error("Failed to read full file content for MD5 check. Read " + std::to_string(total_read) + " of " + std::to_string(content_size));
@@ -252,7 +271,7 @@ struct ThorPitFilePacket {
 // --- File Part Size Packet ---
 struct ThorFilePartSizePacket {
     ThorPacketHeader header;
-    uint32_t file_part_size;
+    uint64_t file_part_size;
 };
 
 // --- File Part Packet ---
@@ -460,7 +479,7 @@ public:
 
     bool receive_packet(void *data, size_t size, int *actual_length, bool is_control = false) {
         int err = 0;
-        int timeout = is_control ? USB_TIMEOUT_CONTROL : USB_TIMEOUT_BULK;
+        int timeout = is_control ? USB_TIMEOUT_CONTROL : 300000;
         
         for (int attempt = 0; attempt < USB_RETRY_COUNT; ++attempt) {
             err = libusb_bulk_transfer(handle, endpoint_in, (unsigned char*)data, size, actual_length, timeout);
@@ -484,7 +503,6 @@ public:
         return false;
     }
 
-    // --- Thor Protocol Handshake ---
     bool handshake() {
         log_info("Starting handshake...");
         ThorHandshakePacket pkt = {};
@@ -629,19 +647,20 @@ public:
             return false;
         }
 
-        pit_table.header_size = le32_to_h(*(uint32_t*)&pit_data[0]);
-        pit_table.entry_count = le32_to_h(*(uint32_t*)&pit_data[4]);
+        uint32_t raw_val;
+        std::memcpy(&raw_val, &pit_data[0], 4);
+        pit_table.header_size = le32_to_h(raw_val);
+        std::memcpy(&raw_val, &pit_data[4], 4);
+        pit_table.entry_count = le32_to_h(raw_val);
 
-        if (pit_table.entry_count > 512) { // Increased limit for modern devices
+        if (pit_table.entry_count > 512) {
             log_error("Invalid or excessive PIT entry count: " + std::to_string(pit_table.entry_count));
             return false;
         }
         
-        // PIT entries are 132 bytes in modern Thor, but let's be careful
         size_t entry_size = 132; 
         size_t expected_min_size = pit_table.header_size + (pit_table.entry_count * entry_size);
         if (pit_data_size < expected_min_size) {
-            // Fallback to 128 if 132 is too large
             entry_size = 128;
             expected_min_size = pit_table.header_size + (pit_table.entry_count * entry_size);
             if (pit_data_size < expected_min_size) {
@@ -650,6 +669,10 @@ public:
             }
         }
 
+        if (pit_table.entry_count == 0 || pit_table.entry_count > 512) {
+            log_error("Invalid or excessive PIT entry count: " + std::to_string(pit_table.entry_count));
+            return false;
+        }
         pit_table.entries.clear();
         pit_table.entries.reserve(pit_table.entry_count);
         log_info("Parsing " + std::to_string(pit_table.entry_count) + " PIT entries (entry size: " + std::to_string(entry_size) + ").");
@@ -663,10 +686,19 @@ public:
             }
 
             PitEntry entry = {};
-            entry.identifier = le32_to_h(*(uint32_t*)&pit_data[offset + 0]);
-            entry.flash_type = le32_to_h(*(uint32_t*)&pit_data[offset + 8]);
-            entry.file_size = le32_to_h(*(uint32_t*)&pit_data[offset + 12]);
-            entry.block_size = le32_to_h(*(uint32_t*)&pit_data[offset + 16]);
+            uint32_t raw_val;
+            
+            std::memcpy(&raw_val, &pit_data[offset + 0], 4);
+            entry.identifier = le32_to_h(raw_val);
+            
+            std::memcpy(&raw_val, &pit_data[offset + 8], 4);
+            entry.flash_type = le32_to_h(raw_val);
+            
+            std::memcpy(&raw_val, &pit_data[offset + 12], 4);
+            entry.file_size = le32_to_h(raw_val);
+            
+            std::memcpy(&raw_val, &pit_data[offset + 16], 4);
+            entry.block_size = le32_to_h(raw_val);
             
             std::memcpy(entry.partition_name, &pit_data[offset + 32], 32);
             entry.partition_name[31] = '\0';
@@ -680,12 +712,13 @@ public:
         return true;
     }
 
-    bool send_file_part_chunk(const void* data, size_t size) {
+    bool send_file_part_chunk(const void* data, size_t size, bool large_partition = false) {
         int actual_length;
         int err = 0;
+        int timeout = large_partition ? 300000 : USB_TIMEOUT_BULK;
         
         for (int attempt = 0; attempt < USB_RETRY_COUNT; ++attempt) {
-            err = libusb_bulk_transfer(handle, LIBUSB_ENDPOINT_OUT, (unsigned char*)data, size, &actual_length, USB_TIMEOUT_BULK);
+            err = libusb_bulk_transfer(handle, LIBUSB_ENDPOINT_OUT, (unsigned char*)data, size, &actual_length, timeout);
             if (err == 0 && actual_length == (int)size) return true;
             
             log_error("USB chunk send failed (attempt " + std::to_string(attempt + 1) + ")", err);
@@ -695,15 +728,11 @@ public:
     }
 
     bool send_file_part_header(uint64_t total_size) {
-        if (total_size > 0xFFFFFFFF) {
-            log_info("Warning: File size exceeds 4GB. Using 32-bit truncated size for protocol compatibility.");
-        }
-
         ThorFilePartSizePacket size_pkt = {};
         size_pkt.header.packet_size = h_to_le32(sizeof(ThorFilePartSizePacket));
         size_pkt.header.packet_type = h_to_le16(THOR_PACKET_FILE_PART_SIZE);
         size_pkt.header.packet_flags = 0;
-        size_pkt.file_part_size = h_to_le32((uint32_t)total_size);
+        size_pkt.file_part_size = htole64(total_size);
 
         if (!send_packet(&size_pkt, sizeof(size_pkt), true)) return false;
 
@@ -769,7 +798,7 @@ public:
 
 #include <lz4frame.h>
 
-bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDevice& usb_device, const std::string& filename) {
+bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDevice& usb_device, const std::string& filename, bool large_partition = false) {
     LZ4F_decompressionContext_t dctx;
     LZ4F_errorCode_t err = LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
     if (LZ4F_isError(err)) {
@@ -783,10 +812,14 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
         ~DctxCleanup() { LZ4F_freeDecompressionContext(ctx); }
     } cleanup(dctx);
 
-    const size_t IN_BUF_SIZE = 1024 * 1024;
-    const size_t OUT_BUF_SIZE = 4 * 1024 * 1024;
-    std::vector<unsigned char> in_buf(IN_BUF_SIZE);
-    std::vector<unsigned char> out_buf(OUT_BUF_SIZE);
+    size_t in_buf_size = 1024 * 1024;
+    size_t out_buf_size = 4 * 1024 * 1024;
+    if (compressed_size > 1024 * 1024 * 1024) {
+        in_buf_size = 8 * 1024 * 1024;
+        out_buf_size = 16 * 1024 * 1024;
+    }
+    std::vector<unsigned char> in_buf(in_buf_size);
+    std::vector<unsigned char> out_buf(out_buf_size);
 
     uint64_t remaining_compressed = compressed_size;
     uint64_t total_uncompressed_sent = 0;
@@ -812,21 +845,20 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 
     uint64_t uncompressed_size = frame_info.contentSize;
     if (uncompressed_size == 0) {
-        log_info("LZ4 frame for " + filename + " does not contain uncompressed size. Pre-scanning...");
-        // Pre-scan to find uncompressed size
+        log_info("LZ4 frame for " + filename + " does not contain uncompressed size. Calculating LZ4 size (this may take a while)...");
         LZ4F_decompressionContext_t scan_dctx;
         LZ4F_createDecompressionContext(&scan_dctx, LZ4F_VERSION);
         
         uint64_t scan_remaining = compressed_size;
         while (scan_remaining > 0) {
-            size_t to_read = std::min(IN_BUF_SIZE, (size_t)scan_remaining);
+            size_t to_read = std::min(in_buf_size, (size_t)scan_remaining);
             file.read((char*)in_buf.data(), to_read);
             size_t read = (size_t)file.gcount();
             if (read == 0) break;
             
             size_t src_off = 0;
             while (src_off < read) {
-                size_t dst_sz = OUT_BUF_SIZE;
+                size_t dst_sz = out_buf_size;
                 size_t src_sz = read - src_off;
                 LZ4F_decompress(scan_dctx, out_buf.data(), &dst_sz, in_buf.data() + src_off, &src_sz, nullptr);
                 uncompressed_size += dst_sz;
@@ -847,7 +879,7 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
     
     while (remaining_compressed > 0 || src_size > 0) {
         if (src_size == 0 && remaining_compressed > 0) {
-            size_t to_read = std::min(IN_BUF_SIZE, (size_t)remaining_compressed);
+            size_t to_read = std::min(in_buf_size, (size_t)remaining_compressed);
             file.read((char*)in_buf.data(), to_read);
             src_size = (size_t)file.gcount();
             if (src_size == 0) break;
@@ -856,7 +888,7 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
         }
 
         while (src_size > 0) {
-            size_t dst_size = OUT_BUF_SIZE;
+            size_t dst_size = out_buf_size;
             size_t src_consumed = src_size;
             err = LZ4F_decompress(dctx, out_buf.data(), &dst_size, in_buf.data() + src_offset, &src_consumed, nullptr);
             
@@ -866,7 +898,7 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
             }
 
             if (dst_size > 0) {
-                if (!usb_device.send_file_part_chunk(out_buf.data(), dst_size)) return false;
+                if (!usb_device.send_file_part_chunk(out_buf.data(), dst_size, large_partition)) return false;
                 total_uncompressed_sent += dst_size;
             }
 
@@ -906,7 +938,7 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
     }
 
     char header[512];
-    const size_t CHUNK_SIZE = 1048576;
+    size_t chunk_size = 1048576;
 
     while ((uint64_t)file.tellg() < max_read_pos) {
         if (!file.read(header, 512)) break;
@@ -931,17 +963,22 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
         log_info("Found file in TAR: " + filename + " (" + std::to_string(data_size) + " bytes)");
 
         uint32_t partition_id = 0;
-        std::string base_name = filename;
-        bool is_lz4 = base_name.find(".lz4") != std::string::npos;
-        if (is_lz4) base_name = base_name.substr(0, base_name.find(".lz4"));
+        std::string partition_name = "";
+        std::string base_name = sanitize_filename(filename);
+        bool is_lz4 = filename.find(".lz4") != std::string::npos;
 
         for (const auto& entry : pit_table.entries) {
-            if (std::string(entry.file_name) == base_name || std::string(entry.file_name) == filename) {
+            std::string pit_file_sanitized = sanitize_filename(entry.file_name);
+            std::string pit_name_sanitized = sanitize_filename(entry.partition_name);
+            if (pit_file_sanitized == base_name || pit_name_sanitized == base_name || std::string(entry.file_name) == filename) {
                 partition_id = entry.identifier;
-                log_info("Partition found in PIT: " + std::string(entry.partition_name) + " (ID: " + std::to_string(partition_id) + ")");
+                partition_name = entry.partition_name;
+                log_info("Partition found in PIT: " + partition_name + " (ID: " + std::to_string(partition_id) + ")");
                 break;
             }
         }
+
+        bool is_large = (partition_name == "SYSTEM" || partition_name == "USERDATA" || partition_name == "SUPER");
 
         if (partition_id == 0) {
             log_info("File " + filename + " ignored: Partition not found in PIT.");
@@ -950,15 +987,19 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
         }
 
         if (is_lz4) {
-            if (!process_lz4_streaming(file, data_size, usb_device, filename)) return false;
+            if (!process_lz4_streaming(file, data_size, usb_device, filename, is_large)) return false;
         } else {
             if (!usb_device.send_file_part_header(data_size)) return false;
 
             uint64_t remaining_size = data_size;
-            std::vector<unsigned char> buffer(CHUNK_SIZE);
+            size_t current_chunk_size = chunk_size;
+            if (data_size > 1024 * 1024 * 1024) {
+                current_chunk_size = 16 * 1024 * 1024;
+            }
+            std::vector<unsigned char> buffer(current_chunk_size);
 
             while (remaining_size > 0) {
-                size_t to_read = std::min((uint64_t)CHUNK_SIZE, remaining_size);
+                size_t to_read = std::min((uint64_t)current_chunk_size, remaining_size);
                 file.read((char*)buffer.data(), to_read);
                 size_t read_count = (size_t)file.gcount();
 
@@ -967,7 +1008,7 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
                     return false;
                 }
 
-                if (!usb_device.send_file_part_chunk(buffer.data(), read_count)) return false;
+                if (!usb_device.send_file_part_chunk(buffer.data(), read_count, is_large)) return false;
                 remaining_size -= read_count;
             }
         }
@@ -981,11 +1022,7 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
     return true;
 }
 
-// ============================================================================
-// USER INTERFACE & HELP MENU
-// ============================================================================
 
-// --- Help Menu ---
 void print_usage() {
     std::cout << "Usage: odin4 [args...]" << std::endl;
     std::cout << "Odin4 downloader. Version: " << ODIN4_VERSION << std::endl;
@@ -999,7 +1036,7 @@ void print_usage() {
     std::cout << " -e        Set Nand erase option" << std::endl;
     std::cout << " -V        Home binary validation check with PIT file" << std::endl;
     std::cout << " --reboot  Reboot into normal mode" << std::endl;
-    // --redownload is a special command for some devices to return to download mode
+    
     std::cout << " --redownload   Reboot into download mode if possible" << std::endl;
     std::cout << " -d        Set a device path (detect automatically without this option)" << std::endl;
     std::cout << " -l        Show downloadable devices path" << std::endl;
@@ -1018,12 +1055,12 @@ void print_usage() {
     std::cout << "Odin Repository: https://github.com/Llucs/odin4" << std::endl;
 }
 
-// --- Version Info ---
+
 void print_version() {
     std::cout << "odin4 version " << ODIN4_VERSION << std::endl;
 }
 
-// --- License Info ---
+
 void print_license() {
     std::cout << "Odin4 — Open Odin Reimplementation" << std::endl;
     std::cout << std::endl;
@@ -1039,13 +1076,13 @@ void print_license() {
     std::cout << "OF ANY KIND, either express or implied." << std::endl;
 }
 
-// --- List Connected Devices ---
+
 void list_devices() {
     libusb_device **list;
     ssize_t cnt = libusb_get_device_list(NULL, &list);
     if (cnt < 0) return;
 
-    // RAII-like cleanup for device list
+
     struct ListCleanup {
         libusb_device **list;
         ListCleanup(libusb_device **l) : list(l) {}
@@ -1061,9 +1098,8 @@ void list_devices() {
             const std::vector<uint16_t> DOWNLOAD_PIDS = {0x685D, 0x6600, 0x6860, 0x6861, 0x6862};
             for (uint16_t pid : DOWNLOAD_PIDS) {
                 if (desc.idProduct == pid) {
-                    std::cout << "/dev/bus/usb/" << libusb_get_bus_number(list[i]) << "/" << libusb_get_device_address(list[i]) << std::endl;
+                    std::cout << "/dev/bus/usb/" << std::setfill('0') << std::setw(3) << (int)libusb_get_bus_number(list[i]) << "/" << std::setfill('0') << std::setw(3) << (int)libusb_get_device_address(list[i]) << std::endl;
                     found = true;
-                    break;
                 }
             }
         }
@@ -1222,9 +1258,7 @@ int process_arguments_and_run(int argc, char** argv) {
     return run_flash_logic(config);
 }
 
-// ============================================================================
-// ENTRY POINT
-// ============================================================================
+
 
 int main(int argc, char** argv) {
     int err = libusb_init(NULL);
