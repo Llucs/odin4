@@ -30,7 +30,7 @@ Please check the Issues and feel free to submit a Pull Request.
 
 ## License
 This project is licensed under the **Apache License 2.0**.  
-See the (LICENSE)[https://github.com/Llucs/odin4/blob/main/LICENSE] file in the root of the repository for full license text.
+See the [LICENSE](https://github.com/Llucs/odin4/blob/main/LICENSE) file in the root of the repository for full license text.
 
 ## Disclaimer
 This tool is provided as-is. Flashing firmware always carries risks.  
