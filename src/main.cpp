@@ -26,7 +26,7 @@ void log_info(const std::string& msg) {
     std::cout << "[INFO] " << msg << std::endl;
 }
 
-void log_error(const std::string& msg, int libusb_err = 0) {
+void log_error(const std::string& msg, int libusb_err) {
     std::cerr << "[ERROR] " << msg;
     if (libusb_err != 0) {
         std::cerr << " (libusb: " << libusb_error_name(libusb_err) << ")";
