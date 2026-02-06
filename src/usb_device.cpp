@@ -19,6 +19,11 @@ UsbDevice::~UsbDevice() {
 }
 
 bool UsbDevice::open_device(const std::string& specific_path) {
+    // Release any previously allocated device list before obtaining a new one
+    if (device_list) {
+        libusb_free_device_list(device_list, 1);
+        device_list = nullptr;
+    }
     ssize_t cnt = libusb_get_device_list(NULL, &device_list);
     if (cnt < 0) {
         log_error("Failed to get USB device list", (int)cnt);
@@ -142,7 +147,7 @@ bool UsbDevice::send_packet(const void *data, size_t size, bool is_control) {
 
 bool UsbDevice::receive_packet(void *data, size_t size, int *actual_length, bool is_control) {
     int err = 0;
-    int timeout = is_control ? USB_TIMEOUT_CONTROL : 300000;
+    int timeout = is_control ? USB_TIMEOUT_CONTROL : USB_TIMEOUT_BULK;
     
     for (int attempt = 0; attempt < USB_RETRY_COUNT; ++attempt) {
         err = libusb_bulk_transfer(handle, endpoint_in, (unsigned char*)data, size, actual_length, timeout);
@@ -311,10 +316,6 @@ bool UsbDevice::receive_pit_table(PitTable& pit_table) {
     std::memcpy(&raw_val, &pit_data[4], 4);
     pit_table.entry_count = le32_to_h(raw_val);
 
-    if (pit_table.entry_count > 512) {
-        log_error("Invalid or excessive PIT entry count: " + std::to_string(pit_table.entry_count));
-        return false;
-    }
     
     size_t entry_size = 132;
     if (pit_data_size < pit_table.header_size + (pit_table.entry_count * 132)) {
@@ -326,6 +327,7 @@ bool UsbDevice::receive_pit_table(PitTable& pit_table) {
         return false;
     }
 
+    // Validate entry count: must be between 1 and 512 entries
     if (pit_table.entry_count == 0 || pit_table.entry_count > 512) {
         log_error("Invalid or excessive PIT entry count: " + std::to_string(pit_table.entry_count));
         return false;

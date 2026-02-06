@@ -2,7 +2,46 @@
 #define THOR_PROTOCOL_H
 
 #include <cstdint>
-#include <endian.h>
+// Include endian definitions when available and provide fallbacks for other platforms
+#if defined(__has_include)
+#  if __has_include(<endian.h>)
+#    include <endian.h>
+#  endif
+#endif
+
+// Fallback definitions for little-endian architectures when standard macros are unavailable.
+#ifndef le16toh
+static inline uint16_t thor_swap16(uint16_t v) {
+    return static_cast<uint16_t>((v << 8) | (v >> 8));
+}
+static inline uint32_t thor_swap32(uint32_t v) {
+    return ((v >> 24) & 0x000000FF) |
+           ((v >> 8)  & 0x0000FF00) |
+           ((v << 8)  & 0x00FF0000) |
+           ((v << 24) & 0xFF000000);
+}
+static inline uint64_t thor_swap64(uint64_t v) {
+    uint32_t lo = static_cast<uint32_t>(v & 0xFFFFFFFFULL);
+    uint32_t hi = static_cast<uint32_t>((v >> 32) & 0xFFFFFFFFULL);
+    uint64_t swapped = static_cast<uint64_t>(thor_swap32(lo)) << 32 | thor_swap32(hi);
+    return swapped;
+}
+#  if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+#    define le16toh(x) thor_swap16(x)
+#    define le32toh(x) thor_swap32(x)
+#    define le64toh(x) thor_swap64(x)
+#    define htole16(x) thor_swap16(x)
+#    define htole32(x) thor_swap32(x)
+#    define htole64(x) thor_swap64(x)
+#  else
+#    define le16toh(x) (x)
+#    define le32toh(x) (x)
+#    define le64toh(x) (x)
+#    define htole16(x) (x)
+#    define htole32(x) (x)
+#    define htole64(x) (x)
+#  endif
+#endif
 
 // ============================================================================
 // THOR PROTOCOL - PACKET STRUCTURES

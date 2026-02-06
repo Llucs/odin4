@@ -16,12 +16,9 @@ struct OdinConfig {
     std::string csc;
     std::string ums;
     std::string device_path;
-    bool nand_erase = false;
-    bool validation = false;
+    // Flags controlling optional behaviour
     bool reboot = false;
     bool redownload = false;
-    bool show_license = false;
-    bool list_devices = false;
 };
 
 // ============================================================================

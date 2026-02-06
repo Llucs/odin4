@@ -26,7 +26,10 @@ void log_info(const std::string& msg) {
     std::cout << "[INFO] " << msg << std::endl;
 }
 
-void log_error(const std::string& msg, int libusb_err) {
+// Provide a default value for the libusb error code so the function can be
+// invoked with a single parameter. The default of 0 indicates no specific
+// libusb error code is available.
+void log_error(const std::string& msg, int libusb_err /*= 0*/) {
     std::cerr << "[ERROR] " << msg;
     if (libusb_err != 0) {
         std::cerr << " (libusb: " << libusb_error_name(libusb_err) << ")";
@@ -71,8 +74,8 @@ void print_usage() {
     std::cout << " -c        Add CP image file" << std::endl;
     std::cout << " -s        Add CSC file" << std::endl;
     std::cout << " -u        Add UMS file" << std::endl;
-    std::cout << " -e        Set Nand erase option" << std::endl;
-    std::cout << " -V        Home binary validation check with PIT file" << std::endl;
+    // The -e and -V options were removed because the corresponding
+    // functionality is not implemented in this version.
     std::cout << " --reboot  Reboot into normal mode" << std::endl;
     
     std::cout << " --redownload   Reboot into download mode if possible" << std::endl;
@@ -260,14 +263,7 @@ int process_arguments_and_run(int argc, char** argv) {
             config.redownload = true; 
             continue; 
         }
-        if (arg == "-e") { 
-            config.nand_erase = true; 
-            continue; 
-        }
-        if (arg == "-V") { 
-            config.validation = true; 
-            continue; 
-        }
+        // The -e (nand erase) and -V (validation) options are no longer supported.
 
         if (arg == "-b" || arg == "-a" || arg == "-c" || arg == "-s" || arg == "-u" || arg == "-d") {
             if (i + 1 >= argc) {

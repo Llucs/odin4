@@ -170,20 +170,27 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
     if (uncompressed_size == 0) {
         log_info("LZ4 frame for " + filename + " does not contain uncompressed size. Calculating LZ4 size (this may take a while)...");
         LZ4F_decompressionContext_t scan_dctx;
-        LZ4F_createDecompressionContext(&scan_dctx, LZ4F_VERSION);
-        
+        LZ4F_errorCode_t create_err = LZ4F_createDecompressionContext(&scan_dctx, LZ4F_VERSION);
+        if (LZ4F_isError(create_err)) {
+            log_error("Failed to create LZ4 scan decompression context: " + std::string(LZ4F_getErrorName(create_err)));
+            return false;
+        }
         uint64_t scan_remaining = compressed_size;
         while (scan_remaining > 0) {
             size_t to_read = std::min(in_buf_size, (size_t)scan_remaining);
             file.read((char*)in_buf.data(), to_read);
             size_t read = (size_t)file.gcount();
             if (read == 0) break;
-            
             size_t src_off = 0;
             while (src_off < read) {
                 size_t dst_sz = out_buf_size;
                 size_t src_sz = read - src_off;
-                LZ4F_decompress(scan_dctx, out_buf.data(), &dst_sz, in_buf.data() + src_off, &src_sz, nullptr);
+                LZ4F_errorCode_t dec_err = LZ4F_decompress(scan_dctx, out_buf.data(), &dst_sz, in_buf.data() + src_off, &src_sz, nullptr);
+                if (LZ4F_isError(dec_err)) {
+                    log_error("LZ4 decompression error during pre-scan for " + filename + ": " + std::string(LZ4F_getErrorName(dec_err)));
+                    LZ4F_freeDecompressionContext(scan_dctx);
+                    return false;
+                }
                 uncompressed_size += dst_sz;
                 src_off += src_sz;
             }
@@ -314,7 +321,10 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
 
         if (partition_id == 0) {
             log_info("File " + filename + " ignored: Partition not found in PIT.");
-            file.ignore((std::streamsize)(data_size + (512 - (data_size % 512)) % 512));
+            // Skip over the file data and padding using seekg to avoid potential overflow
+            file.seekg((std::streamoff)data_size, std::ios::cur);
+            size_t pad = (512 - (data_size % 512)) % 512;
+            file.seekg((std::streamoff)pad, std::ios::cur);
             continue;
         }
 
@@ -346,7 +356,8 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
         }
 
         size_t padding = (512 - (data_size % 512)) % 512;
-        file.ignore((std::streamsize)padding);
+        // Skip padding at the end of each file entry
+        file.seekg((std::streamoff)padding, std::ios::cur);
 
         if (!usb_device.end_file_transfer(partition_id)) return false;
     }
