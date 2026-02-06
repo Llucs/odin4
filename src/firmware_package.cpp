@@ -3,6 +3,7 @@
 #include <vector>
 #include <algorithm>
 #include <cstring>
+#include <cctype>
 #include <lz4frame.h>
 
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
@@ -51,6 +52,9 @@ bool check_md5_signature(const std::string& file_path) {
     }
     expected_md5_hex[32] = '\0';
     std::string expected_md5(expected_md5_hex);
+    // Trim any trailing or leading whitespace characters from the expected MD5 string
+    expected_md5.erase(expected_md5.find_last_not_of(" \n\r\t") + 1);
+    expected_md5.erase(0, expected_md5.find_first_not_of(" \n\r\t"));
 
     log_info("Expected MD5: " + expected_md5);
 
@@ -294,9 +298,11 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
 
         std::string size_str(header + 124, 12);
         uint64_t data_size = 0;
-        try { data_size = std::stoull(size_str, nullptr, 8); } catch (...) { 
+        try {
+            data_size = std::stoull(size_str, nullptr, 8);
+        } catch (...) {
             log_error("Invalid file size in TAR header for " + filename);
-            break; 
+            return false;
         }
 
         log_info("Found file in TAR: " + filename + " (" + std::to_string(data_size) + " bytes)");
@@ -304,7 +310,15 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
         uint32_t partition_id = 0;
         std::string partition_name = "";
         std::string base_name = sanitize_filename(filename);
-        bool is_lz4 = filename.find(".lz4") != std::string::npos;
+        // Determine if this entry is an LZ4-compressed file using a case-insensitive comparison
+        bool is_lz4 = false;
+        {
+            std::string lower_filename = filename;
+            std::transform(lower_filename.begin(), lower_filename.end(), lower_filename.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+            if (lower_filename.find(".lz4") != std::string::npos) {
+                is_lz4 = true;
+            }
+        }
 
         for (const auto& entry : pit_table.entries) {
             std::string pit_file_sanitized = sanitize_filename(entry.file_name);

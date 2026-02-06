@@ -29,7 +29,7 @@ void log_info(const std::string& msg) {
 // Provide a default value for the libusb error code so the function can be
 // invoked with a single parameter. The default of 0 indicates no specific
 // libusb error code is available.
-void log_error(const std::string& msg, int libusb_err /*= 0*/) {
+void log_error(const std::string& msg, int libusb_err) {
     std::cerr << "[ERROR] " << msg;
     if (libusb_err != 0) {
         std::cerr << " (libusb: " << libusb_error_name(libusb_err) << ")";
@@ -65,8 +65,9 @@ void log_hexdump(const std::string& title, const void* data, size_t size) {
 // ============================================================================
 
 void print_usage() {
-    std::cout << "Usage: odin4 [args...]" << std::endl;
+    std::cout << "Usage: odin4 [options]" << std::endl;
     std::cout << "Odin4 downloader. Version: " << ODIN4_VERSION << std::endl;
+    std::cout << " -h        Show this help message" << std::endl;
     std::cout << " -v        Show version" << std::endl;
     std::cout << " -w        Show license" << std::endl;
     std::cout << " -b        Add Bootloader file" << std::endl;
@@ -74,8 +75,7 @@ void print_usage() {
     std::cout << " -c        Add CP image file" << std::endl;
     std::cout << " -s        Add CSC file" << std::endl;
     std::cout << " -u        Add UMS file" << std::endl;
-    // The -e and -V options were removed because the corresponding
-    // functionality is not implemented in this version.
+    // The -e and -V options have been removed as they are not supported.
     std::cout << " --reboot  Reboot into normal mode" << std::endl;
     
     std::cout << " --redownload   Reboot into download mode if possible" << std::endl;
@@ -132,10 +132,10 @@ void list_devices() {
         if (libusb_get_device_descriptor(list[i], &desc) < 0) continue;
 
         if (desc.idVendor == SAMSUNG_VID) {
-            const std::vector<uint16_t> DOWNLOAD_PIDS = {0x685D, 0x6600, 0x6860, 0x6861, 0x6862};
-            for (uint16_t pid : DOWNLOAD_PIDS) {
+            // Iterate over known Samsung download mode product IDs
+            for (uint16_t pid : SAMSUNG_DOWNLOAD_PIDS) {
                 if (desc.idProduct == pid) {
-                    std::cout << "/dev/bus/usb/" << std::setfill('0') << std::setw(3) << (int)libusb_get_bus_number(list[i]) << "/" << std::setfill('0') << std::setw(3) << (int)libusb_get_device_address(list[i]) << std::endl;
+                    std::cout << "/dev/bus/usb/" << std::setfill('0') << std::setw(3) << static_cast<int>(libusb_get_bus_number(list[i])) << "/" << std::setfill('0') << std::setw(3) << static_cast<int>(libusb_get_device_address(list[i])) << std::endl;
                     found = true;
                 }
             }

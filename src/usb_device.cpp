@@ -43,7 +43,7 @@ bool UsbDevice::open_device(const std::string& specific_path) {
                         << std::setfill('0') << std::setw(3) << (int)libusb_get_device_address(device_list[i]);
                 if (path_ss.str() != specific_path) continue;
             }
-            for (uint16_t pid : DOWNLOAD_PIDS) {
+            for (uint16_t pid : SAMSUNG_DOWNLOAD_PIDS) {
                 if (desc.idProduct == pid) {
                     target_device = device_list[i];
                     break;
@@ -360,12 +360,14 @@ bool UsbDevice::receive_pit_table(PitTable& pit_table) {
         entry.block_size = le32_to_h(raw_val);
         
         size_t name_offset = (entry_size == 132) ? 32 : 28;
-        std::memcpy(entry.partition_name, &pit_data[offset + name_offset], 32);
-        entry.partition_name[31] = '\0';
-        
+        // Copy at most 31 characters from the PIT table entry names. The remaining
+        // byte in the fixed-size buffers remains zero because the struct was
+        // zero-initialised (see entry = {}). This avoids truncating the 32nd
+        // character and ensures strings are always null-terminated.
+        std::memcpy(entry.partition_name, &pit_data[offset + name_offset], 31);
+
         size_t file_offset = (entry_size == 132) ? 64 : 60;
-        std::memcpy(entry.file_name, &pit_data[offset + file_offset], 32);
-        entry.file_name[31] = '\0';
+        std::memcpy(entry.file_name, &pit_data[offset + file_offset], 31);
         
         pit_table.entries.push_back(entry);
     }
@@ -393,7 +395,7 @@ bool UsbDevice::send_file_part_header(uint64_t total_size) {
     size_pkt.header.packet_size = h_to_le32(sizeof(ThorFilePartSizePacket));
     size_pkt.header.packet_type = h_to_le16(THOR_PACKET_FILE_PART_SIZE);
     size_pkt.header.packet_flags = 0;
-    size_pkt.file_part_size = htole64(total_size);
+    size_pkt.file_part_size = h_to_le64(total_size);
 
     if (!send_packet(&size_pkt, sizeof(size_pkt), true)) return false;
 

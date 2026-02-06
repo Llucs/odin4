@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <array>
 #include <libusb.h>
 #include "odin_types.h"
 #include "thor_protocol.h"
@@ -18,12 +19,15 @@ void log_hexdump(const std::string& title, const void* data, size_t size);
 #define USB_TIMEOUT_BULK 60000
 #define USB_TIMEOUT_CONTROL 5000
 
+// List of known Samsung USB product IDs for devices in download mode.
+// Centralising this list avoids duplication across different translation units.
+static constexpr std::array<uint16_t, 5> SAMSUNG_DOWNLOAD_PIDS{{0x685D, 0x6600, 0x6860, 0x6861, 0x6862}};
+
 class UsbDevice {
 private:
     libusb_device_handle *handle = nullptr;
     libusb_device **device_list = nullptr;
-    const std::vector<uint16_t> DOWNLOAD_PIDS = {0x685D, 0x6600, 0x6860, 0x6861, 0x6862};
-    
+
     uint8_t endpoint_out = 0x01;
     uint8_t endpoint_in = 0x81;
     int interface_number = 0;
