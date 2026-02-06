@@ -633,6 +633,7 @@ public:
     // receive_pit_table() will read and process it.
     return true;
 }
+};
 
 bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const PitTable& pit_table) {
     log_info("Processing TAR file: " + tar_path);
