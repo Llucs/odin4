@@ -38,7 +38,11 @@ target_include_directories(lz4_lib PUBLIC lib/lz4)
 # =========================
 # Main executable (C++)
 # =========================
-add_executable(odin4 src/main.cpp)
+add_executable(odin4 
+    src/main.cpp
+    src/usb_device.cpp
+    src/firmware_package.cpp
+)
 set_target_properties(odin4 PROPERTIES OUTPUT_NAME "odin4")
 
 # =========================
