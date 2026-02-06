@@ -9,7 +9,7 @@
 
 // Forward declarations for logging functions used by UsbDevice
 void log_info(const std::string& msg);
-void log_error(const std::string& msg, int libusb_err = 0);
+void log_error(const std::string& msg, int libusb_err);
 void log_hexdump(const std::string& title, const void* data, size_t size);
 
 // Constants used by UsbDevice

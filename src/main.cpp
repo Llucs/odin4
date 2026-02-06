@@ -26,7 +26,7 @@ void log_info(const std::string& msg) {
     std::cout << "[INFO] " << msg << std::endl;
 }
 
-void log_error(const std::string& msg, int libusb_err) {
+void log_error(const std::string& msg, int libusb_err = 0) {
     std::cerr << "[ERROR] " << msg;
     if (libusb_err != 0) {
         std::cerr << " (libusb: " << libusb_error_name(libusb_err) << ")";
@@ -113,12 +113,12 @@ void print_license() {
 }
 
 void list_devices() {
-    libusb_device **list;
+    libusb_device **list = nullptr;
     ssize_t cnt = libusb_get_device_list(NULL, &list);
     if (cnt < 0) return;
 
     struct ListCleanup {
-        libusb_device **list;
+        libusb_device **list = nullptr;
         ListCleanup(libusb_device **l) : list(l) {}
         ~ListCleanup() { if (list) libusb_free_device_list(list, 1); }
     } list_cleanup(list);

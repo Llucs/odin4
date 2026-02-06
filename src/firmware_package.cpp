@@ -55,7 +55,8 @@ bool check_md5_signature(const std::string& file_path) {
     log_info("Expected MD5: " + expected_md5);
 
     file.seekg(0);
-    size_t content_size = (size_t)((long long)file_size - 32);
+    if (file_size < 32) return false;
+    size_t content_size = (size_t)file_size - 32;
 
     CryptoPP::Weak::MD5 hash;
     std::vector<unsigned char> digest(hash.DigestSize());
@@ -204,7 +205,10 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
             size_t to_read = std::min(in_buf_size, (size_t)remaining_compressed);
             file.read((char*)in_buf.data(), to_read);
             src_size = (size_t)file.gcount();
-            if (src_size == 0) break;
+            if (src_size == 0) {
+                log_error("Unexpected end of file during LZ4 streaming.");
+                return false;
+            }
             remaining_compressed -= src_size;
             src_offset = 0;
         }
@@ -263,10 +267,16 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
     size_t chunk_size = 1048576;
 
     while ((uint64_t)file.tellg() < max_read_pos) {
-        if (!file.read(header, 512)) break;
+        if (!file.read(header, 512)) {
+            if (file.eof()) break;
+            log_error("Failed to read TAR header.");
+            return false;
+        }
 
         std::string filename_str(header, 100);
-        std::string filename = filename_str.c_str();
+        size_t name_len = 0;
+        while (name_len < 100 && header[name_len] != '\0') name_len++;
+        std::string filename = filename_str.substr(0, name_len);
 
         if (filename.empty()) {
             bool all_zeros = true;

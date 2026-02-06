@@ -54,8 +54,8 @@ bool UsbDevice::open_device(const std::string& specific_path) {
     }
 
     // Discover endpoints
-    libusb_config_descriptor *config;
-    if (libusb_get_active_config_descriptor(target_device, &config) == 0) {
+    libusb_config_descriptor *config = nullptr;
+    if (libusb_get_active_config_descriptor(target_device, &config) == 0 && config) {
         bool found = false;
         for (int i = 0; i < config->bNumInterfaces; i++) {
             const libusb_interface *inter = &config->interface[i];
@@ -82,13 +82,13 @@ bool UsbDevice::open_device(const std::string& specific_path) {
         if (!found) {
             log_info("Endpoints not found in config descriptor. Using defaults (0x01/0x81).");
         }
-        libusb_free_config_descriptor(config);
+        if (config) libusb_free_config_descriptor(config);
     } else {
         log_info("Failed to get config descriptor. Using defaults (0x01/0x81).");
     }
 
     int err = libusb_open(target_device, &handle);
-    if (err < 0) {
+    if (err < 0 || !handle) {
         log_error("Failed to open USB device", err);
         return false;
     }
@@ -316,15 +316,14 @@ bool UsbDevice::receive_pit_table(PitTable& pit_table) {
         return false;
     }
     
-    size_t entry_size = 132; 
-    size_t expected_min_size = pit_table.header_size + (pit_table.entry_count * entry_size);
-    if (pit_data_size < expected_min_size) {
+    size_t entry_size = 132;
+    if (pit_data_size < pit_table.header_size + (pit_table.entry_count * 132)) {
         entry_size = 128;
-        expected_min_size = pit_table.header_size + (pit_table.entry_count * entry_size);
-        if (pit_data_size < expected_min_size) {
-            log_error("Received PIT size (" + std::to_string(pit_data_size) + ") is smaller than expected.");
-            return false;
-        }
+    }
+    
+    if (pit_data_size < pit_table.header_size + (pit_table.entry_count * entry_size)) {
+        log_error("Received PIT size (" + std::to_string(pit_data_size) + ") is smaller than expected.");
+        return false;
     }
 
     if (pit_table.entry_count == 0 || pit_table.entry_count > 512) {
@@ -338,7 +337,7 @@ bool UsbDevice::receive_pit_table(PitTable& pit_table) {
     for (uint32_t i = 0; i < pit_table.entry_count; ++i) {
         size_t offset = pit_table.header_size + (i * entry_size);
         
-        if (offset + sizeof(PitEntry) > pit_data_size) {
+        if (offset + entry_size > pit_data_size) {
             log_error("Out of bounds access reading PIT entry " + std::to_string(i) + ".");
             return false;
         }
@@ -358,10 +357,12 @@ bool UsbDevice::receive_pit_table(PitTable& pit_table) {
         std::memcpy(&raw_val, &pit_data[offset + 16], 4);
         entry.block_size = le32_to_h(raw_val);
         
-        std::memcpy(entry.partition_name, &pit_data[offset + 32], 32);
+        size_t name_offset = (entry_size == 132) ? 32 : 28;
+        std::memcpy(entry.partition_name, &pit_data[offset + name_offset], 32);
         entry.partition_name[31] = '\0';
         
-        std::memcpy(entry.file_name, &pit_data[offset + 64], 32);
+        size_t file_offset = (entry_size == 132) ? 64 : 60;
+        std::memcpy(entry.file_name, &pit_data[offset + file_offset], 32);
         entry.file_name[31] = '\0';
         
         pit_table.entries.push_back(entry);
