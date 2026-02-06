@@ -272,17 +272,12 @@ bool UsbDevice::request_pit() {
     pkt.packet_type = h_to_le16(THOR_PACKET_PIT_FILE);
     pkt.packet_flags = 0;
 
+    // The PIT request only sends a header requesting the PIT file. The response
+    // containing the PIT size and data will be handled by receive_pit_table().
+    // Do not consume any packets here; otherwise the subsequent call to
+    // receive_pit_table() will see an empty buffer and fail. Simply send
+    // the request and return success if the transfer completed.
     if (!send_packet(&pkt, sizeof(pkt), true)) return false;
-
-    ThorPitFilePacket response = {};
-    int actual_length;
-    if (!receive_packet(&response, sizeof(response), &actual_length, true)) return false;
-
-    if (le16toh(response.header.packet_type) != THOR_PACKET_PIT_FILE) {
-        log_error("PIT request failed. Unexpected packet type: " + std::to_string(le16toh(response.header.packet_type)));
-        return false;
-    }
-    log_info("PIT size packet received.");
     return true;
 }
 
