@@ -151,7 +151,9 @@ void list_devices() {
 int run_flash_logic(const OdinConfig& config) {
     UsbDevice usb_device;
     if (!usb_device.open_device(config.device_path)) {
-        log_error("The device could not be found or the connection established.");
+        // Provide clearer error messaging when the device cannot be opened.  The
+        // previous text was grammatically incorrect and ambiguous.
+        log_error("The device could not be found or the connection could not be established.");
         return 1;
     }
 
