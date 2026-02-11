@@ -1,10 +1,6 @@
 name: Build Odin4
 
 on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -50,7 +46,6 @@ jobs:
         run: |
           mkdir -p dist
 
-          # Ajusta se o binário tiver outro nome
           if [ -f build/odin4 ]; then
             cp build/odin4 dist/
           else
