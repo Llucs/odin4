@@ -42,6 +42,7 @@ add_executable(odin4
     src/main.cpp
     src/usb_device.cpp
     src/firmware_package.cpp
+    src/logger.cpp
 )
 set_target_properties(odin4 PROPERTIES OUTPUT_NAME "odin4")
 
