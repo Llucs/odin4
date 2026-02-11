@@ -12,6 +12,9 @@
 #include <libusb.h>
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
+#include <chrono>
+#include <sstream>
 #include "logger.h"
 
 #include "odin_types.h"
@@ -42,6 +45,7 @@ void print_usage() {
     std::cout << " --reboot  Reboot into normal mode" << std::endl;
     
     std::cout << " --redownload   Reboot into download mode if possible" << std::endl;
+    std::cout << " --check-only   Validate firmware and skip flashing" << std::endl;
     std::cout << " -d        Set a device path (detect automatically without this option)" << std::endl;
     std::cout << " -l        Show downloadable devices path" << std::endl;
     std::cout << std::endl;
@@ -171,11 +175,15 @@ int run_flash_logic(const OdinConfig& config) {
         log_error("Handshake failed.");
         return 1;
     }
+    // Log successful handshake
+    log_info("Handshake successful.");
 
     if (!usb_device.request_device_type()) {
         log_error("The device type request failed.");
         return 1;
     }
+    // Record the device type for logging
+    log_info("Device type: " + usb_device.get_device_type());
 
     // Verify that all provided firmware images appear to match the device type.
     if (!verify_firmware_compatibility(config, usb_device.get_device_type())) {
@@ -183,11 +191,15 @@ int run_flash_logic(const OdinConfig& config) {
         return 1;
     }
 
+    // Log session begin
+    log_info("Beginning session.");
     if (!usb_device.begin_session()) {
         log_error("Session begin failed.");
         return 1;
     }
 
+    // Request the PIT and log
+    log_info("Requesting PIT from device.");
     if (!usb_device.request_pit()) {
         log_error("PIT request failed.");
         return 1;
@@ -198,6 +210,25 @@ int run_flash_logic(const OdinConfig& config) {
         log_error("PIT receipt failed.");
         return 1;
     }
+    log_info("PIT received with " + std::to_string(pit_table.entries.size()) + " entries.");
+
+    // Compute total size of firmware files for statistics. This uses std::filesystem
+    // and ignores any missing or zero-length files gracefully.
+    uint64_t total_bytes = 0;
+    auto accumulate_size = [&](const std::string& path) {
+        if (!path.empty()) {
+            std::error_code ec;
+            auto sz = std::filesystem::file_size(path, ec);
+            if (!ec) total_bytes += static_cast<uint64_t>(sz);
+        }
+    };
+    accumulate_size(config.bootloader);
+    accumulate_size(config.ap);
+    accumulate_size(config.cp);
+    accumulate_size(config.csc);
+    accumulate_size(config.ums);
+    // Record start time for statistics
+    auto start_time = std::chrono::steady_clock::now();
 
     std::vector<std::pair<std::string, std::string>> files = {
         {"BL", config.bootloader}, 
@@ -210,7 +241,7 @@ int run_flash_logic(const OdinConfig& config) {
     bool success = true;
     for (const auto& f : files) {
         if (!f.second.empty()) {
-            if (!process_tar_file(f.second, usb_device, pit_table)) {
+            if (!process_tar_file(f.second, usb_device, pit_table, !config.dry_run)) {
                 log_error("Flash failed during file processing: " + f.first);
                 success = false;
                 break;
@@ -223,23 +254,45 @@ int run_flash_logic(const OdinConfig& config) {
         return 1;
     }
 
-    if (config.reboot) {
-        if (!usb_device.send_control(THOR_CONTROL_REBOOT)) {
-            log_error("The reboot command failed.");
-            return 1;
+    // In dry-run mode, skip sending reboot or redownload commands to avoid writing
+    if (!config.dry_run) {
+        if (config.reboot) {
+            if (!usb_device.send_control(THOR_CONTROL_REBOOT)) {
+                log_error("The reboot command failed.");
+                return 1;
+            }
         }
-    }
-
-    if (config.redownload) {
-        if (!usb_device.send_control(THOR_CONTROL_REDOWNLOAD)) {
-            log_error("The redownload command failed.");
-            return 1;
+        if (config.redownload) {
+            if (!usb_device.send_control(THOR_CONTROL_REDOWNLOAD)) {
+                log_error("The redownload command failed.");
+                return 1;
+            }
+        }
+    } else {
+        if (config.reboot || config.redownload) {
+            log_info("Dry run mode: reboot/redownload commands skipped.");
         }
     }
 
     if (!usb_device.end_session()) {
         log_error("Session closure failed.");
         return 1;
+    }
+
+    // Compute elapsed time and statistics
+    auto end_time = std::chrono::steady_clock::now();
+    double elapsed_seconds = std::chrono::duration_cast<std::chrono::duration<double>>(end_time - start_time).count();
+    if (elapsed_seconds < 0.001) elapsed_seconds = 0.001; // prevent divide-by-zero
+    // Log summary based on mode
+    std::ostringstream oss;
+    if (config.dry_run) {
+        oss << "Dry run completed. Total data size: " << total_bytes << " bytes. Elapsed time: " << std::fixed << std::setprecision(2) << elapsed_seconds << " s.";
+        log_info(oss.str());
+    } else {
+        double mb = total_bytes / (1024.0 * 1024.0);
+        double speed = mb / elapsed_seconds;
+        oss << "Flashed " << total_bytes << " bytes in " << std::fixed << std::setprecision(2) << elapsed_seconds << " s. Average speed: " << std::setprecision(2) << speed << " MB/s.";
+        log_info(oss.str());
     }
 
     log_info("Flash process completed successfully.");
@@ -275,6 +328,11 @@ int process_arguments_and_run(int argc, char** argv) {
         if (arg == "--redownload") { 
             config.redownload = true; 
             continue; 
+        }
+        if (arg == "--check-only") {
+            // Enable dry-run mode: verify images and PIT but skip flashing
+            config.dry_run = true;
+            continue;
         }
         // The -e (nand erase) and -V (validation) options are no longer supported.
 

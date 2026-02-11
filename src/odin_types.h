@@ -19,6 +19,12 @@ struct OdinConfig {
     // Flags controlling optional behaviour
     bool reboot = false;
     bool redownload = false;
+    // Perform a dry run (check-only) instead of actually flashing. When
+    // enabled, odin4 will verify firmware integrity and compatibility,
+    // parse PIT tables and tar archives, but will not send any data to
+    // the device. This flag corresponds to the --check-only command-line
+    // option.
+    bool dry_run = false;
 };
 
 // ============================================================================

@@ -126,7 +126,7 @@ bool check_md5_signature(const std::string& file_path) {
     }
 }
 
-bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDevice& usb_device, const std::string& filename, bool large_partition) {
+bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDevice& usb_device, const std::string& filename, bool large_partition, bool do_flash) {
     LZ4F_decompressionContext_t dctx;
     LZ4F_errorCode_t err = LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
     if (LZ4F_isError(err)) {
@@ -208,7 +208,11 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
         log_info("Pre-scan complete. Uncompressed size: " + std::to_string(uncompressed_size));
     }
 
-    if (!usb_device.send_file_part_header(uncompressed_size)) return false;
+    // When do_flash is false, skip sending headers to the device. We still
+    // decompress the file to ensure its integrity and to report progress.
+    if (do_flash) {
+        if (!usb_device.send_file_part_header(uncompressed_size)) return false;
+    }
 
     size_t src_offset = 0;
     size_t src_size = 0;
@@ -237,7 +241,9 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
             }
 
             if (dst_size > 0) {
-                if (!usb_device.send_file_part_chunk(out_buf.data(), dst_size, large_partition)) return false;
+                if (do_flash) {
+                    if (!usb_device.send_file_part_chunk(out_buf.data(), dst_size, large_partition)) return false;
+                }
                 total_uncompressed_sent += dst_size;
                 // Update progress and print when the percentage changes.
                 if (uncompressed_size > 0) {
@@ -269,7 +275,7 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
     return true;
 }
 
-bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const PitTable& pit_table) {
+bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const PitTable& pit_table, bool do_flash) {
     log_info("Processing TAR file: " + tar_path);
     
     if (!check_md5_signature(tar_path)) return false;
@@ -349,18 +355,20 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
         bool is_large = (partition_name == "SYSTEM" || partition_name == "USERDATA" || partition_name == "SUPER");
 
         if (partition_id == 0) {
-            log_info("File " + filename + " ignored: Partition not found in PIT.");
-            // Skip over the file data and padding using seekg to avoid potential overflow
-            file.seekg((std::streamoff)data_size, std::ios::cur);
-            size_t pad = (512 - (data_size % 512)) % 512;
-            file.seekg((std::streamoff)pad, std::ios::cur);
-            continue;
+            // Abort if a file in the TAR does not correspond to any PIT entry
+            log_error("File " + filename + " does not match any partition in the PIT table.");
+            return false;
         }
 
         if (is_lz4) {
-            if (!process_lz4_streaming(file, data_size, usb_device, filename, is_large)) return false;
+            // Process LZ4 entry. If do_flash is false, data will be decompressed but
+            // not transmitted to the device.
+            if (!process_lz4_streaming(file, data_size, usb_device, filename, is_large, do_flash)) return false;
         } else {
-            if (!usb_device.send_file_part_header(data_size)) return false;
+            if (do_flash) {
+                // Send the file header only when flashing
+                if (!usb_device.send_file_part_header(data_size)) return false;
+            }
 
             uint64_t remaining_size = data_size;
             size_t current_chunk_size = chunk_size;
@@ -371,6 +379,7 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
             uint64_t sent_size = 0;
             int last_percent = -1;
 
+            // Read and optionally send each chunk
             while (remaining_size > 0) {
                 size_t to_read = std::min((uint64_t)current_chunk_size, remaining_size);
                 file.read((char*)buffer.data(), to_read);
@@ -380,8 +389,9 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
                     log_error("Unexpected read error in TAR file.");
                     return false;
                 }
-
-                if (!usb_device.send_file_part_chunk(buffer.data(), read_count, is_large)) return false;
+                if (do_flash) {
+                    if (!usb_device.send_file_part_chunk(buffer.data(), read_count, is_large)) return false;
+                }
                 remaining_size -= read_count;
                 sent_size += read_count;
                 if (data_size > 0) {
@@ -400,11 +410,14 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
             }
         }
 
+        // Skip any padding at the end of the archive entry
         size_t padding = (512 - (data_size % 512)) % 512;
-        // Skip padding at the end of each file entry
         file.seekg((std::streamoff)padding, std::ios::cur);
 
-        if (!usb_device.end_file_transfer(partition_id)) return false;
+        // End the transfer if we actually flashed the partition
+        if (do_flash) {
+            if (!usb_device.end_file_transfer(partition_id)) return false;
+        }
     }
 
     return true;
