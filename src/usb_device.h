@@ -9,10 +9,7 @@
 #include "odin_types.h"
 #include "thor_protocol.h"
 
-// Forward declarations for logging functions used by UsbDevice
-void log_info(const std::string& msg);
-void log_error(const std::string& msg, int libusb_err = 0);
-void log_hexdump(const std::string& title, const void* data, size_t size);
+#include "logger.h"
 
 // Constants used by UsbDevice
 #define SAMSUNG_VID 0x04E8

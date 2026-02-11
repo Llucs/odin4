@@ -452,9 +452,9 @@ bool UsbDevice::receive_pit_table(PitTable& pit_table) {
         std::memcpy(e.file_name, pit_data.data() + off + 68, 32);
         std::memcpy(e.fota_name, pit_data.data() + off + 100, 32);
 
-        e.partition_name[31] = ' ';
-        e.file_name[31] = ' ';
-        e.fota_name[31] = ' ';
+        e.partition_name[31] = '\0';
+        e.file_name[31] = '\0';
+        e.fota_name[31] = '\0';
 
         pit_table.entries.push_back(e);
     }

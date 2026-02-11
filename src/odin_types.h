@@ -33,12 +33,19 @@ struct OdinConfig {
 
 #pragma pack(push, 1)
 struct PitEntry {
+    // Layout matches the 132-byte PIT entry used by Samsung download mode.
+    uint32_t binary_type;
+    uint32_t device_type;
     uint32_t identifier;
-    uint32_t flash_type;
+    uint32_t attributes;
+    uint32_t update_attributes;
+    uint32_t block_size_or_offset;
+    uint32_t block_count;
+    uint32_t file_offset;
     uint32_t file_size;
-    uint32_t block_size;
     char partition_name[32];
     char file_name[32];
+    char fota_name[32];
 };
 #pragma pack(pop)
 
