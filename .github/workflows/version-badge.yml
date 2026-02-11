@@ -1,0 +1,78 @@
+name: Update Version Badge
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "src/main.cpp"
+
+permissions:
+  contents: write
+
+jobs:
+  update-version-json:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read ODIN4_VERSION (before/after)
+        id: vercheck
+        shell: bash
+        run: |
+          set -e
+
+          BEFORE="$(git show HEAD~1:src/main.cpp 2>/dev/null \
+            | grep -E '^[[:space:]]*#define[[:space:]]+ODIN4_VERSION[[:space:]]+"' \
+            | sed -E 's/.*"([^"]+)".*/\1/' | head -n 1 || true)"
+
+          AFTER="$(git show HEAD:src/main.cpp \
+            | grep -E '^[[:space:]]*#define[[:space:]]+ODIN4_VERSION[[:space:]]+"' \
+            | sed -E 's/.*"([^"]+)".*/\1/' | head -n 1)"
+
+          echo "before=$BEFORE" >> "$GITHUB_OUTPUT"
+          echo "after=$AFTER" >> "$GITHUB_OUTPUT"
+
+          if [ "$BEFORE" = "$AFTER" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stop if version did not change
+        if: steps.vercheck.outputs.changed != 'true'
+        run: echo "ODIN4_VERSION unchanged. Skipping."
+
+      - name: Generate version.json
+        if: steps.vercheck.outputs.changed == 'true'
+        shell: bash
+        run: |
+          VERSION="${{ steps.vercheck.outputs.after }}"
+          cat > version.json <<EOF
+          {
+            "schemaVersion": 1,
+            "label": "version",
+            "message": "${VERSION}",
+            "color": "2563EB"
+          }
+          EOF
+
+      - name: Commit and push
+        if: steps.vercheck.outputs.changed == 'true'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add version.json
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Update version badge"
+          git push
