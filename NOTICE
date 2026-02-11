@@ -1,0 +1,9 @@
+odin4
+Copyright 2026 Llucs
+
+This project includes third-party libraries:
+- libusb
+- Crypto++
+- LZ4
+
+See the LICENSE file for licensing details.
