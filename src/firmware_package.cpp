@@ -297,8 +297,6 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
     }
 
     char header[512];
-    size_t chunk_size = 1048576;
-
     while ((uint64_t)file.tellg() < max_read_pos) {
         if (!file.read(header, 512)) {
             if (file.eof()) break;
@@ -331,6 +329,7 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
 
         uint32_t partition_id = 0;
         std::string partition_name = "";
+        const PitEntry* pit_entry = nullptr;
         std::string base_name = sanitize_filename(filename);
         // Determine if this entry is an LZ4-compressed file using a case-insensitive comparison
         bool is_lz4 = false;
@@ -348,6 +347,7 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
             if (pit_file_sanitized == base_name || pit_name_sanitized == base_name || std::string(entry.file_name) == filename) {
                 partition_id = entry.identifier;
                 partition_name = entry.partition_name;
+                pit_entry = &entry;
                 log_info("Partition found in PIT: " + partition_name + " (ID: " + std::to_string(partition_id) + ")");
                 break;
             }
@@ -355,7 +355,7 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
 
         bool is_large = (partition_name == "SYSTEM" || partition_name == "USERDATA" || partition_name == "SUPER");
 
-        if (partition_id == 0) {
+        if (partition_id == 0 || pit_entry == nullptr) {
             // Abort if a file in the TAR does not correspond to any PIT entry
             log_error("File " + filename + " does not match any partition in the PIT table.");
             return false;
