@@ -3,6 +3,8 @@
 </p>
 
 # odin4 (WIP)
+[Licensed under the Apache License 2.0](LICENSE)
+
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Build](https://img.shields.io/badge/Build-GitHub%20Actions-2ea44f.svg)](../../actions)
