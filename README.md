@@ -1,3 +1,7 @@
+<p align="center">
+<img width="150" src="./logo.png" align="left"
+</p>
+
 # odin4 (WIP)
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
