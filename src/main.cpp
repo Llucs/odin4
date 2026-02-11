@@ -1,6 +1,6 @@
 // ============================================================================
 // odin4 - Samsung Device Flashing Tool
-// Version: 4.0.0-d3a4388
+// Version: 4.1.0-ac22b8e
 // Protocol: Thor USB Communication
 // Developer: Llucs
 // ============================================================================
@@ -22,7 +22,7 @@
 #include "usb_device.h"
 #include "firmware_package.h"
 
-#define ODIN4_VERSION "4.0.0-d3a4388"
+#define ODIN4_VERSION "4.1.0-ac22b8e"
 
 // Logging utilities are now defined in src/logger.cpp. See logger.h for declarations.
 
