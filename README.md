@@ -10,6 +10,7 @@
 [![Build](https://img.shields.io/badge/Build-GitHub%20Actions-2ea44f.svg)](../../actions)
 [![Platform](https://img.shields.io/badge/Platform-Linux-informational.svg)](#)
 [![Language](https://img.shields.io/badge/Language-C%2FC%2B%2B-blue.svg)](#)
+![Version](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/SEU_USUARIO/odin4/main/version.json)
 
 **odin4** is an open-source Samsung firmware flashing tool for Linux, based on the original **odin4** project for Linux and **Thor USB protocol**.
 
