@@ -1,67 +1,95 @@
 <p align="center">
-<img width="150" src="./logo.png" align="left"
+  <img src="./logo.png" width="160" alt="odin4 logo">
 </p>
 
-# odin4 (WIP)
-[Licensed under the Apache License 2.0](LICENSE)
+<h1 align="center">odin4</h1>
 
+<p align="center">
+  Modern Samsung firmware flashing tool for Linux
+</p>
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Build](https://img.shields.io/badge/Build-GitHub%20Actions-2ea44f.svg)](../../actions)
-[![Platform](https://img.shields.io/badge/Platform-Linux-informational.svg)](#)
-[![Language](https://img.shields.io/badge/Language-C%2FC%2B%2B-blue.svg)](#)
-![Version](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Llucs/odin4/main/version.json)
-
-**odin4** is an open-source Samsung firmware flashing tool for Linux, based on the original **odin4** project for Linux and **Thor USB protocol**.
-
-It aims to be a modern alternative to the original Odin for Windows, with a focus on stability, clean code, correct protocol implementation, and proper logging.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg"></a>
+  <a href="../../actions"><img src="https://img.shields.io/badge/Build-GitHub%20Actions-2ea44f.svg"></a>
+  <img src="https://img.shields.io/badge/Platform-Linux-informational.svg">
+  <img src="https://img.shields.io/badge/Language-C%2FC%2B%2B-blue.svg">
+  <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Llucs/odin4/main/version.json">
+</p>
 
 ---
 
-## Features
-- Samsung **Download Mode** detection via **libusb**
-- **Thor protocol** implementation
-- Flash support for standard Samsung firmware packages:
+## Overview
+
+**odin4** is a modern Samsung firmware flashing tool for Linux built around a clean and correct implementation of the Thor USB protocol.
+
+The project focuses on:
+
+- Correct protocol behavior
+- Strong validation before flashing
+- Structured logging
+- Deterministic and safe flashing logic
+- Clean and maintainable C++ code
+
+It is designed as a serious Linux-native alternative for Samsung firmware flashing workflows.
+
+---
+
+## Core Features
+
+- Samsung **Download Mode** detection via `libusb`
+- Native **Thor protocol** implementation
+- Automatic **PIT retrieval and parsing**
+- Strict partition validation against PIT
+- Support for standard Samsung firmware packages:
   - **BL**
   - **AP**
   - **CP**
   - **CSC**
   - **UMS**
-- **.tar.md5** integrity verification (Crypto++)
+- `.tar.md5` integrity verification using **Crypto++**
 - Streaming flash support for:
-  - raw images
+  - Raw images
   - **LZ4-compressed images**
-- Automatic PIT retrieval and parsing
-- Console output + persistent log file (`odin4.log`)
 - Per-file flashing progress reporting
-- Sequential multi-device flashing when `-d` is not provided
+- Transfer statistics (size, elapsed time, average speed)
+- Persistent log file (`odin4.log`)
+- Sequential multi-device flashing when `-d` is not specified
+- Safe **dry-run mode** (`--check-only`) for validation without flashing
 
 ---
 
-## Project Status
-This project is under active development.
+## Safety and Validation
 
-The tool is already functional and has received major improvements in protocol reliability, firmware parsing, Crypto++ migration, and overall stability.
+odin4 enforces strict checks before writing to the device:
 
-However, there may still be remaining edge cases depending on device model, firmware format variations, and host environment differences.
+- Firmware integrity verification
+- Partition name validation against PIT
+- Device model compatibility check
+- Explicit flashing control flow
+- Optional dry-run execution
+
+The tool does not implement destructive or high-risk operations such as NAND erase or forced repartitioning.
 
 ---
 
 ## Build (Linux)
 
 ### Dependencies
+
 ```bash
 sudo apt-get update
 sudo apt-get install -y   cmake ninja-build zip make pkg-config g++   libusb-1.0-0-dev libcrypto++-dev
 ```
 
-### Build
+### Compile
+
 ```bash
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel $(nproc)
 ```
 
 Binary output:
+
 ```bash
 build/odin4
 ```
@@ -71,28 +99,38 @@ build/odin4
 ## Usage
 
 ### List devices in Download Mode
+
 ```bash
 ./build/odin4 -l
 ```
 
-### Flash a firmware set
+### Flash firmware
+
 ```bash
 ./build/odin4   -b BL_XXXX.tar.md5   -a AP_XXXX.tar.md5   -c CP_XXXX.tar.md5   -s CSC_XXXX.tar.md5
 ```
 
 ### Flash a specific device
+
 ```bash
-./build/odin4   -d /dev/bus/usb/001/002   -b BL_XXXX.tar.md5   -a AP_XXXX.tar.md5   -c CP_XXXX.tar.md5   -s CSC_XXXX.tar.md5
+./build/odin4   -d /dev/bus/usb/001/002   -b BL_XXXX.tar.md5   -a AP_XXXX.tar.md5
+```
+
+### Dry-run (validation only)
+
+```bash
+./build/odin4 --check-only   -b BL_XXXX.tar.md5   -a AP_XXXX.tar.md5
 ```
 
 ### Reboot after flashing
+
 ```bash
-./build/odin4 --reboot -b BL_XXXX.tar.md5 -a AP_XXXX.tar.md5
+./build/odin4 --reboot   -b BL_XXXX.tar.md5   -a AP_XXXX.tar.md5
 ```
 
 ---
 
-## Linux USB Permissions (udev rule)
+## Linux USB Permissions
 
 To allow access to Samsung devices in Download Mode, create:
 
@@ -100,7 +138,7 @@ To allow access to Samsung devices in Download Mode, create:
 sudo nano /etc/udev/rules.d/51-android.rules
 ```
 
-Add this line:
+Add:
 
 ```bash
 SUBSYSTEM=="usb", ATTR{idVendor}=="04e8", MODE="0666", GROUP="plugdev"
@@ -113,26 +151,50 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
 
-Unplug and reconnect the device.
+Reconnect the device afterward.
+
+---
+
+## Project Status
+
+The project is actively maintained and production-oriented.
+
+Core protocol behavior, validation logic, and firmware handling are implemented with a focus on correctness and reliability.
+
+Further improvements focus on refinement, edge-case handling, and long-term stability.
 
 ---
 
 ## Contributing
+
 Contributions are welcome.
 
-If you have experience with **C/C++**, **libusb**, **Crypto++**, or reverse engineering, feel free to open issues or submit pull requests.
+Areas of interest:
+
+- libusb improvements
+- Protocol robustness
+- Testing and validation
+- Performance refinement
+- Documentation
 
 ---
 
 ## License
-Licensed under the **Apache License 2.0**.  
-See the `LICENSE` file for details.
+
+Licensed under the **Apache License 2.0**.
+
+See the `LICENSE` file for full details.
 
 ---
 
 ## Disclaimer
-This tool is provided **as-is**.  
-Flashing firmware always carries risks, including permanent device damage.
 
-Use at your own risk.  
-The author(s) are not responsible for any damage, data loss, or device bricking.
+Flashing firmware always carries risk.
+
+This tool is provided **as-is**, without warranties of any kind.
+
+Use at your own responsibility.
+
+---
+
+© 2026 Llucs
