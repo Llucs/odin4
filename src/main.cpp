@@ -10,6 +10,9 @@
 #include <vector>
 #include <iomanip>
 #include <libusb.h>
+#include <algorithm>
+#include <cctype>
+#include "logger.h"
 
 #include "odin_types.h"
 #include "thor_protocol.h"
@@ -18,47 +21,7 @@
 
 #define ODIN4_VERSION "3.3.0-ddfadbe"
 
-// ============================================================================
-// LOGGING UTILITIES
-// ============================================================================
-
-void log_info(const std::string& msg) {
-    std::cout << "[INFO] " << msg << std::endl;
-}
-
-// Provide a default value for the libusb error code so the function can be
-// invoked with a single parameter. The default of 0 indicates no specific
-// libusb error code is available.
-void log_error(const std::string& msg, int libusb_err) {
-    std::cerr << "[ERROR] " << msg;
-    if (libusb_err != 0) {
-        std::cerr << " (libusb: " << libusb_error_name(libusb_err) << ")";
-    }
-    std::cerr << std::endl;
-}
-
-void log_hexdump(const std::string& title, const void* data, size_t size) {
-    if (size == 0) return;
-    const unsigned char* bytes = static_cast<const unsigned char*>(data);
-    
-    // Save current cout state
-    std::ios_base::fmtflags f(std::cout.flags());
-    char fill = std::cout.fill();
-    std::streamsize old_width = std::cout.width();
-    
-    std::cout << "[DEBUG] " << title << " (" << size << " bytes):" << std::endl;
-    std::cout << std::hex << std::setfill('0');
-    for (size_t i = 0; i < size; ++i) {
-        std::cout << std::setw(2) << (unsigned int)bytes[i] << " ";
-        if ((i + 1) % 16 == 0) std::cout << std::endl;
-    }
-    if (size % 16 != 0) std::cout << std::endl;
-    
-    // Restore cout state
-    std::cout.flags(f);
-    std::cout.fill(fill);
-    std::cout.width(old_width);
-}
+// Logging utilities are now defined in src/logger.cpp. See logger.h for declarations.
 
 // ============================================================================
 // CLI UTILITIES
@@ -115,36 +78,80 @@ void print_license() {
     std::cout << "OF ANY KIND, either express or implied." << std::endl;
 }
 
+// List all Samsung devices detected in download mode. This helper prints
+// their USB bus/address paths. The enumeration is performed via the
+// UsbDevice::list_download_devices() static member.
 void list_devices() {
-    libusb_device **list = nullptr;
-    ssize_t cnt = libusb_get_device_list(NULL, &list);
-    if (cnt < 0) return;
-
-    struct ListCleanup {
-        libusb_device **list = nullptr;
-        ListCleanup(libusb_device **l) : list(l) {}
-        ~ListCleanup() { if (list) libusb_free_device_list(list, 1); }
-    } list_cleanup(list);
-
-    bool found = false;
-    for (ssize_t i = 0; i < cnt; i++) {
-        libusb_device_descriptor desc;
-        if (libusb_get_device_descriptor(list[i], &desc) < 0) continue;
-
-        if (desc.idVendor == SAMSUNG_VID) {
-            // Iterate over known Samsung download mode product IDs
-            for (uint16_t pid : SAMSUNG_DOWNLOAD_PIDS) {
-                if (desc.idProduct == pid) {
-                    std::cout << "/dev/bus/usb/" << std::setfill('0') << std::setw(3) << static_cast<int>(libusb_get_bus_number(list[i])) << "/" << std::setfill('0') << std::setw(3) << static_cast<int>(libusb_get_device_address(list[i])) << std::endl;
-                    found = true;
-                }
-            }
+    std::vector<std::string> devices = UsbDevice::list_download_devices();
+    if (devices.empty()) {
+        std::cout << "No Samsung devices found in download mode." << std::endl;
+    } else {
+        for (const auto& path : devices) {
+            std::cout << path << std::endl;
         }
     }
+}
 
-    if (!found) {
-        std::cout << "No Samsung devices found in download mode." << std::endl;
+// ---------------------------------------------------------------------------
+// Firmware compatibility verification
+// ---------------------------------------------------------------------------
+// This function performs a simple compatibility check between the connected
+// device and the firmware image filenames provided by the user. It attempts
+// to extract the model identifier from the device type string (typically
+// something like "SM-G970F") and ensures that each firmware filename
+// contains that identifier (case-insensitive). If the device type cannot be
+// determined or no files are provided, the function returns true. On
+// mismatch it logs an error and returns false.
+bool verify_firmware_compatibility(const OdinConfig& cfg, const std::string& device_type) {
+    if (device_type.empty()) {
+        log_info("Device type string is empty; skipping firmware compatibility checks.");
+        return true;
     }
+    // Normalise the device_type by converting to uppercase and removing "SM-" prefix.
+    std::string dt = device_type;
+    // Remove whitespace and common separators
+    dt.erase(std::remove_if(dt.begin(), dt.end(), [](unsigned char c) {
+        return std::isspace(c) || c == '\\' || c == '/' || c == '-';
+    }), dt.end());
+    // Convert to uppercase for case-insensitive comparison
+    std::transform(dt.begin(), dt.end(), dt.begin(), [](unsigned char c){ return static_cast<char>(std::toupper(c)); });
+    if (dt.rfind("SM", 0) == 0) {
+        // If begins with "SM" drop it for matching (e.g. SMG970F -> G970F)
+        dt = dt.substr(2);
+    }
+    // Lambda to test a single file path
+    auto check_file = [&](const std::string& path) -> bool {
+        if (path.empty()) return true;
+        // Extract the filename from a full path by finding the last separator.
+        std::string fname;
+        size_t pos = path.find_last_of("/\\");
+        if (pos != std::string::npos) {
+            fname = path.substr(pos + 1);
+        } else {
+            fname = path;
+        }
+        // Convert filename to uppercase and strip common separators to improve match.
+        std::string f_upper;
+        f_upper.reserve(fname.size());
+        for (char c : fname) {
+            unsigned char uc = static_cast<unsigned char>(c);
+            if (std::isspace(uc)) continue;
+            if (uc == '-') continue;
+            f_upper.push_back(static_cast<char>(std::toupper(uc)));
+        }
+        if (f_upper.find(dt) == std::string::npos) {
+            log_error("Firmware file '" + fname + "' does not appear compatible with device type '" + device_type + "'.");
+            return false;
+        }
+        return true;
+    };
+    if (!check_file(cfg.bootloader)) return false;
+    if (!check_file(cfg.ap)) return false;
+    if (!check_file(cfg.cp)) return false;
+    if (!check_file(cfg.csc)) return false;
+    if (!check_file(cfg.ums)) return false;
+    log_info("All firmware files appear compatible with device type " + device_type + ".");
+    return true;
 }
 
 // ============================================================================
@@ -167,6 +174,12 @@ int run_flash_logic(const OdinConfig& config) {
 
     if (!usb_device.request_device_type()) {
         log_error("The device type request failed.");
+        return 1;
+    }
+
+    // Verify that all provided firmware images appear to match the device type.
+    if (!verify_firmware_compatibility(config, usb_device.get_device_type())) {
+        log_error("Firmware compatibility verification failed.");
         return 1;
     }
 
@@ -287,10 +300,37 @@ int process_arguments_and_run(int argc, char** argv) {
         return 1;
     }
 
+    // If no specific device path is provided, attempt to flash all detected devices.
+    if (config.device_path.empty()) {
+        std::vector<std::string> devices = UsbDevice::list_download_devices();
+        if (devices.empty()) {
+            log_error("No Samsung devices found in download mode. Connect a device or specify -d.");
+            return 1;
+        }
+        // Flash each device sequentially. If an error occurs on any device, abort.
+        int aggregate_result = 0;
+        for (const auto& dev : devices) {
+            OdinConfig cfg = config;
+            cfg.device_path = dev;
+            log_info("Flashing device: " + dev);
+            int result = run_flash_logic(cfg);
+            if (result != 0) {
+                aggregate_result = result;
+                break;
+            }
+        }
+        return aggregate_result;
+    }
+    // Otherwise, flash the single specified device.
     return run_flash_logic(config);
 }
 
 int main(int argc, char** argv) {
+    // Configure a default log file. Logging will also be printed to the console.
+    // The log file path could be made configurable via a future command-line
+    // option. For now we use a fixed name in the current working directory.
+    set_log_file("odin4.log");
+
     int err = libusb_init(NULL);
     if (err < 0) {
         std::cerr << "[ERROR] Failed to initialize libusb: " << libusb_error_name(err) << std::endl;

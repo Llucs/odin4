@@ -32,6 +32,9 @@ private:
     uint8_t endpoint_in = 0x81;
     int interface_number = 0;
 
+    // Stores the device type string returned during the THOR protocol handshake.
+    std::string device_type_str;
+
 public:
     UsbDevice() = default;
     ~UsbDevice();
@@ -49,6 +52,15 @@ public:
     bool send_file_part_header(uint64_t total_size);
     bool end_file_transfer(uint32_t partition_id);
     bool send_control(uint32_t control_type);
+
+    // Return the device type string obtained via request_device_type().
+    // The returned reference remains valid for the lifetime of the UsbDevice instance.
+    const std::string& get_device_type() const { return device_type_str; }
+
+    // Enumerate all Samsung devices currently in download mode. The returned
+    // vector contains the device path strings (e.g. "/dev/bus/usb/001/002").
+    // This does not require opening any devices.
+    static std::vector<std::string> list_download_devices();
 };
 
 #endif // USB_DEVICE_H

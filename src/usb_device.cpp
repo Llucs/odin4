@@ -5,6 +5,7 @@
 #include <thread>
 #include <chrono>
 #include <cstring>
+#include <vector>
 
 UsbDevice::~UsbDevice() {
     if (handle) {
@@ -222,8 +223,53 @@ bool UsbDevice::request_device_type() {
         log_error("Device type request failed. Unexpected packet type: " + std::to_string(le16toh(response.header.packet_type)));
         return false;
     }
-    log_info("Device type received.");
+    // Copy the device type string from the response. The char array is
+    // null-terminated or zero-padded. Convert to a std::string and trim
+    // trailing null bytes.
+    device_type_str.clear();
+    for (int i = 0; i < static_cast<int>(sizeof(response.device_type)); ++i) {
+        char c = response.device_type[i];
+        if (c == '\0') break;
+        device_type_str.push_back(c);
+    }
+    log_info("Device type received: " + device_type_str);
     return true;
+}
+
+// Static helper: enumerate Samsung devices in download mode
+std::vector<std::string> UsbDevice::list_download_devices() {
+    std::vector<std::string> result;
+    libusb_device **list = nullptr;
+    ssize_t cnt = libusb_get_device_list(NULL, &list);
+    if (cnt < 0) {
+        // on error, return empty list
+        return result;
+    }
+    struct Cleanup {
+        libusb_device **l;
+        Cleanup(libusb_device **ptr) : l(ptr) {}
+        ~Cleanup() { if (l) libusb_free_device_list(l, 1); }
+    } cleanup(list);
+    for (ssize_t i = 0; i < cnt; i++) {
+        libusb_device_descriptor desc;
+        if (libusb_get_device_descriptor(list[i], &desc) < 0) continue;
+        if (desc.idVendor != SAMSUNG_VID) continue;
+        bool download_pid = false;
+        for (uint16_t pid : SAMSUNG_DOWNLOAD_PIDS) {
+            if (desc.idProduct == pid) {
+                download_pid = true;
+                break;
+            }
+        }
+        if (!download_pid) continue;
+        std::stringstream path_ss;
+        path_ss << "/dev/bus/usb/"
+                << std::setfill('0') << std::setw(3) << static_cast<int>(libusb_get_bus_number(list[i]))
+                << "/"
+                << std::setfill('0') << std::setw(3) << static_cast<int>(libusb_get_device_address(list[i]));
+        result.push_back(path_ss.str());
+    }
+    return result;
 }
 
 bool UsbDevice::begin_session() {

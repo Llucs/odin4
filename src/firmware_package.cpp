@@ -1,4 +1,5 @@
 #include "firmware_package.h"
+#include "logger.h"
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -150,6 +151,7 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 
     uint64_t remaining_compressed = compressed_size;
     uint64_t total_uncompressed_sent = 0;
+    int last_percent = -1;
 
     // Read frame header to get content size
     std::streampos start_pos = file.tellg();
@@ -237,6 +239,14 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
             if (dst_size > 0) {
                 if (!usb_device.send_file_part_chunk(out_buf.data(), dst_size, large_partition)) return false;
                 total_uncompressed_sent += dst_size;
+                // Update progress and print when the percentage changes.
+                if (uncompressed_size > 0) {
+                    int percent = static_cast<int>((static_cast<double>(total_uncompressed_sent) / uncompressed_size) * 100.0);
+                    if (percent != last_percent) {
+                        std::cout << "\r[Flash] " << filename << ": " << percent << "%" << std::flush;
+                        last_percent = percent;
+                    }
+                }
             }
 
             src_offset += src_consumed;
@@ -250,7 +260,12 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
         log_error("Decompressed size mismatch for " + filename + ": expected " + std::to_string(uncompressed_size) + ", got " + std::to_string(total_uncompressed_sent));
         return false;
     }
-
+    // Ensure the progress bar ends at 100% and move to the next line.
+    if (uncompressed_size > 0 && last_percent < 100) {
+        std::cout << "\r[Flash] " << filename << ": 100%" << std::endl;
+    } else {
+        std::cout << std::endl;
+    }
     return true;
 }
 
@@ -349,10 +364,12 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
 
             uint64_t remaining_size = data_size;
             size_t current_chunk_size = chunk_size;
-            if (data_size > 1024 * 1024 * 1024) {
+            if (data_size > 1024ULL * 1024ULL * 1024ULL) {
                 current_chunk_size = 16 * 1024 * 1024;
             }
             std::vector<unsigned char> buffer(current_chunk_size);
+            uint64_t sent_size = 0;
+            int last_percent = -1;
 
             while (remaining_size > 0) {
                 size_t to_read = std::min((uint64_t)current_chunk_size, remaining_size);
@@ -366,6 +383,20 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
 
                 if (!usb_device.send_file_part_chunk(buffer.data(), read_count, is_large)) return false;
                 remaining_size -= read_count;
+                sent_size += read_count;
+                if (data_size > 0) {
+                    int percent = static_cast<int>((static_cast<double>(sent_size) / data_size) * 100.0);
+                    if (percent != last_percent) {
+                        std::cout << "\r[Flash] " << filename << ": " << percent << "%" << std::flush;
+                        last_percent = percent;
+                    }
+                }
+            }
+            // After sending the entire file, ensure the progress reaches 100%
+            if (data_size > 0 && last_percent < 100) {
+                std::cout << "\r[Flash] " << filename << ": 100%" << std::endl;
+            } else {
+                std::cout << std::endl;
             }
         }
 
