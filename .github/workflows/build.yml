@@ -51,7 +51,7 @@ jobs:
           set -euo pipefail
 
           echo "Checking for libcryptopp.a..."
-          A_PATH="$(ls -1 /usr/lib*/**/libcryptopp.a 2>/dev/null | head -n 1 || true)"
+          A_PATH="$(find /usr -type f -name 'libcryptopp.a' 2>/dev/null | head -n 1 || true)"
           if [ -n "$A_PATH" ]; then
             echo "Found static Crypto++: $A_PATH"
             exit 0
@@ -64,10 +64,9 @@ jobs:
 
           make -j"$(nproc)"
           sudo make install PREFIX=/usr/local
-
           sudo ldconfig || true
 
-          A_PATH2="$(ls -1 /usr/local/lib*/libcryptopp.a 2>/dev/null | head -n 1 || true)"
+          A_PATH2="$(find /usr/local -type f -name 'libcryptopp.a' 2>/dev/null | head -n 1 || true)"
           if [ -z "$A_PATH2" ]; then
             echo "ERROR: Crypto++ static library build/install failed (libcryptopp.a still not found)." >&2
             exit 1
@@ -100,9 +99,14 @@ jobs:
           echo "ODIN4_SUFFIX=$SUFFIX" >> "$GITHUB_ENV"
           echo "ODIN4_OUTNAME=odin4_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
 
+      - name: Clean build dir
+        run: rm -rf build
+
       - name: Configure CMake
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="/usr/local"
 
       - name: Build
         run: |
