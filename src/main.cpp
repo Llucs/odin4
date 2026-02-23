@@ -197,24 +197,16 @@ int run_flash_logic(const OdinConfig& config) {
         log_error("Session begin failed.");
         return 1;
     }
-
-// Request the PIT and log
-log_info("Requesting PIT from device.");
-
-PitTable pit_table;
-
-if (!usb_device.request_pit(pit_table)) {
-    log_error("PIT request failed.");
-    return 1;
-}
+    // Request the PIT and log
+    log_info("Requesting PIT from device.");
 
     PitTable pit_table;
-    if (!usb_device.receive_pit_table(pit_table)) {
-        log_error("PIT receipt failed.");
+    if (!usb_device.request_pit(pit_table)) {
+        log_error("PIT request failed.");
         return 1;
     }
-    log_info("PIT received with " + std::to_string(pit_table.entries.size()) + " entries.");
 
+    log_info("PIT received with " + std::to_string(pit_table.entries.size()) + " entries.");
     // Compute total size of firmware files for statistics. This uses std::filesystem
     // and ignores any missing or zero-length files gracefully.
     uint64_t total_bytes = 0;
