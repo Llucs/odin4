@@ -22,7 +22,22 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 # =========================
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
-pkg_check_modules(CRYPTOPP REQUIRED libcrypto++)
+
+# Prefer Crypto++ static to avoid runtime dependency on libcrypto++.so
+find_path(CRYPTOPP_INCLUDE_DIR cryptlib.h
+    PATH_SUFFIXES cryptopp crypto++
+)
+
+find_library(CRYPTOPP_STATIC_LIB
+    NAMES cryptopp libcryptopp.a
+)
+
+if (CRYPTOPP_INCLUDE_DIR AND CRYPTOPP_STATIC_LIB)
+    set(CRYPTOPP_USE_STATIC ON)
+else()
+    set(CRYPTOPP_USE_STATIC OFF)
+    pkg_check_modules(CRYPTOPP REQUIRED libcrypto++)
+endif()
 
 # =========================
 # LZ4 static library (C)
@@ -38,7 +53,7 @@ target_include_directories(lz4_lib PUBLIC lib/lz4)
 # =========================
 # Main executable (C++)
 # =========================
-add_executable(odin4 
+add_executable(odin4
     src/main.cpp
     src/usb_device.cpp
     src/firmware_package.cpp
@@ -60,8 +75,13 @@ target_compile_options(odin4 PRIVATE
 # =========================
 target_include_directories(odin4 PRIVATE
     ${LIBUSB_INCLUDE_DIRS}
-    ${CRYPTOPP_INCLUDE_DIRS}
 )
+
+if (CRYPTOPP_USE_STATIC)
+    target_include_directories(odin4 PRIVATE ${CRYPTOPP_INCLUDE_DIR})
+else()
+    target_include_directories(odin4 PRIVATE ${CRYPTOPP_INCLUDE_DIRS})
+endif()
 
 # =========================
 # Linking
@@ -69,7 +89,12 @@ target_include_directories(odin4 PRIVATE
 target_link_libraries(odin4 PRIVATE
     ${LIBUSB_LIBRARIES}
     lz4_lib
-    ${CRYPTOPP_LIBRARIES}
     -static-libgcc
     -static-libstdc++
 )
+
+if (CRYPTOPP_USE_STATIC)
+    target_link_libraries(odin4 PRIVATE ${CRYPTOPP_STATIC_LIB})
+else()
+    target_link_libraries(odin4 PRIVATE ${CRYPTOPP_LIBRARIES})
+endif()
