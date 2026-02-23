@@ -9,6 +9,28 @@
 #include <algorithm>
 #include <cctype>
 #include <unordered_set>
+#include <limits>
+#include <mutex>
+
+namespace {
+    libusb_context* g_libusb_ctx = nullptr;
+    std::once_flag g_libusb_once;
+
+    bool ensure_libusb_initialized() {
+        std::call_once(g_libusb_once, []() {
+            int rc = libusb_init(&g_libusb_ctx);
+            if (rc != 0) g_libusb_ctx = nullptr;
+        });
+        return g_libusb_ctx != nullptr;
+    }
+
+    int clamp_size_to_int(size_t sz) {
+        if (sz > static_cast<size_t>(std::numeric_limits<int>::max())) {
+            return std::numeric_limits<int>::max();
+        }
+        return static_cast<int>(sz);
+    }
+}
 
 static int retry_backoff_ms(int attempt) {
     int ms = 100;
@@ -39,11 +61,14 @@ bool UsbDevice::bulk_write_all(const void* data, size_t size, int timeout_ms) {
             int actual_length = 0;
             size_t to_send = size - offset;
             if (to_send > max_chunk_bytes) to_send = max_chunk_bytes;
-            int err = libusb_bulk_transfer(handle, endpoint_out, const_cast<unsigned char*>(ptr + offset), static_cast<int>(to_send), &actual_length, timeout_ms);
+            int err = libusb_bulk_transfer(handle, endpoint_out, const_cast<unsigned char*>(ptr + offset), clamp_size_to_int(to_send), &actual_length, timeout_ms);
+            if (actual_length > 0) {
+                offset += static_cast<size_t>(actual_length);
+            }
             if (err != 0) {
                 log_error("USB bulk write failed", err);
                 if (err == LIBUSB_ERROR_NO_DEVICE) return false;
-                if (err == LIBUSB_ERROR_PIPE) libusb_clear_halt(handle, endpoint_out);
+                if (err == LIBUSB_ERROR_PIPE) (void)libusb_clear_halt(handle, endpoint_out);
                 // Some devices/controllers behave poorly with ZLP or large transfers.
                 // Fall back to small chunks and retry.
                 if (err == LIBUSB_ERROR_PIPE || err == LIBUSB_ERROR_TIMEOUT) {
@@ -55,7 +80,6 @@ bool UsbDevice::bulk_write_all(const void* data, size_t size, int timeout_ms) {
                 log_error("USB bulk write returned zero length");
                 break;
             }
-            offset += static_cast<size_t>(actual_length);
         }
         if (offset == size) {
             // Only send ZLP once, at the end of the whole transfer.
@@ -76,10 +100,16 @@ bool UsbDevice::bulk_write_all(const void* data, size_t size, int timeout_ms) {
 }
 
 bool UsbDevice::bulk_read_once(void* data, size_t size, int* actual_length, int timeout_ms) {
-    int err = libusb_bulk_transfer(handle, endpoint_in, static_cast<unsigned char*>(data), static_cast<int>(size), actual_length, timeout_ms);
-    if (err == 0) return true;
-    if (err == LIBUSB_ERROR_PIPE) libusb_clear_halt(handle, endpoint_in);
-    log_error("USB bulk read failed", err);
+    for (int attempt = 0; attempt < USB_RETRY_COUNT; ++attempt) {
+        int err = libusb_bulk_transfer(handle, endpoint_in, static_cast<unsigned char*>(data), clamp_size_to_int(size), actual_length, timeout_ms);
+        if (err == 0) return true;
+        if (err == LIBUSB_ERROR_NO_DEVICE) return false;
+        if (err == LIBUSB_ERROR_PIPE) (void)libusb_clear_halt(handle, endpoint_in);
+        log_error("USB bulk read failed", err);
+        if (attempt < USB_RETRY_COUNT - 1) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(retry_backoff_ms(attempt)));
+        }
+    }
     return false;
 }
 
@@ -180,7 +210,14 @@ bool UsbDevice::open_device(const std::string& specific_path, const UsbSelection
         device_list = nullptr;
     }
 
-    ssize_t cnt = libusb_get_device_list(NULL, &device_list);
+    if (!ensure_libusb_initialized()) {
+        last_open_error = UsbOpenError::Other;
+        last_open_libusb_err = LIBUSB_ERROR_OTHER;
+        log_error("Failed to enumerate USB devices", LIBUSB_ERROR_OTHER);
+        return false;
+    }
+
+    ssize_t cnt = libusb_get_device_list(g_libusb_ctx, &device_list);
     if (cnt < 0) {
         last_open_error = UsbOpenError::Other;
         last_open_libusb_err = static_cast<int>(cnt);
@@ -299,20 +336,40 @@ bool UsbDevice::receive_packet(void *data, size_t size, int *actual_length, bool
     size_t required_min = (min_size == 0) ? size : min_size;
 
     for (int attempt = 0; attempt < USB_RETRY_COUNT; ++attempt) {
-        int err = libusb_bulk_transfer(handle, endpoint_in, static_cast<unsigned char*>(data), static_cast<int>(size), actual_length, timeout);
+        size_t received = 0;
+        *actual_length = 0;
 
-        if (err == 0) {
-            if (*actual_length >= static_cast<int>(required_min) && *actual_length <= static_cast<int>(size)) {
-                if (is_control) log_hexdump("Packet Received (Control)", data, static_cast<size_t>(*actual_length));
-                return true;
+        while (received < required_min && received < size) {
+            int chunk = 0;
+            const size_t remaining = size - received;
+            int err = libusb_bulk_transfer(handle, endpoint_in, static_cast<unsigned char*>(data) + received, clamp_size_to_int(remaining), &chunk, timeout);
+
+            if (chunk > 0) {
+                received += static_cast<size_t>(chunk);
+                *actual_length = static_cast<int>(received);
             }
-            log_error("Incorrect receive size (attempt " + std::to_string(attempt + 1) + "): expected min " + std::to_string(required_min) + ", max " + std::to_string(size) + ", received " + std::to_string(*actual_length));
-        } else if (err == LIBUSB_ERROR_TIMEOUT && timeout_override_ms > 0) {
-            return false;
-        } else {
+
+            if (err == 0) {
+                if (received >= required_min) break;
+                if (chunk <= 0) break;
+                continue;
+            }
+
+            if (err == LIBUSB_ERROR_PIPE) (void)libusb_clear_halt(handle, endpoint_in);
+            if (err == LIBUSB_ERROR_TIMEOUT && timeout_override_ms > 0) {
+                return false;
+            }
             log_error("USB packet receive failed (attempt " + std::to_string(attempt + 1) + ")", err);
             if (err == LIBUSB_ERROR_NO_DEVICE) return false;
+            break;
         }
+
+        if (received >= required_min && received <= size) {
+            if (is_control) log_hexdump("Packet Received (Control)", data, received);
+            return true;
+        }
+
+        log_error("Incorrect receive size (attempt " + std::to_string(attempt + 1) + "): expected min " + std::to_string(required_min) + ", max " + std::to_string(size) + ", received " + std::to_string(received));
 
         if (attempt < USB_RETRY_COUNT - 1) {
             std::this_thread::sleep_for(std::chrono::milliseconds(retry_backoff_ms(attempt)));
@@ -366,7 +423,7 @@ bool UsbDevice::request_device_type() {
 
     ThorDeviceTypePacket response = {};
     int actual_length;
-    if (!receive_packet(&response, sizeof(response), &actual_length, true, sizeof(ThorPacketHeader))) return false;
+    if (!receive_packet(&response, sizeof(response), &actual_length, true, sizeof(response))) return false;
 
     if (le16toh(response.header.packet_type) != THOR_PACKET_DEVICE_TYPE) {
         log_error("Device type request failed. Unexpected packet type: " + std::to_string(le16toh(response.header.packet_type)));
@@ -393,7 +450,8 @@ std::vector<std::string> UsbDevice::list_download_devices() {
 std::vector<std::string> UsbDevice::list_download_devices(const UsbSelectionCriteria& criteria) {
     std::vector<std::string> result;
     libusb_device** list = nullptr;
-    const ssize_t cnt = libusb_get_device_list(NULL, &list);
+    if (!ensure_libusb_initialized()) return result;
+    const ssize_t cnt = libusb_get_device_list(g_libusb_ctx, &list);
     if (cnt < 0) return result;
 
     struct Cleanup {
@@ -734,7 +792,7 @@ bool UsbDevice::send_file_part_header(uint64_t total_size) {
 
     ThorResponsePacket response = {};
     int actual_length;
-    if (!receive_packet(&response, sizeof(response), &actual_length, true, sizeof(ThorPacketHeader))) return false;
+    if (!receive_packet(&response, sizeof(response), &actual_length, true, sizeof(ThorResponsePacket))) return false;
 
     uint32_t code = 0;
     if (actual_length >= static_cast<int>(sizeof(ThorResponsePacket))) {
@@ -794,7 +852,7 @@ bool UsbDevice::send_control(uint32_t control_type) {
 
     ThorResponsePacket response = {};
     int actual_length;
-    if (!receive_packet(&response, sizeof(response), &actual_length, true, sizeof(ThorPacketHeader))) return false;
+    if (!receive_packet(&response, sizeof(response), &actual_length, true, sizeof(ThorResponsePacket))) return false;
 
     uint32_t code = 0;
     if (actual_length >= static_cast<int>(sizeof(ThorResponsePacket))) {
