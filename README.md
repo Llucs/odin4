@@ -2,7 +2,7 @@
   <img src="./logo.png" width="160" alt="odin4 logo">
 </p>
 
-<h1 align="center">odin4</h1>
+<h1 align="center">odin4 (WIP)</h1>
 
 <p align="center">
   Modern Samsung firmware flashing tool for Linux
