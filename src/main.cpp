@@ -21,7 +21,7 @@
 #include "usb_device.h"
 #include "firmware_package.h"
 
-#define ODIN4_VERSION "4.2.1-1e767b6"
+#define ODIN4_VERSION "5.0.0-b131894"
 
 static void print_usage() {
     std::cout << "Usage: odin4 [options]" << std::endl;
