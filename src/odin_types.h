@@ -5,6 +5,22 @@
 #include <vector>
 #include <cstdint>
 
+// Exit codes are part of the CLI contract.
+// 0: success
+// 2: argument/usage error
+// 3: USB/device error
+// 4: firmware/archive/MD5 error
+// 5: PIT/compatibility error
+// 6: flashing/protocol error
+enum class ExitCode : int {
+    Success = 0,
+    Usage = 2,
+    Usb = 3,
+    Firmware = 4,
+    Pit = 5,
+    Protocol = 6
+};
+
 // ============================================================================
 // CONFIGURATION STRUCTURES
 // ============================================================================
@@ -25,6 +41,23 @@ struct OdinConfig {
     // the device. This flag corresponds to the --check-only command-line
     // option.
     bool dry_run = false;
+
+    // When enabled, files that do not map to PIT partitions are skipped instead
+    // of causing an abort. This is disabled by default for safety.
+    bool allow_unknown = false;
+
+    // Logging
+    bool quiet = false;
+    bool verbose = false;
+    bool debug = false;
+
+    // Optional USB selection overrides.
+    bool has_vid = false;
+    uint16_t vid = 0;
+    bool has_pid = false;
+    uint16_t pid = 0;
+    bool has_usb_interface = false;
+    int usb_interface = 0;
 };
 
 // ============================================================================

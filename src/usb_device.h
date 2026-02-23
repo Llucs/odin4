@@ -17,9 +17,27 @@
 #define USB_TIMEOUT_BULK 60000
 #define USB_TIMEOUT_CONTROL 5000
 
-// List of known Samsung USB product IDs for devices in download mode.
-// Centralising this list avoids duplication across different translation units.
-static constexpr std::array<uint16_t, 5> SAMSUNG_DOWNLOAD_PIDS{{0x685D, 0x6600, 0x6860, 0x6861, 0x6862}};
+// Known Samsung USB product IDs historically used in Download Mode.
+// This list is intentionally conservative and is based on public Heimdall udev rules.
+static constexpr std::array<uint16_t, 3> SAMSUNG_DOWNLOAD_PIDS{{0x6601, 0x685D, 0x68C3}};
+
+struct UsbSelectionCriteria {
+    bool has_vid = false;
+    uint16_t vid = 0;
+    bool has_pid = false;
+    uint16_t pid = 0;
+    bool has_interface = false;
+    int interface_number = 0;
+};
+
+enum class UsbOpenError {
+    None,
+    NoDevice,
+    NotDownloadMode,
+    AccessDenied,
+    Busy,
+    Other
+};
 
 class UsbDevice {
 private:
@@ -35,6 +53,9 @@ private:
 
     // Stores the device type string returned during the THOR protocol handshake.
     std::string device_type_str;
+
+    UsbOpenError last_open_error = UsbOpenError::None;
+    int last_open_libusb_err = 0;
 
 
 enum class ProtocolMode {
@@ -72,6 +93,10 @@ public:
     ~UsbDevice();
 
     bool open_device(const std::string& specific_path = "");
+    bool open_device(const std::string& specific_path, const UsbSelectionCriteria& criteria);
+
+    UsbOpenError get_last_open_error() const { return last_open_error; }
+    int get_last_open_libusb_error() const { return last_open_libusb_err; }
     bool send_packet(const void *data, size_t size, bool is_control = false);
     bool receive_packet(void *data, size_t size, int *actual_length, bool is_control = false, size_t min_size = 0, int timeout_override_ms = 0);
     bool handshake();
@@ -95,6 +120,7 @@ public:
     // vector contains the device path strings (e.g. "/dev/bus/usb/001/002").
     // This does not require opening any devices.
     static std::vector<std::string> list_download_devices();
+    static std::vector<std::string> list_download_devices(const UsbSelectionCriteria& criteria);
 };
 
 #endif // USB_DEVICE_H

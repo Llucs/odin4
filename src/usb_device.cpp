@@ -8,6 +8,16 @@
 #include <vector>
 #include <algorithm>
 #include <cctype>
+#include <unordered_set>
+
+static int retry_backoff_ms(int attempt) {
+    int ms = 100;
+    for (int i = 0; i < attempt; ++i) {
+        ms *= 2;
+        if (ms > 1500) return 1500;
+    }
+    return ms;
+}
 
 UsbDevice::~UsbDevice() {
     if (handle) {
@@ -32,6 +42,7 @@ bool UsbDevice::bulk_write_all(const void* data, size_t size, int timeout_ms) {
             int err = libusb_bulk_transfer(handle, endpoint_out, const_cast<unsigned char*>(ptr + offset), static_cast<int>(to_send), &actual_length, timeout_ms);
             if (err != 0) {
                 log_error("USB bulk write failed", err);
+                if (err == LIBUSB_ERROR_NO_DEVICE) return false;
                 if (err == LIBUSB_ERROR_PIPE) libusb_clear_halt(handle, endpoint_out);
                 // Some devices/controllers behave poorly with ZLP or large transfers.
                 // Fall back to small chunks and retry.
@@ -57,7 +68,9 @@ bool UsbDevice::bulk_write_all(const void* data, size_t size, int timeout_ms) {
             }
             return true;
         }
-        if (attempt < USB_RETRY_COUNT - 1) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        if (attempt < USB_RETRY_COUNT - 1) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(retry_backoff_ms(attempt)));
+        }
     }
     return false;
 }
@@ -71,115 +84,205 @@ bool UsbDevice::bulk_read_once(void* data, size_t size, int* actual_length, int 
 }
 
 
+static std::string usb_path_for_device(libusb_device* dev) {
+    std::ostringstream oss;
+    oss << "/dev/bus/usb/" << std::setfill('0') << std::setw(3) << static_cast<int>(libusb_get_bus_number(dev))
+        << "/" << std::setfill('0') << std::setw(3) << static_cast<int>(libusb_get_device_address(dev));
+    return oss.str();
+}
+
+static bool is_known_download_pid(uint16_t pid) {
+    for (uint16_t known : SAMSUNG_DOWNLOAD_PIDS) {
+        if (pid == known) return true;
+    }
+    return false;
+}
+
+struct InterfaceCandidate {
+    int score = -1;
+    int interface_number = -1;
+    uint8_t ep_in = 0;
+    uint8_t ep_out = 0;
+    uint16_t ep_out_mps = 0;
+    uint8_t interface_class = 0;
+    uint8_t num_endpoints = 0;
+};
+
+static InterfaceCandidate find_best_interface(libusb_device* dev, const UsbSelectionCriteria& criteria) {
+    InterfaceCandidate best;
+    libusb_config_descriptor* config = nullptr;
+    if (libusb_get_active_config_descriptor(dev, &config) != 0 || !config) return best;
+
+    for (int i = 0; i < config->bNumInterfaces; ++i) {
+        const libusb_interface* inter = &config->interface[i];
+        for (int j = 0; j < inter->num_altsetting; ++j) {
+            const libusb_interface_descriptor* id = &inter->altsetting[j];
+            if (criteria.has_interface && id->bInterfaceNumber != criteria.interface_number) continue;
+
+            uint8_t ep_in = 0;
+            uint8_t ep_out = 0;
+            uint16_t ep_out_mps = 0;
+            int bulk_endpoints = 0;
+
+            for (int k = 0; k < id->bNumEndpoints; ++k) {
+                const libusb_endpoint_descriptor* ep = &id->endpoint[k];
+                if ((ep->bmAttributes & 0x03) != LIBUSB_TRANSFER_TYPE_BULK) continue;
+                ++bulk_endpoints;
+                if (ep->bEndpointAddress & 0x80) ep_in = ep->bEndpointAddress;
+                else {
+                    ep_out = ep->bEndpointAddress;
+                    ep_out_mps = ep->wMaxPacketSize;
+                }
+            }
+
+            if (!ep_in || !ep_out) continue;
+
+            int score = 0;
+            // Heimdall-style heuristic: CDC Data interface with exactly 2 endpoints.
+            if (id->bInterfaceClass == 0x0A && id->bNumEndpoints == 2) score += 100;
+            // General fallback: any interface with bulk in/out.
+            score += 50;
+            // Small preference for "clean" configurations.
+            if (bulk_endpoints == 2) score += 10;
+
+            if (score > best.score) {
+                best.score = score;
+                best.interface_number = id->bInterfaceNumber;
+                best.ep_in = ep_in;
+                best.ep_out = ep_out;
+                best.ep_out_mps = ep_out_mps;
+                best.interface_class = id->bInterfaceClass;
+                best.num_endpoints = id->bNumEndpoints;
+            }
+        }
+    }
+
+    libusb_free_config_descriptor(config);
+    return best;
+}
+
 bool UsbDevice::open_device(const std::string& specific_path) {
-    // Release any previously allocated device list before obtaining a new one
+    UsbSelectionCriteria criteria;
+    return open_device(specific_path, criteria);
+}
+
+bool UsbDevice::open_device(const std::string& specific_path, const UsbSelectionCriteria& criteria) {
+    last_open_error = UsbOpenError::None;
+    last_open_libusb_err = 0;
+
+    if (handle) {
+        libusb_release_interface(handle, interface_number);
+        libusb_close(handle);
+        handle = nullptr;
+    }
     if (device_list) {
         libusb_free_device_list(device_list, 1);
         device_list = nullptr;
     }
+
     ssize_t cnt = libusb_get_device_list(NULL, &device_list);
     if (cnt < 0) {
-        log_error("Failed to get USB device list", (int)cnt);
+        last_open_error = UsbOpenError::Other;
+        last_open_libusb_err = static_cast<int>(cnt);
+        log_error("Failed to enumerate USB devices", static_cast<int>(cnt));
         return false;
     }
 
-    libusb_device *target_device = nullptr;
-    for (ssize_t i = 0; i < cnt; i++) {
+    libusb_device* target = nullptr;
+    InterfaceCandidate chosen_if;
+    bool saw_candidate_vendor = false;
+
+    for (ssize_t i = 0; i < cnt; ++i) {
+        libusb_device* dev = device_list[i];
         libusb_device_descriptor desc;
-        if (libusb_get_device_descriptor(device_list[i], &desc) < 0) continue;
+        if (libusb_get_device_descriptor(dev, &desc) != 0) continue;
 
-        if (desc.idVendor == SAMSUNG_VID) {
-            if (!specific_path.empty()) {
-                std::stringstream path_ss;
-                path_ss << "/dev/bus/usb/" 
-                        << std::setfill('0') << std::setw(3) << (int)libusb_get_bus_number(device_list[i]) << "/" 
-                        << std::setfill('0') << std::setw(3) << (int)libusb_get_device_address(device_list[i]);
-                if (path_ss.str() != specific_path) continue;
-            }
-            for (uint16_t pid : SAMSUNG_DOWNLOAD_PIDS) {
-                if (desc.idProduct == pid) {
-                    target_device = device_list[i];
-                    break;
-                }
-            }
+        const uint16_t vid = desc.idVendor;
+        const uint16_t pid = desc.idProduct;
+
+        if (criteria.has_vid) {
+            if (vid != criteria.vid) continue;
+        } else {
+            if (vid != SAMSUNG_VID) continue;
         }
-        if (target_device) break;
+
+        saw_candidate_vendor = true;
+
+        if (criteria.has_pid && pid != criteria.pid) continue;
+        if (!specific_path.empty() && usb_path_for_device(dev) != specific_path) continue;
+
+        InterfaceCandidate cand = find_best_interface(dev, criteria);
+        if (cand.score < 0) continue;
+
+        const bool pid_known = is_known_download_pid(pid);
+        const bool cdc_data = (cand.interface_class == 0x0A);
+
+        // Default behavior: be conservative and only auto-match devices that look
+        // like Samsung Download Mode (known PID or CDC Data bulk interface).
+        if (!criteria.has_pid && !criteria.has_vid) {
+            if (!pid_known && !cdc_data) continue;
+        }
+
+        // Prefer known download PIDs when multiple devices match.
+        int score = cand.score;
+        if (pid_known) score += 20;
+        if (score > chosen_if.score) {
+            chosen_if = cand;
+            target = dev;
+        }
     }
 
-    if (!target_device) {
-        log_info("No Samsung device in download mode found.");
+    if (!target) {
+        last_open_error = saw_candidate_vendor ? UsbOpenError::NotDownloadMode : UsbOpenError::NoDevice;
+        log_warn("No compatible device found. Ensure the device is connected and in Download Mode.");
         return false;
     }
 
-    // Discover endpoints
-    libusb_config_descriptor *config = nullptr;
-    if (libusb_get_active_config_descriptor(target_device, &config) == 0 && config) {
-        bool found = false;
-        for (int i = 0; i < config->bNumInterfaces; i++) {
-            const libusb_interface *inter = &config->interface[i];
-            for (int j = 0; j < inter->num_altsetting; j++) {
-                const libusb_interface_descriptor *inter_desc = &inter->altsetting[j];
-                uint8_t ep_in = 0, ep_out = 0;
-                uint16_t ep_out_mps = 0;
-                for (int k = 0; k < inter_desc->bNumEndpoints; k++) {
-                    const libusb_endpoint_descriptor *ep_desc = &inter_desc->endpoint[k];
-                    if ((ep_desc->bmAttributes & 0x03) == LIBUSB_TRANSFER_TYPE_BULK) {
-                        if (ep_desc->bEndpointAddress & 0x80) {
-                            ep_in = ep_desc->bEndpointAddress;
-                        } else {
-                            ep_out = ep_desc->bEndpointAddress;
-                            ep_out_mps = ep_desc->wMaxPacketSize;
-                        }
-                    }
-                }
-                if (ep_in && ep_out) {
-                    endpoint_in = ep_in;
-                    endpoint_out = ep_out;
-                    if (ep_out_mps != 0) endpoint_out_max_packet = ep_out_mps;
-                    interface_number = inter_desc->bInterfaceNumber;
-                    found = true;
-                    break;
-                }
-            }
-            if (found) break;
-        }
-        if (!found) {
-            log_info("Endpoints not found in config descriptor. Using defaults (0x01/0x81).");
-        }
-        if (config) libusb_free_config_descriptor(config);
-    } else {
-        log_info("Failed to get config descriptor. Using defaults (0x01/0x81).");
-    }
+    endpoint_in = chosen_if.ep_in;
+    endpoint_out = chosen_if.ep_out;
+    if (chosen_if.ep_out_mps != 0) endpoint_out_max_packet = chosen_if.ep_out_mps;
+    interface_number = chosen_if.interface_number;
 
-    int err = libusb_open(target_device, &handle);
-    if (err < 0 || !handle) {
-        log_error("Failed to open USB device", err);
+    const int open_err = libusb_open(target, &handle);
+    if (open_err < 0 || !handle) {
+        last_open_libusb_err = open_err;
+        if (open_err == LIBUSB_ERROR_ACCESS) last_open_error = UsbOpenError::AccessDenied;
+        else if (open_err == LIBUSB_ERROR_BUSY) last_open_error = UsbOpenError::Busy;
+        else last_open_error = UsbOpenError::Other;
+        log_error("Failed to open USB device", open_err);
         return false;
     }
 
     if (libusb_kernel_driver_active(handle, interface_number) == 1) {
-        int detach_err = libusb_detach_kernel_driver(handle, interface_number);
+        const int detach_err = libusb_detach_kernel_driver(handle, interface_number);
         if (detach_err < 0) {
+            last_open_error = (detach_err == LIBUSB_ERROR_ACCESS) ? UsbOpenError::AccessDenied : UsbOpenError::Other;
+            last_open_libusb_err = detach_err;
             log_error("Failed to detach kernel driver", detach_err);
+            libusb_close(handle);
+            handle = nullptr;
             return false;
         }
     }
 
-    err = libusb_claim_interface(handle, interface_number);
-    if (err < 0) {
-        log_error("Failed to claim USB interface", err);
+    const int claim_err = libusb_claim_interface(handle, interface_number);
+    if (claim_err < 0) {
+        last_open_libusb_err = claim_err;
+        if (claim_err == LIBUSB_ERROR_ACCESS) last_open_error = UsbOpenError::AccessDenied;
+        else last_open_error = UsbOpenError::Other;
+        log_error("Failed to claim USB interface", claim_err);
+        libusb_close(handle);
+        handle = nullptr;
         return false;
     }
-    
-    {
-        std::ostringstream oss;
-        oss << "USB device opened. Interface: " << interface_number
-            << ", EP IN: 0x" << std::hex << std::setw(2) << std::setfill('0') << (int)endpoint_in
-            << ", EP OUT: 0x" << std::hex << std::setw(2) << std::setfill('0') << (int)endpoint_out
-            << std::dec
-            << ", OUT wMaxPacketSize: " << endpoint_out_max_packet;
-        log_info(oss.str());
-    }
+
+    std::ostringstream oss;
+    oss << "USB device opened. Path: " << usb_path_for_device(target)
+        << ", Interface: " << interface_number
+        << ", EP IN: 0x" << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(endpoint_in)
+        << ", EP OUT: 0x" << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(endpoint_out)
+        << std::dec << ", OUT wMaxPacketSize: " << endpoint_out_max_packet;
+    log_info(oss.str());
     return true;
 }
 
@@ -208,9 +311,12 @@ bool UsbDevice::receive_packet(void *data, size_t size, int *actual_length, bool
             return false;
         } else {
             log_error("USB packet receive failed (attempt " + std::to_string(attempt + 1) + ")", err);
+            if (err == LIBUSB_ERROR_NO_DEVICE) return false;
         }
 
-        if (attempt < USB_RETRY_COUNT - 1) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        if (attempt < USB_RETRY_COUNT - 1) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(retry_backoff_ms(attempt)));
+        }
     }
 
     return false;
@@ -279,38 +385,49 @@ bool UsbDevice::request_device_type() {
     return true;
 }
 
-// Static helper: enumerate Samsung devices in download mode
 std::vector<std::string> UsbDevice::list_download_devices() {
+    UsbSelectionCriteria criteria;
+    return list_download_devices(criteria);
+}
+
+std::vector<std::string> UsbDevice::list_download_devices(const UsbSelectionCriteria& criteria) {
     std::vector<std::string> result;
-    libusb_device **list = nullptr;
-    ssize_t cnt = libusb_get_device_list(NULL, &list);
-    if (cnt < 0) {
-        // on error, return empty list
-        return result;
-    }
+    libusb_device** list = nullptr;
+    const ssize_t cnt = libusb_get_device_list(NULL, &list);
+    if (cnt < 0) return result;
+
     struct Cleanup {
-        libusb_device **l;
-        Cleanup(libusb_device **ptr) : l(ptr) {}
+        libusb_device** l;
+        explicit Cleanup(libusb_device** ptr) : l(ptr) {}
         ~Cleanup() { if (l) libusb_free_device_list(l, 1); }
     } cleanup(list);
-    for (ssize_t i = 0; i < cnt; i++) {
+
+    for (ssize_t i = 0; i < cnt; ++i) {
+        libusb_device* dev = list[i];
         libusb_device_descriptor desc;
-        if (libusb_get_device_descriptor(list[i], &desc) < 0) continue;
-        if (desc.idVendor != SAMSUNG_VID) continue;
-        bool download_pid = false;
-        for (uint16_t pid : SAMSUNG_DOWNLOAD_PIDS) {
-            if (desc.idProduct == pid) {
-                download_pid = true;
-                break;
-            }
+        if (libusb_get_device_descriptor(dev, &desc) != 0) continue;
+
+        const uint16_t vid = desc.idVendor;
+        const uint16_t pid = desc.idProduct;
+
+        if (criteria.has_vid) {
+            if (vid != criteria.vid) continue;
+        } else {
+            if (vid != SAMSUNG_VID) continue;
         }
-        if (!download_pid) continue;
-        std::stringstream path_ss;
-        path_ss << "/dev/bus/usb/"
-                << std::setfill('0') << std::setw(3) << static_cast<int>(libusb_get_bus_number(list[i]))
-                << "/"
-                << std::setfill('0') << std::setw(3) << static_cast<int>(libusb_get_device_address(list[i]));
-        result.push_back(path_ss.str());
+
+        if (criteria.has_pid && pid != criteria.pid) continue;
+
+        InterfaceCandidate cand = find_best_interface(dev, criteria);
+        if (cand.score < 0) continue;
+
+        const bool pid_known = is_known_download_pid(pid);
+        const bool cdc_data = (cand.interface_class == 0x0A);
+        if (!criteria.has_pid && !criteria.has_vid) {
+            if (!pid_known && !cdc_data) continue;
+        }
+
+        result.push_back(usb_path_for_device(dev));
     }
     return result;
 }
@@ -426,6 +543,24 @@ static bool parse_pit_bytes(PitTable& pit_table, const std::vector<unsigned char
     pit_table.entries.clear();
     pit_table.entries.reserve(pit_table.entry_count);
 
+    auto extract_field = [](const char* field, size_t max_len) -> std::string {
+        size_t n = 0;
+        while (n < max_len && field[n] != '\0') ++n;
+        std::string s(field, n);
+        while (!s.empty() && (s.back() == ' ' || s.back() == '\t')) s.pop_back();
+        return s;
+    };
+
+    auto is_valid_pit_string = [](const std::string& s) -> bool {
+        for (unsigned char c : s) {
+            if (c < 0x20 || c > 0x7E) return false;
+            if (c == '/' || c == '\\') return false;
+        }
+        return true;
+    };
+
+    std::unordered_set<uint32_t> seen_identifiers;
+
     for (uint32_t i = 0; i < pit_table.entry_count; ++i) {
         const size_t off = pit_table.header_size + static_cast<size_t>(i) * entry_size;
         PitEntry e = {};
@@ -441,6 +576,42 @@ static bool parse_pit_bytes(PitTable& pit_table, const std::vector<unsigned char
         std::memcpy(e.partition_name, pit_data.data() + off + 36, 32);
         std::memcpy(e.file_name, pit_data.data() + off + 68, 32);
         std::memcpy(e.fota_name, pit_data.data() + off + 100, 32);
+
+        const std::string part_name = extract_field(e.partition_name, 32);
+        const std::string file_name = extract_field(e.file_name, 32);
+
+        if (part_name.empty()) {
+            log_error("PIT entry " + std::to_string(i) + " has an empty partition name");
+            return false;
+        }
+        if (!is_valid_pit_string(part_name)) {
+            log_error("PIT entry " + std::to_string(i) + " has an invalid partition name: '" + part_name + "'");
+            return false;
+        }
+        if (!file_name.empty() && !is_valid_pit_string(file_name)) {
+            log_error("PIT entry " + std::to_string(i) + " has an invalid file name: '" + file_name + "'");
+            return false;
+        }
+
+        if (e.identifier == 0) {
+            log_error("PIT entry " + std::to_string(i) + " has an invalid identifier (0)");
+            return false;
+        }
+        if (!seen_identifiers.insert(e.identifier).second) {
+            log_error("PIT contains duplicate partition identifier: " + std::to_string(e.identifier));
+            return false;
+        }
+
+        if (e.block_count != 0) {
+            const uint64_t a = static_cast<uint64_t>(e.block_size_or_offset);
+            const uint64_t b = static_cast<uint64_t>(e.block_count);
+            const uint64_t prod = a * b;
+            if (a != 0 && prod / a != b) {
+                log_error("PIT entry " + std::to_string(i) + " has an overflow in block size/count");
+                return false;
+            }
+        }
+
         // Do NOT force-null-terminate here; treat these as fixed 32-byte fields.
         pit_table.entries.push_back(e);
     }
