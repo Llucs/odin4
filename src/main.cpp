@@ -198,12 +198,15 @@ int run_flash_logic(const OdinConfig& config) {
         return 1;
     }
 
-    // Request the PIT and log
-    log_info("Requesting PIT from device.");
-    if (!usb_device.request_pit()) {
-        log_error("PIT request failed.");
-        return 1;
-    }
+// Request the PIT and log
+log_info("Requesting PIT from device.");
+
+PitTable pit_table;
+
+if (!usb_device.request_pit(pit_table)) {
+    log_error("PIT request failed.");
+    return 1;
+}
 
     PitTable pit_table;
     if (!usb_device.receive_pit_table(pit_table)) {
