@@ -241,6 +241,12 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
                 return false;
             }
 
+            // Guard against no-forward-progress situations to avoid infinite loops.
+            if (src_consumed == 0 && dst_size == 0 && err != 0) {
+                log_error("LZ4 decompression made no progress for " + filename);
+                return false;
+            }
+
             if (dst_size > 0) {
                 if (do_flash) {
                     if (!usb_device.send_file_part_chunk(out_buf.data(), dst_size, chunk_index++, large_partition)) return false;
@@ -296,18 +302,39 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
         max_read_pos -= 32;
     }
 
+    auto pit_field_to_string = [](const char* field, size_t max_len) -> std::string {
+        size_t n = 0;
+        while (n < max_len && field[n] != '\0') ++n;
+        return std::string(field, n);
+    };
+    auto to_lower = [](std::string s) {
+        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+        return s;
+    };
+
     char header[512];
     while ((uint64_t)file.tellg() < max_read_pos) {
         if (!file.read(header, 512)) {
-            if (file.eof()) break;
-            log_error("Failed to read TAR header.");
+            log_error("Failed to read TAR header (truncated archive)." );
             return false;
         }
 
-        std::string filename_str(header, 100);
+        // TAR filename handling: support ustar prefix.
+        std::string name(header, 100);
         size_t name_len = 0;
-        while (name_len < 100 && header[name_len] != '\0') name_len++;
-        std::string filename = filename_str.substr(0, name_len);
+        while (name_len < 100 && header[name_len] != '\0') ++name_len;
+        name = name.substr(0, name_len);
+
+        std::string filename = name;
+        if (std::memcmp(header + 257, "ustar", 5) == 0) {
+            std::string prefix(header + 345, 155);
+            size_t p_len = 0;
+            while (p_len < 155 && prefix[p_len] != '\0') ++p_len;
+            prefix = prefix.substr(0, p_len);
+            if (!prefix.empty()) {
+                filename = prefix + "/" + name;
+            }
+        }
 
         if (filename.empty()) {
             bool all_zeros = true;
@@ -330,7 +357,7 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
         uint32_t partition_id = 0;
         std::string partition_name = "";
         const PitEntry* pit_entry = nullptr;
-        std::string base_name = sanitize_filename(filename);
+        std::string base_name = to_lower(sanitize_filename(filename));
         // Determine if this entry is an LZ4-compressed file using a case-insensitive comparison
         bool is_lz4 = false;
         {
@@ -342,11 +369,14 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
         }
 
         for (const auto& entry : pit_table.entries) {
-            std::string pit_file_sanitized = sanitize_filename(entry.file_name);
-            std::string pit_name_sanitized = sanitize_filename(entry.partition_name);
-            if (pit_file_sanitized == base_name || pit_name_sanitized == base_name || std::string(entry.file_name) == filename) {
+            std::string pit_file = pit_field_to_string(entry.file_name, 32);
+            std::string pit_part = pit_field_to_string(entry.partition_name, 32);
+            std::string pit_file_sanitized = to_lower(sanitize_filename(pit_file));
+            std::string pit_name_sanitized = to_lower(sanitize_filename(pit_part));
+
+            if (pit_file_sanitized == base_name || pit_name_sanitized == base_name || to_lower(pit_file) == to_lower(filename)) {
                 partition_id = entry.identifier;
-                partition_name = entry.partition_name;
+                partition_name = pit_part;
                 pit_entry = &entry;
                 log_info("Partition found in PIT: " + partition_name + " (ID: " + std::to_string(partition_id) + ")");
                 break;
@@ -355,7 +385,7 @@ bool process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
 
         bool is_large = (partition_name == "SYSTEM" || partition_name == "USERDATA" || partition_name == "SUPER");
 
-        if (partition_id == 0 || pit_entry == nullptr) {
+        if (pit_entry == nullptr) {
             // Abort if a file in the TAR does not correspond to any PIT entry
             log_error("File " + filename + " does not match any partition in the PIT table.");
             return false;

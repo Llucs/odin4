@@ -25,7 +25,6 @@ bool UsbDevice::bulk_write_all(const void* data, size_t size, int timeout_ms) {
     const unsigned char* ptr = static_cast<const unsigned char*>(data);
     size_t offset = 0;
     for (int attempt = 0; attempt < USB_RETRY_COUNT; ++attempt) {
-        offset = 0;
         while (offset < size) {
             int actual_length = 0;
             size_t to_send = size - offset;
@@ -46,14 +45,18 @@ bool UsbDevice::bulk_write_all(const void* data, size_t size, int timeout_ms) {
                 break;
             }
             offset += static_cast<size_t>(actual_length);
+        }
+        if (offset == size) {
+            // Only send ZLP once, at the end of the whole transfer.
+            // Some Odin legacy bootloaders expect it when the transfer size is an exact multiple of wMaxPacketSize.
             if (protocol_mode == ProtocolMode::OdinLegacy && odin_supports_zlp && endpoint_out_max_packet != 0) {
-                if (actual_length % endpoint_out_max_packet == 0) {
+                if ((size % endpoint_out_max_packet) == 0) {
                     int zlp_len = 0;
-                    libusb_bulk_transfer(handle, endpoint_out, nullptr, 0, &zlp_len, timeout_ms);
+                    (void)libusb_bulk_transfer(handle, endpoint_out, nullptr, 0, &zlp_len, timeout_ms);
                 }
             }
+            return true;
         }
-        if (offset == size) return true;
         if (attempt < USB_RETRY_COUNT - 1) std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     return false;
@@ -117,16 +120,22 @@ bool UsbDevice::open_device(const std::string& specific_path) {
             for (int j = 0; j < inter->num_altsetting; j++) {
                 const libusb_interface_descriptor *inter_desc = &inter->altsetting[j];
                 uint8_t ep_in = 0, ep_out = 0;
+                uint16_t ep_out_mps = 0;
                 for (int k = 0; k < inter_desc->bNumEndpoints; k++) {
                     const libusb_endpoint_descriptor *ep_desc = &inter_desc->endpoint[k];
                     if ((ep_desc->bmAttributes & 0x03) == LIBUSB_TRANSFER_TYPE_BULK) {
-                        if (ep_desc->bEndpointAddress & 0x80) ep_in = ep_desc->bEndpointAddress;
-                        else ep_out = ep_desc->bEndpointAddress;
+                        if (ep_desc->bEndpointAddress & 0x80) {
+                            ep_in = ep_desc->bEndpointAddress;
+                        } else {
+                            ep_out = ep_desc->bEndpointAddress;
+                            ep_out_mps = ep_desc->wMaxPacketSize;
+                        }
                     }
                 }
                 if (ep_in && ep_out) {
                     endpoint_in = ep_in;
                     endpoint_out = ep_out;
+                    if (ep_out_mps != 0) endpoint_out_max_packet = ep_out_mps;
                     interface_number = inter_desc->bInterfaceNumber;
                     found = true;
                     break;
@@ -162,9 +171,15 @@ bool UsbDevice::open_device(const std::string& specific_path) {
         return false;
     }
     
-    log_info("USB device opened. Interface: " + std::to_string(interface_number) + 
-             ", EP IN: 0x" + std::to_string(endpoint_in) + 
-             ", EP OUT: 0x" + std::to_string(endpoint_out));
+    {
+        std::ostringstream oss;
+        oss << "USB device opened. Interface: " << interface_number
+            << ", EP IN: 0x" << std::hex << std::setw(2) << std::setfill('0') << (int)endpoint_in
+            << ", EP OUT: 0x" << std::hex << std::setw(2) << std::setfill('0') << (int)endpoint_out
+            << std::dec
+            << ", OUT wMaxPacketSize: " << endpoint_out_max_packet;
+        log_info(oss.str());
+    }
     return true;
 }
 
@@ -239,7 +254,7 @@ bool UsbDevice::request_device_type() {
     ThorPacketHeader pkt = {};
     pkt.packet_size = h_to_le32(sizeof(ThorPacketHeader));
     pkt.packet_type = h_to_le16(THOR_PACKET_DEVICE_TYPE);
-    pkt.packet_flags = 0;
+    pkt.packet_flags = h_to_le16(0);
 
     if (!send_packet(&pkt, sizeof(pkt), true)) return false;
 
@@ -307,7 +322,7 @@ bool UsbDevice::begin_session() {
     ThorBeginSessionPacket pkt = {};
     pkt.header.packet_size = h_to_le32(sizeof(ThorBeginSessionPacket));
     pkt.header.packet_type = h_to_le16(THOR_PACKET_BEGIN_SESSION);
-    pkt.header.packet_flags = 0;
+    pkt.header.packet_flags = h_to_le16(0);
     pkt.unknown1 = 0;
     pkt.unknown2 = 0;
 
@@ -317,11 +332,12 @@ bool UsbDevice::begin_session() {
     int actual_length;
     if (!receive_packet(&response, sizeof(response), &actual_length, true, sizeof(ThorPacketHeader))) return false;
 
-    uint32_t code = 0;
-    if (actual_length >= static_cast<int>(sizeof(ThorResponsePacket))) {
-        code = le32_to_h(response.response_code);
+    if (actual_length < static_cast<int>(sizeof(ThorResponsePacket))) {
+        log_error("Session begin failed: short response (" + std::to_string(actual_length) + " bytes)");
+        return false;
     }
 
+    uint32_t code = le32_to_h(response.response_code);
     if (le16toh(response.header.packet_type) != THOR_PACKET_RESPONSE || code != 0) {
         log_error("Session begin failed. Response code: " + std::to_string(code));
         return false;
@@ -337,7 +353,7 @@ bool UsbDevice::end_session() {
     ThorEndSessionPacket pkt = {};
     pkt.header.packet_size = h_to_le32(sizeof(ThorEndSessionPacket));
     pkt.header.packet_type = h_to_le16(THOR_PACKET_END_SESSION);
-    pkt.header.packet_flags = 0;
+    pkt.header.packet_flags = h_to_le16(0);
 
     if (!send_packet(&pkt, sizeof(pkt), true)) return false;
 
@@ -345,11 +361,12 @@ bool UsbDevice::end_session() {
     int actual_length;
     if (!receive_packet(&response, sizeof(response), &actual_length, true, sizeof(ThorPacketHeader))) return false;
 
-    uint32_t code = 0;
-    if (actual_length >= static_cast<int>(sizeof(ThorResponsePacket))) {
-        code = le32_to_h(response.response_code);
+    if (actual_length < static_cast<int>(sizeof(ThorResponsePacket))) {
+        log_error("Session end failed: short response (" + std::to_string(actual_length) + " bytes)");
+        return false;
     }
 
+    uint32_t code = le32_to_h(response.response_code);
     if (le16toh(response.header.packet_type) != THOR_PACKET_RESPONSE || code != 0) {
         log_error("Session end failed. Response code: " + std::to_string(code));
         return false;
@@ -358,38 +375,9 @@ bool UsbDevice::end_session() {
     return true;
 }
 
-bool UsbDevice::request_pit() {
-    if (protocol_mode == ProtocolMode::OdinLegacy) { std::vector<unsigned char> pit; return odin_dump_pit(pit); }
-
-    log_info("Requesting PIT...");
-    ThorPacketHeader pkt = {};
-    pkt.packet_size = h_to_le32(sizeof(ThorPacketHeader));
-    pkt.packet_type = h_to_le16(THOR_PACKET_PIT_FILE);
-    pkt.packet_flags = 0;
-
-    // The PIT request only sends a header requesting the PIT file. The response
-    // containing the PIT size and data will be handled by receive_pit_table().
-    // Do not consume any packets here; otherwise the subsequent call to
-    // receive_pit_table() will see an empty buffer and fail. Simply send
-    // the request and return success if the transfer completed.
-    if (!send_packet(&pkt, sizeof(pkt), true)) return false;
-    return true;
-}
-
-bool UsbDevice::receive_pit_table(PitTable& pit_table) {
-    ThorPitFilePacket pit_size_pkt = {};
-    int actual_length = 0;
-    if (!receive_packet(&pit_size_pkt, sizeof(pit_size_pkt), &actual_length, true, sizeof(pit_size_pkt))) return false;
-
-    uint32_t pit_data_size = le32_to_h(pit_size_pkt.pit_file_size);
-    if (pit_data_size < 28 || pit_data_size > 1048576) {
-        log_error("Invalid PIT size: " + std::to_string(pit_data_size));
-        return false;
-    }
-
-    std::vector<unsigned char> pit_data(pit_data_size);
-    if (!receive_packet(pit_data.data(), pit_data_size, &actual_length, false, pit_data_size)) {
-        log_error("Failed to receive PIT data");
+static bool parse_pit_bytes(PitTable& pit_table, const std::vector<unsigned char>& pit_data) {
+    if (pit_data.size() < 28) {
+        log_error("PIT data too small: " + std::to_string(pit_data.size()));
         return false;
     }
 
@@ -406,7 +394,9 @@ bool UsbDevice::receive_pit_table(PitTable& pit_table) {
 
     const uint32_t file_id = read_u32(0);
     if (file_id != 0x12349876) {
-        log_error("PIT file identifier mismatch: 0x" + [&](){ std::ostringstream oss; oss<<std::hex<<file_id; return oss.str(); }());
+        std::ostringstream oss;
+        oss << std::hex << file_id;
+        log_error("PIT file identifier mismatch: 0x" + oss.str());
         return false;
     }
 
@@ -451,11 +441,7 @@ bool UsbDevice::receive_pit_table(PitTable& pit_table) {
         std::memcpy(e.partition_name, pit_data.data() + off + 36, 32);
         std::memcpy(e.file_name, pit_data.data() + off + 68, 32);
         std::memcpy(e.fota_name, pit_data.data() + off + 100, 32);
-
-        e.partition_name[31] = '\0';
-        e.file_name[31] = '\0';
-        e.fota_name[31] = '\0';
-
+        // Do NOT force-null-terminate here; treat these as fixed 32-byte fields.
         pit_table.entries.push_back(e);
     }
 
@@ -463,11 +449,63 @@ bool UsbDevice::receive_pit_table(PitTable& pit_table) {
     return true;
 }
 
+bool UsbDevice::request_pit(PitTable& pit_table) {
+    if (protocol_mode == ProtocolMode::OdinLegacy) {
+        std::vector<unsigned char> pit;
+        if (!odin_dump_pit(pit)) return false;
+        return parse_pit_bytes(pit_table, pit);
+    }
+
+    log_info("Requesting PIT...");
+    ThorPacketHeader pkt = {};
+    pkt.packet_size = h_to_le32(sizeof(ThorPacketHeader));
+    pkt.packet_type = h_to_le16(THOR_PACKET_PIT_FILE);
+    pkt.packet_flags = h_to_le16(0);
+
+    // The PIT request only sends a header requesting the PIT file. The response
+    // containing the PIT size and data will be handled by receive_pit_table().
+    // Do not consume any packets here; otherwise the subsequent call to
+    // receive_pit_table() will see an empty buffer and fail. Simply send
+    // the request and return success if the transfer completed.
+    if (!send_packet(&pkt, sizeof(pkt), true)) return false;
+    return receive_pit_table(pit_table);
+}
+
+bool UsbDevice::receive_pit_table(PitTable& pit_table) {
+    ThorPitFilePacket pit_size_pkt = {};
+    int actual_length = 0;
+    if (!receive_packet(&pit_size_pkt, sizeof(pit_size_pkt), &actual_length, true, sizeof(pit_size_pkt))) return false;
+
+    if (actual_length < static_cast<int>(sizeof(ThorPitFilePacket))) {
+        log_error("Short PIT size packet (" + std::to_string(actual_length) + " bytes)");
+        return false;
+    }
+
+    if (le16toh(pit_size_pkt.header.packet_type) != THOR_PACKET_PIT_FILE) {
+        log_error("Unexpected packet type while reading PIT size: " + std::to_string(le16toh(pit_size_pkt.header.packet_type)));
+        return false;
+    }
+
+    uint32_t pit_data_size = le32_to_h(pit_size_pkt.pit_file_size);
+    if (pit_data_size < 28 || pit_data_size > 1048576) {
+        log_error("Invalid PIT size: " + std::to_string(pit_data_size));
+        return false;
+    }
+
+    std::vector<unsigned char> pit_data(pit_data_size);
+    if (!receive_packet(pit_data.data(), pit_data_size, &actual_length, false, pit_data_size)) {
+        log_error("Failed to receive PIT data");
+        return false;
+    }
+
+    return parse_pit_bytes(pit_table, pit_data);
+}
+
 bool UsbDevice::send_file_part_chunk(const void* data, size_t size, uint32_t chunk_index, bool large_partition) {
     ThorFilePartPacket part_pkt = {};
     part_pkt.header.packet_size = h_to_le32(sizeof(ThorFilePartPacket));
     part_pkt.header.packet_type = h_to_le16(THOR_PACKET_FILE_PART);
-    part_pkt.header.packet_flags = 0;
+    part_pkt.header.packet_flags = h_to_le16(0);
     part_pkt.file_part_index = h_to_le32(chunk_index);
     part_pkt.file_part_size = h_to_le32(static_cast<uint32_t>(size));
 
@@ -477,8 +515,11 @@ bool UsbDevice::send_file_part_chunk(const void* data, size_t size, uint32_t chu
     int actual_length = 0;
     if (!receive_packet(&response, sizeof(response), &actual_length, true, sizeof(ThorPacketHeader))) return false;
 
-    uint32_t code = 0;
-    if (actual_length >= static_cast<int>(sizeof(ThorResponsePacket))) code = le32toh(response.response_code);
+    if (actual_length < static_cast<int>(sizeof(ThorResponsePacket))) {
+        log_error("File part control failed: short response (" + std::to_string(actual_length) + " bytes)");
+        return false;
+    }
+    uint32_t code = le32toh(response.response_code);
     if (le16toh(response.header.packet_type) != THOR_PACKET_RESPONSE || code != 0) {
         log_error("File part control failed. Code: " + std::to_string(code));
         return false;
@@ -487,15 +528,22 @@ bool UsbDevice::send_file_part_chunk(const void* data, size_t size, uint32_t chu
     int timeout = large_partition ? 300000 : USB_TIMEOUT_BULK;
     if (!bulk_write_all(data, size, timeout)) return false;
 
+    // Always wait for the post-data ACK, with a reasonable timeout, to avoid leaving it queued in the IN endpoint.
     ThorResponsePacket post = {};
     int post_len = 0;
-    if (receive_packet(&post, sizeof(post), &post_len, true, sizeof(ThorPacketHeader), 250)) {
-        uint32_t post_code = 0;
-        if (post_len >= static_cast<int>(sizeof(ThorResponsePacket))) post_code = le32toh(post.response_code);
-        if (le16toh(post.header.packet_type) == THOR_PACKET_RESPONSE && post_code != 0) {
-            log_error("File part data ACK reported failure. Code: " + std::to_string(post_code));
-            return false;
-        }
+    int post_timeout = large_partition ? 30000 : 10000;
+    if (!receive_packet(&post, sizeof(post), &post_len, true, sizeof(ThorPacketHeader), post_timeout)) {
+        log_error("Timed out waiting for post-data ACK");
+        return false;
+    }
+    if (post_len < static_cast<int>(sizeof(ThorResponsePacket))) {
+        log_error("Post-data ACK was short (" + std::to_string(post_len) + " bytes)");
+        return false;
+    }
+    uint32_t post_code = le32toh(post.response_code);
+    if (le16toh(post.header.packet_type) != THOR_PACKET_RESPONSE || post_code != 0) {
+        log_error("File part data ACK reported failure. Code: " + std::to_string(post_code));
+        return false;
     }
 
     return true;
@@ -508,7 +556,7 @@ bool UsbDevice::send_file_part_header(uint64_t total_size) {
     ThorFilePartSizePacket size_pkt = {};
     size_pkt.header.packet_size = h_to_le32(sizeof(ThorFilePartSizePacket));
     size_pkt.header.packet_type = h_to_le16(THOR_PACKET_FILE_PART_SIZE);
-    size_pkt.header.packet_flags = 0;
+    size_pkt.header.packet_flags = h_to_le16(0);
     size_pkt.file_part_size = h_to_le64(total_size);
 
     if (!send_packet(&size_pkt, sizeof(size_pkt), true)) return false;
@@ -530,11 +578,16 @@ bool UsbDevice::send_file_part_header(uint64_t total_size) {
 }
 
 bool UsbDevice::end_file_transfer(uint32_t partition_id) {
+    if (protocol_mode == ProtocolMode::OdinLegacy) {
+        // Odin legacy finalisation is handled by the legacy sequence-end commands.
+        // Keep this as a no-op to avoid sending THOR packets in legacy mode.
+        return true;
+    }
     log_info("Finalizing file transfer for partition ID: " + std::to_string(partition_id));
     ThorEndFileTransferPacket pkt = {};
     pkt.header.packet_size = h_to_le32(sizeof(ThorEndFileTransferPacket));
     pkt.header.packet_type = h_to_le16(THOR_PACKET_END_FILE_TRANSFER);
-    pkt.header.packet_flags = 0;
+    pkt.header.packet_flags = h_to_le16(0);
     pkt.partition_id = h_to_le32(partition_id);
 
     if (!send_packet(&pkt, sizeof(pkt), true)) return false;
@@ -543,11 +596,11 @@ bool UsbDevice::end_file_transfer(uint32_t partition_id) {
     int actual_length;
     if (!receive_packet(&response, sizeof(response), &actual_length, true, sizeof(ThorPacketHeader))) return false;
 
-    uint32_t code = 0;
-    if (actual_length >= static_cast<int>(sizeof(ThorResponsePacket))) {
-        code = le32_to_h(response.response_code);
+    if (actual_length < static_cast<int>(sizeof(ThorResponsePacket))) {
+        log_error("File transfer finalization failed: short response (" + std::to_string(actual_length) + " bytes)");
+        return false;
     }
-
+    uint32_t code = le32_to_h(response.response_code);
     if (le16toh(response.header.packet_type) != THOR_PACKET_RESPONSE || code != 0) {
         log_error("File transfer finalization failed. Code: " + std::to_string(code));
         return false;
@@ -563,7 +616,7 @@ bool UsbDevice::send_control(uint32_t control_type) {
     ThorControlPacket pkt = {};
     pkt.header.packet_size = h_to_le32(sizeof(ThorControlPacket));
     pkt.header.packet_type = h_to_le16(THOR_PACKET_CONTROL);
-    pkt.header.packet_flags = 0;
+    pkt.header.packet_flags = h_to_le16(0);
     pkt.control_type = h_to_le32(control_type);
 
     if (!send_packet(&pkt, sizeof(pkt), true)) return false;
@@ -629,6 +682,15 @@ bool UsbDevice::odin_fail_check(const std::vector<unsigned char>& rsp, const std
             case -3: suffix = " (Erase)"; break;
             case -2: suffix = " (WP)"; break;
             default: break;
+        }
+    }
+
+    if (allow_progress) {
+        // Some bootloaders report intermediate/progress states using 0xFF + a negative code.
+        // Treat those as non-fatal when explicitly allowed.
+        if (code >= -7 && code <= -2) {
+            log_info(context + " progress code " + std::to_string(code) + suffix);
+            return true;
         }
     }
 
@@ -782,6 +844,7 @@ bool UsbDevice::odin_dump_pit(std::vector<unsigned char>& pit_out) {
     for (uint32_t i = 0; i < blocks; ++i) {
         uint32_t le_i = h_to_le32(i);
         if (!odin_command(0x65, 0x02, &le_i, sizeof(le_i), rsp, 5000)) return false;
+        if (!odin_fail_check(rsp, "PitDumpBlock", false)) return false;
 
         int got = 0;
         std::vector<unsigned char> data(block, 0);
@@ -804,14 +867,27 @@ bool UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
         if (!odin_request_file_flash()) return false;
 
         const uint64_t sequence_bytes = static_cast<uint64_t>(odin_flash_packet_size) * static_cast<uint64_t>(odin_flash_sequence_count);
-        uint32_t sequences = static_cast<uint32_t>(size / sequence_bytes);
-        uint32_t last_sequence = static_cast<uint32_t>(size % sequence_bytes);
-        if (last_sequence != 0) sequences += 1;
-        else last_sequence = static_cast<uint32_t>(sequence_bytes);
+        if (sequence_bytes == 0) return false;
+
+        const uint64_t sequences64 = (size + sequence_bytes - 1) / sequence_bytes;
+        if (sequences64 == 0 || sequences64 > 0xFFFFFFFFull) {
+            log_error("Too many legacy sequences for size: " + std::to_string(size));
+            return false;
+        }
+        const uint32_t sequences = static_cast<uint32_t>(sequences64);
+
+        uint64_t last_sequence64 = size - static_cast<uint64_t>(sequences - 1) * sequence_bytes;
+        if (last_sequence64 == 0) last_sequence64 = sequence_bytes;
+        if (last_sequence64 > 0xFFFFFFFFull) {
+            log_error("Legacy last sequence too large: " + std::to_string(last_sequence64));
+            return false;
+        }
+        const uint32_t last_sequence = static_cast<uint32_t>(last_sequence64);
 
         uint64_t total_sent = 0;
         std::vector<unsigned char> part(static_cast<size_t>(odin_flash_packet_size), 0);
 
+        uint32_t expected_index = 0;
         for (uint32_t i = 0; i < sequences; ++i) {
             const bool last = (i + 1 == sequences);
             const uint32_t real_size = last ? last_sequence : static_cast<uint32_t>(sequence_bytes);
@@ -836,7 +912,7 @@ bool UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
                     }
                 }
 
-                if (!odin_send_file_part_and_ack(part.data(), part.size(), j)) return false;
+                if (!odin_send_file_part_and_ack(part.data(), part.size(), expected_index++)) return false;
                 total_sent += static_cast<uint64_t>(odin_flash_packet_size);
             }
 
