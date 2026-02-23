@@ -79,7 +79,7 @@ public:
     bool request_device_type();
     bool begin_session();
     bool end_session();
-    bool request_pit();
+    bool request_pit(PitTable& pit_table);
     bool receive_pit_table(PitTable& pit_table);
     bool flash_partition_stream(std::istream& stream, uint64_t size, const PitEntry& pit_entry, bool large_partition);
     bool send_file_part_chunk(const void* data, size_t size, uint32_t chunk_index, bool large_partition = false);
