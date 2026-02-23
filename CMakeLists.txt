@@ -25,17 +25,36 @@ pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 
 # Prefer Crypto++ static to avoid runtime dependency on libcrypto++.so
 find_path(CRYPTOPP_INCLUDE_DIR cryptlib.h
-    PATH_SUFFIXES cryptopp crypto++
+    PATHS
+        /usr/local/include
+        /usr/include
+    PATH_SUFFIXES
+        cryptopp
+        crypto++
 )
+
+# Force static lookup for Crypto++ only
+set(_OLD_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
+set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
 
 find_library(CRYPTOPP_STATIC_LIB
-    NAMES cryptopp libcryptopp.a
+    NAMES cryptopp libcryptopp
+    PATHS
+        /usr/local/lib
+        /usr/local/lib64
+        /usr/lib
+        /usr/lib64
+        /usr/lib/x86_64-linux-gnu
+        /usr/lib/aarch64-linux-gnu
 )
 
-if (CRYPTOPP_INCLUDE_DIR AND CRYPTOPP_STATIC_LIB)
+set(CMAKE_FIND_LIBRARY_SUFFIXES ${_OLD_CMAKE_FIND_LIBRARY_SUFFIXES})
+
+if (CRYPTOPP_INCLUDE_DIR AND CRYPTOPP_STATIC_LIB AND CRYPTOPP_STATIC_LIB MATCHES "\\.a$")
     set(CRYPTOPP_USE_STATIC ON)
 else()
     set(CRYPTOPP_USE_STATIC OFF)
+    find_package(PkgConfig REQUIRED)
     pkg_check_modules(CRYPTOPP REQUIRED libcrypto++)
 endif()
 
