@@ -52,7 +52,6 @@ set_target_properties(odin4 PROPERTIES OUTPUT_NAME "odin4")
 target_compile_options(odin4 PRIVATE
     -Wall
     -Wextra
-    -fpermissive
     -Wno-cast-function-type
 )
 

@@ -132,26 +132,12 @@ build/odin4
 
 ## Linux USB Permissions
 
-To allow access to Samsung devices in Download Mode, create:
+If odin4 reports `LIBUSB_ERROR_ACCESS`, install the udev rule shipped with this repository:
 
-```bash
-sudo nano /etc/udev/rules.d/51-android.rules
-```
+- Copy `udev/60-odin4.rules` to `/etc/udev/rules.d/60-odin4.rules`
+- Reload udev rules and reconnect the device
 
-Add:
-
-```bash
-SUBSYSTEM=="usb", ATTR{idVendor}=="04e8", MODE="0666", GROUP="plugdev"
-```
-
-Reload rules:
-
-```bash
-sudo udevadm control --reload-rules
-sudo udevadm trigger
-```
-
-Reconnect the device afterward.
+This rule targets known Samsung Download Mode USB IDs.
 
 ---
 
