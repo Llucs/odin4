@@ -31,7 +31,7 @@
 
 ## Overview
 
-**odin4** is a modern Samsung firmware flashing tool for Linux built around a clean and correct implementation of the Thor USB protocol. 
+**odin4** is a modern Samsung firmware flashing tool for Linux built around a clean and correct implementation of the Thor USB protocol.
 
 The project focuses on:
 
