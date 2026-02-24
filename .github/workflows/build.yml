@@ -184,3 +184,44 @@ jobs:
         with:
           name: odin4-linux-all
           path: ${{ env.OUT }}
+
+publish_nightly:
+    name: Publish Nightly Pre-Release
+    runs-on: ubuntu-22.04
+    needs: [build, bundle]
+    if: ${{ github.event_name == 'push' }}
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect zips
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find artifacts -type f -name "*.zip" -exec cp {} dist/ \;
+
+          if ! ls dist/*.zip 1> /dev/null 2>&1; then
+            echo "No zip files found."
+            exit 1
+          fi
+
+      - name: Publish or update Nightly pre-release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: nightly
+          name: Nightly (pre-release)
+          prerelease: true
+          allowUpdates: true
+          replacesArtifacts: true
+          artifacts: "dist/*.zip"
+          body: |
+            Automated nightly build from latest main.
+
+            Commit: ${{ github.sha }}
+            Run: ${{ github.run_id }}
