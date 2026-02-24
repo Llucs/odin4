@@ -9,11 +9,24 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg"></a>
-  <a href="../../actions"><img src="https://img.shields.io/badge/Build-GitHub%20Actions-2ea44f.svg"></a>
-  <img src="https://img.shields.io/badge/Platform-Linux-informational.svg">
-  <img src="https://img.shields.io/badge/Language-C%2FC%2B%2B-blue.svg">
-  <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Llucs/odin4/main/version.json">
+  <a href="LICENSE">
+    <img src="https://img.shields.io/github/license/Llucs/odin4">
+  </a>
+
+  <a href="https://github.com/Llucs/odin4/actions/workflows/build.yml">
+    <img src="https://github.com/Llucs/odin4/actions/workflows/build.yml/badge.svg">
+  </a>
+
+  <a href="https://github.com/Llucs/odin4/actions/workflows/codeql.yml">
+    <img src="https://github.com/Llucs/odin4/actions/workflows/codeql.yml/badge.svg">
+  </a>
+
+  <img src="https://img.shields.io/badge/platform-linux-blue">
+  <img src="https://img.shields.io/badge/language-C%2FC%2B%2B-blue">
+
+  <a href="https://github.com/Llucs/odin4/releases">
+    <img src="https://img.shields.io/github/v/release/Llucs/odin4">
+  </a>
 </p>
 
 ---
