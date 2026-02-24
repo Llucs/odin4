@@ -170,8 +170,10 @@ typedef struct {
 } LZ4F_frameInfo_t;
 
 #define LZ4F_INIT_FRAMEINFO                                                                                            \
-    { LZ4F_max64KB, LZ4F_blockLinked, LZ4F_noContentChecksum, LZ4F_frame, 0ULL, 0U, LZ4F_noBlockChecksum } /* v1.8.3+  \
-                                                                                                            */
+    {                                                                                                                  \
+        LZ4F_max64KB, LZ4F_blockLinked, LZ4F_noContentChecksum, LZ4F_frame, 0ULL, 0U, LZ4F_noBlockChecksum             \
+    } /* v1.8.3+                                                                                                       \
+       */
 
 /*! LZ4F_preferences_t :
  *  makes it possible to supply advanced compression instructions to streaming interface.
