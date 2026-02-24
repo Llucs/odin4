@@ -8,8 +8,10 @@ on:
 jobs:
   cppcheck:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Install cppcheck
         run: |
@@ -19,9 +21,8 @@ jobs:
       - name: Run cppcheck
         run: |
           cppcheck \
-  --enable=warning,style,performance,portability \
-  --error-exitcode=1 \
-  --inline-suppr \
-  --suppress=missingIncludeSystem \
-  -I include \
-  src
+            --enable=warning,style,performance,portability \
+            --error-exitcode=1 \
+            --inline-suppr \
+            --suppress=missingIncludeSystem \
+            src
