@@ -1,6 +1,8 @@
 name: Build Odin4
 
 on:
+  push:
+    branches: ["main"]
   workflow_dispatch:
     inputs:
       suffix:
@@ -12,6 +14,9 @@ on:
         required: false
         type: boolean
         default: true
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -29,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
@@ -50,29 +55,16 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "Checking for libcryptopp.a..."
           A_PATH="$(find /usr -type f -name 'libcryptopp.a' 2>/dev/null | head -n 1 || true)"
-          if [ -n "$A_PATH" ]; then
-            echo "Found static Crypto++: $A_PATH"
-            exit 0
+          if [ -z "$A_PATH" ]; then
+            echo "Building Crypto++ static..."
+            rm -rf /tmp/cryptopp
+            git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git /tmp/cryptopp
+            cd /tmp/cryptopp
+            make -j"$(nproc)"
+            sudo make install PREFIX=/usr/local
+            sudo ldconfig || true
           fi
-
-          echo "libcryptopp.a not found via apt packages. Building Crypto++ static from source..."
-          rm -rf /tmp/cryptopp
-          git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git /tmp/cryptopp
-          cd /tmp/cryptopp
-
-          make -j"$(nproc)"
-          sudo make install PREFIX=/usr/local
-          sudo ldconfig || true
-
-          A_PATH2="$(find /usr/local -type f -name 'libcryptopp.a' 2>/dev/null | head -n 1 || true)"
-          if [ -z "$A_PATH2" ]; then
-            echo "ERROR: Crypto++ static library build/install failed (libcryptopp.a still not found)." >&2
-            exit 1
-          fi
-
-          echo "Installed static Crypto++: $A_PATH2"
 
       - name: Read version from source
         shell: bash
@@ -86,13 +78,21 @@ jobs:
             | head -n 1)"
 
           if [ -z "$VERSION" ]; then
-            echo "ERROR: Could not parse ODIN4_VERSION from $SRC_FILE" >&2
+            echo "ERROR: Could not parse ODIN4_VERSION" >&2
             exit 1
           fi
 
-          SUFFIX="${{ inputs.suffix }}"
-          if [ -n "$SUFFIX" ] && [[ "$SUFFIX" != -* ]]; then
-            SUFFIX="-$SUFFIX"
+          EVENT="${{ github.event_name }}"
+
+          if [ "$EVENT" = "push" ]; then
+            DATE="$(date -u +%Y%m%d)"
+            SHA="$(git rev-parse --short=7 HEAD)"
+            SUFFIX="-nightly-${DATE}-${SHA}"
+          else
+            SUFFIX="${{ inputs.suffix }}"
+            if [ -n "$SUFFIX" ] && [[ "$SUFFIX" != -* ]]; then
+              SUFFIX="-$SUFFIX"
+            fi
           fi
 
           echo "ODIN4_VERSION=$VERSION" >> "$GITHUB_ENV"
@@ -112,22 +112,19 @@ jobs:
         run: |
           cmake --build build --parallel $(nproc)
 
-      - name: Verify runtime dependencies (must not depend on libcrypto++.so)
+      - name: Verify runtime dependencies
         shell: bash
         run: |
           set -euo pipefail
-
           BIN="build/odin4"
+
           if [ ! -f "$BIN" ]; then
             echo "ERROR: build/odin4 not found." >&2
             exit 1
           fi
 
-          echo "ldd check:"
-          ldd "$BIN" || true
-
           if ldd "$BIN" | grep -qiE 'libcrypto\+\+\.so'; then
-            echo "ERROR: Binary still depends on libcrypto++.so. Static link failed." >&2
+            echo "ERROR: Binary still depends on libcrypto++.so." >&2
             exit 1
           fi
 
@@ -147,7 +144,7 @@ jobs:
           echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: odin4-linux-${{ matrix.arch }}-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}
           path: ${{ env.ZIP_NAME }}
@@ -156,11 +153,11 @@ jobs:
     name: Bundle (single zip with both arch)
     runs-on: ubuntu-22.04
     needs: build
-    if: ${{ inputs.bundle }}
+    if: ${{ github.event_name == 'push' || inputs.bundle }}
 
     steps:
       - name: Download all build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
 
@@ -173,23 +170,19 @@ jobs:
 
           SAMPLE="$(ls -1 bundle/*.zip | head -n 1 || true)"
           if [ -z "$SAMPLE" ]; then
-            echo "ERROR: No zip artifacts found to bundle." >&2
+            echo "ERROR: No zip artifacts found." >&2
             exit 1
           fi
 
           BASE="$(basename "$SAMPLE")"
-          VERSUFFIX="$(echo "$BASE" | sed -E 's/^odin4-linux-[^-]+-(.+)\.zip$/\1/' || true)"
-          if [ -z "$VERSUFFIX" ] || [ "$VERSUFFIX" = "$BASE" ]; then
-            OUT="odin4-linux-all.zip"
-          else
-            OUT="odin4-linux-all-${VERSUFFIX}.zip"
-          fi
+          VERSUFFIX="$(echo "$BASE" | sed -E 's/^odin4-linux-[^-]+-(.+)\.zip$/\1/')"
+          OUT="odin4-linux-all-${VERSUFFIX}.zip"
 
           (cd bundle && zip "../${OUT}" ./*.zip)
           echo "OUT=${OUT}" >> "$GITHUB_ENV"
 
       - name: Upload bundle artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: odin4-linux-all
           path: ${{ env.OUT }}
