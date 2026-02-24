@@ -14,7 +14,7 @@ on:
         default: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -52,7 +52,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           A_PATH="$(find /usr -type f -name 'libcryptopp.a' 2>/dev/null | head -n 1 || true)"
           if [ -z "$A_PATH" ]; then
             echo "Building Crypto++ static..."
@@ -68,7 +67,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           SRC_FILE="src/main.cpp"
 
           VERSION="$(grep -E '^[[:space:]]*#define[[:space:]]+ODIN4_VERSION[[:space:]]+"' "$SRC_FILE" \
@@ -115,12 +113,10 @@ jobs:
         run: |
           set -euo pipefail
           BIN="build/odin4"
-
           if [ ! -f "$BIN" ]; then
             echo "ERROR: build/odin4 not found." >&2
             exit 1
           fi
-
           if ldd "$BIN" | grep -qiE 'libcrypto\+\+\.so'; then
             echo "ERROR: Binary still depends on libcrypto++.so." >&2
             exit 1
@@ -131,14 +127,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-
           cp build/odin4 "dist/${ODIN4_OUTNAME}"
           strip "dist/${ODIN4_OUTNAME}" || true
-
           cd dist
           ZIP_NAME="odin4-linux-${{ matrix.arch }}-${ODIN4_VERSION}${ODIN4_SUFFIX}.zip"
           zip "../${ZIP_NAME}" "${ODIN4_OUTNAME}"
-
           echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
 
       - name: Upload artifact
@@ -165,17 +158,14 @@ jobs:
           set -euo pipefail
           mkdir -p bundle
           find artifacts -type f -name "*.zip" -exec cp {} bundle/ \;
-
           SAMPLE="$(ls -1 bundle/*.zip | head -n 1 || true)"
           if [ -z "$SAMPLE" ]; then
             echo "ERROR: No zip artifacts found." >&2
             exit 1
           fi
-
           BASE="$(basename "$SAMPLE")"
           VERSUFFIX="$(echo "$BASE" | sed -E 's/^odin4-linux-[^-]+-(.+)\.zip$/\1/')"
           OUT="odin4-linux-all-${VERSUFFIX}.zip"
-
           (cd bundle && zip "../${OUT}" ./*.zip)
           echo "OUT=${OUT}" >> "$GITHUB_ENV"
 
@@ -185,14 +175,11 @@ jobs:
           name: odin4-linux-all
           path: ${{ env.OUT }}
 
-publish_nightly:
+  publish_nightly:
     name: Publish Nightly Pre-Release
     runs-on: ubuntu-22.04
     needs: [build, bundle]
     if: ${{ github.event_name == 'push' }}
-
-    permissions:
-      contents: write
 
     steps:
       - name: Download artifacts
@@ -205,7 +192,6 @@ publish_nightly:
           set -euo pipefail
           mkdir -p dist
           find artifacts -type f -name "*.zip" -exec cp {} dist/ \;
-
           if ! ls dist/*.zip 1> /dev/null 2>&1; then
             echo "No zip files found."
             exit 1
