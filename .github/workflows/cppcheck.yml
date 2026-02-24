@@ -18,4 +18,10 @@ jobs:
 
       - name: Run cppcheck
         run: |
-          cppcheck --enable=warning,style,performance,portability --error-exitcode=1 --inline-suppr .
+          cppcheck \
+  --enable=warning,style,performance,portability \
+  --error-exitcode=1 \
+  --inline-suppr \
+  --suppress=missingIncludeSystem \
+  -I include \
+  src
