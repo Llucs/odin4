@@ -79,10 +79,13 @@ static void print_license() {
 
 static bool parse_hex_u16(const std::string& s, uint16_t& out) {
     std::string v = s;
-    if (v.rfind("0x", 0) == 0 || v.rfind("0X", 0) == 0) v = v.substr(2);
-    if (v.empty() || v.size() > 4) return false;
+    if (v.rfind("0x", 0) == 0 || v.rfind("0X", 0) == 0)
+        v = v.substr(2);
+    if (v.empty() || v.size() > 4)
+        return false;
     for (unsigned char c : v) {
-        if (!std::isxdigit(c)) return false;
+        if (!std::isxdigit(c))
+            return false;
     }
     try {
         out = static_cast<uint16_t>(std::stoul(v, nullptr, 16));
@@ -96,7 +99,8 @@ static bool parse_int(const std::string& s, int& out) {
     try {
         size_t idx = 0;
         int v = std::stoi(s, &idx, 10);
-        if (idx != s.size()) return false;
+        if (idx != s.size())
+            return false;
         out = v;
         return true;
     } catch (...) {
@@ -143,32 +147,36 @@ static bool verify_firmware_compatibility(const OdinConfig& cfg, const std::stri
     }
 
     std::string dt = device_type;
-    dt.erase(std::remove_if(dt.begin(), dt.end(), [](unsigned char c) {
-        return std::isspace(c) || c == '\\' || c == '/' || c == '-';
-    }), dt.end());
+    dt.erase(std::remove_if(dt.begin(), dt.end(),
+                            [](unsigned char c) { return std::isspace(c) || c == '\\' || c == '/' || c == '-'; }),
+             dt.end());
 
-    std::transform(dt.begin(), dt.end(), dt.begin(), [](unsigned char c) {
-        return static_cast<char>(std::toupper(c));
-    });
+    std::transform(dt.begin(), dt.end(), dt.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
 
-    if (dt.rfind("SM", 0) == 0) dt = dt.substr(2);
+    if (dt.rfind("SM", 0) == 0)
+        dt = dt.substr(2);
 
     auto file_matches = [&](const std::string& path) -> bool {
-        if (path.empty()) return true;
+        if (path.empty())
+            return true;
         std::string fname = std::filesystem::path(path).filename().string();
         std::string f;
         f.reserve(fname.size());
         for (unsigned char c : fname) {
-            if (std::isspace(c) || c == '-') continue;
+            if (std::isspace(c) || c == '-')
+                continue;
             f.push_back(static_cast<char>(std::toupper(c)));
         }
         return f.find(dt) != std::string::npos;
     };
 
     for (const std::string& p : {cfg.bootloader, cfg.ap, cfg.cp, cfg.csc, cfg.ums}) {
-        if (p.empty()) continue;
+        if (p.empty())
+            continue;
         if (!file_matches(p)) {
-            log_error("Firmware file name does not appear to match device type: " + std::filesystem::path(p).filename().string() + " vs " + device_type);
+            log_error("Firmware file name does not appear to match device type: " +
+                      std::filesystem::path(p).filename().string() + " vs " + device_type);
             return false;
         }
     }
@@ -209,7 +217,8 @@ static ExitCode run_for_device(const OdinConfig& cfg) {
     }
 
     const std::string device_type = usb.get_device_type();
-    if (!device_type.empty()) log_info("Device type: " + device_type);
+    if (!device_type.empty())
+        log_info("Device type: " + device_type);
 
     if (has_any_firmware_files(cfg)) {
         if (!verify_firmware_compatibility(cfg, device_type)) {
@@ -232,15 +241,11 @@ static ExitCode run_for_device(const OdinConfig& cfg) {
 
     if (has_any_firmware_files(cfg)) {
         const std::vector<std::pair<std::string, std::string>> archives = {
-            {"BL", cfg.bootloader},
-            {"AP", cfg.ap},
-            {"CP", cfg.cp},
-            {"CSC", cfg.csc},
-            {"UMS", cfg.ums}
-        };
+            {"BL", cfg.bootloader}, {"AP", cfg.ap}, {"CP", cfg.cp}, {"CSC", cfg.csc}, {"UMS", cfg.ums}};
 
         for (const auto& item : archives) {
-            if (item.second.empty()) continue;
+            if (item.second.empty())
+                continue;
             ExitCode rc = process_tar_file(item.second, usb, pit, !cfg.dry_run, cfg.allow_unknown);
             if (rc != ExitCode::Success) {
                 usb.end_session();
@@ -276,7 +281,7 @@ static ExitCode run_for_device(const OdinConfig& cfg) {
     }
 
     if (cfg.dry_run) {
-        log_info("Validation completed successfully (check-only)." );
+        log_info("Validation completed successfully (check-only).");
     } else if (has_any_firmware_files(cfg)) {
         log_info("Flashing completed successfully.");
     }
@@ -288,10 +293,14 @@ static ExitCode process_arguments_and_run(int argc, char** argv) {
     OdinConfig cfg;
 
     auto apply_log_flags = [&]() {
-        if (cfg.debug) set_log_level(LogLevel::Debug);
-        else if (cfg.verbose) set_log_level(LogLevel::Verbose);
-        else if (cfg.quiet) set_log_level(LogLevel::Error);
-        else set_log_level(LogLevel::Info);
+        if (cfg.debug)
+            set_log_level(LogLevel::Debug);
+        else if (cfg.verbose)
+            set_log_level(LogLevel::Verbose);
+        else if (cfg.quiet)
+            set_log_level(LogLevel::Error);
+        else
+            set_log_level(LogLevel::Info);
     };
 
     for (int i = 1; i < argc; ++i) {
@@ -346,18 +355,21 @@ static ExitCode process_arguments_and_run(int argc, char** argv) {
         }
 
         auto take_value = [&](std::string& out) -> bool {
-            if (i + 1 >= argc) return false;
+            if (i + 1 >= argc)
+                return false;
             out = argv[++i];
             return true;
         };
 
         auto take_value_u16hex = [&](uint16_t& out) -> bool {
-            if (i + 1 >= argc) return false;
+            if (i + 1 >= argc)
+                return false;
             return parse_hex_u16(argv[++i], out);
         };
 
         auto take_value_int = [&](int& out) -> bool {
-            if (i + 1 >= argc) return false;
+            if (i + 1 >= argc)
+                return false;
             return parse_int(argv[++i], out);
         };
 
@@ -404,12 +416,18 @@ static ExitCode process_arguments_and_run(int argc, char** argv) {
                 log_error("Option requires an argument: " + arg);
                 return ExitCode::Usage;
             }
-            if (arg == "-b") cfg.bootloader = value;
-            else if (arg == "-a") cfg.ap = value;
-            else if (arg == "-c") cfg.cp = value;
-            else if (arg == "-s") cfg.csc = value;
-            else if (arg == "-u") cfg.ums = value;
-            else if (arg == "-d") cfg.device_path = value;
+            if (arg == "-b")
+                cfg.bootloader = value;
+            else if (arg == "-a")
+                cfg.ap = value;
+            else if (arg == "-c")
+                cfg.cp = value;
+            else if (arg == "-s")
+                cfg.csc = value;
+            else if (arg == "-u")
+                cfg.ums = value;
+            else if (arg == "-d")
+                cfg.device_path = value;
             continue;
         }
 
@@ -444,7 +462,8 @@ static ExitCode process_arguments_and_run(int argc, char** argv) {
             one.device_path = dev_path;
             log_info("Using device: " + dev_path);
             const ExitCode rc = run_for_device(one);
-            if (rc != ExitCode::Success) return rc;
+            if (rc != ExitCode::Success)
+                return rc;
         }
         return ExitCode::Success;
     }
