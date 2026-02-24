@@ -1,0 +1,39 @@
+name: clang-format (PR)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+
+      - name: Run clang-format
+        run: |
+          files=$(git ls-files '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hpp' '*.hxx')
+          if [ -n "$files" ]; then
+            clang-format -i $files
+          fi
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: bot/clang-format
+          delete-branch: true
+          title: "Apply clang-format"
+          commit-message: "Apply clang-format"
+          body: |
+            This PR applies clang-format to keep code style consistent.
