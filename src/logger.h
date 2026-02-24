@@ -4,13 +4,7 @@
 #include <string>
 #include <cstddef>
 
-enum class LogLevel : int {
-    Error = 0,
-    Warn = 1,
-    Info = 2,
-    Verbose = 3,
-    Debug = 4
-};
+enum class LogLevel : int { Error = 0, Warn = 1, Info = 2, Verbose = 3, Debug = 4 };
 
 // Configure the console/file verbosity. Errors are always printed.
 void set_log_level(LogLevel level);

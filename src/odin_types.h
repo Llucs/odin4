@@ -12,14 +12,7 @@
 // 4: firmware/archive/MD5 error
 // 5: PIT/compatibility error
 // 6: flashing/protocol error
-enum class ExitCode : int {
-    Success = 0,
-    Usage = 2,
-    Usb = 3,
-    Firmware = 4,
-    Pit = 5,
-    Protocol = 6
-};
+enum class ExitCode : int { Success = 0, Usage = 2, Usb = 3, Firmware = 4, Pit = 5, Protocol = 6 };
 
 // ============================================================================
 // CONFIGURATION STRUCTURES
