@@ -24,7 +24,6 @@
   <img src="https://img.shields.io/badge/platform-linux-blue">
   <img src="https://img.shields.io/badge/language-C%2FC%2B%2B-blue">
 
-  <a
   </a>
 </p>
 
