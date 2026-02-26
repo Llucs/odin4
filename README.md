@@ -24,6 +24,9 @@
   <img src="https://img.shields.io/badge/platform-linux-blue">
   <img src="https://img.shields.io/badge/language-C%2FC%2B%2B-blue">
 
+<img
+src="https://img.shields.io/endpoint ?url=https://raw.githubusercontent.com/Llucs/odin4/main/version.json">
+
   </a>
 </p>
 
