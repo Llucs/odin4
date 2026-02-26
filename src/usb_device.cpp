@@ -342,7 +342,8 @@ bool UsbDevice::open_device(const std::string& specific_path, const UsbSelection
     const int kernel_driver_state = libusb_kernel_driver_active(handle, interface_number);
     if (kernel_driver_state < 0) {
         last_open_libusb_err = kernel_driver_state;
-        last_open_error = (kernel_driver_state == LIBUSB_ERROR_ACCESS) ? UsbOpenError::AccessDenied : UsbOpenError::Other;
+        last_open_error =
+            (kernel_driver_state == LIBUSB_ERROR_ACCESS) ? UsbOpenError::AccessDenied : UsbOpenError::Other;
         log_error("Failed to claim USB interface", kernel_driver_state);
         libusb_close(handle);
         handle = nullptr;
