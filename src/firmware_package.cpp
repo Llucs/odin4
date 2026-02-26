@@ -247,6 +247,30 @@ bool is_all_zeros_block(const char* header) {
     return true;
 }
 
+bool tar_header_checksum_valid(const char* header) {
+    uint64_t expected = 0;
+    if (!parse_octal_u64(header + 148, 8, expected))
+        return false;
+
+    uint64_t sum_unsigned = 0;
+    int64_t sum_signed = 0;
+    for (int i = 0; i < 512; ++i) {
+        unsigned char u = 0;
+        if (i >= 148 && i < 156)
+            u = static_cast<unsigned char>(' ');
+        else
+            u = static_cast<unsigned char>(header[i]);
+        sum_unsigned += static_cast<uint64_t>(u);
+        sum_signed += static_cast<int64_t>(static_cast<int8_t>(u));
+    }
+
+    if (expected == sum_unsigned)
+        return true;
+    if (sum_signed >= 0 && expected == static_cast<uint64_t>(sum_signed))
+        return true;
+    return false;
+}
+
 std::string sanitize_tar_name(const std::string& s) {
     std::string out = s;
     while (!out.empty() && (out.back() == '\0' || out.back() == '\n' || out.back() == '\r'))
@@ -658,6 +682,11 @@ ExitCode process_tar_file(const std::string& tar_path, UsbDevice& usb_device, co
             break;
         }
 
+        if (!tar_header_checksum_valid(header)) {
+            log_error("Invalid TAR header checksum");
+            return ExitCode::Firmware;
+        }
+
         uint64_t data_size = 0;
         if (!parse_octal_u64(header + 124, 12, data_size)) {
             log_error("Invalid TAR size field");
@@ -700,6 +729,10 @@ ExitCode process_tar_file(const std::string& tar_path, UsbDevice& usb_device, co
         }
 
         auto skip_entry_data = [&](uint64_t size) -> ExitCode {
+            if (size > static_cast<uint64_t>(std::numeric_limits<std::streamoff>::max())) {
+                log_error("Failed to skip TAR entry data");
+                return ExitCode::Firmware;
+            }
             file.seekg(static_cast<std::streamoff>(size), std::ios::cur);
             if (!file) {
                 log_error("Failed to skip TAR entry data");
@@ -841,11 +874,13 @@ ExitCode process_tar_file(const std::string& tar_path, UsbDevice& usb_device, co
             return ExitCode::Pit;
         }
 
-        const std::string part_upper = partition_name;
+        std::string part_upper = partition_name;
+        std::transform(part_upper.begin(), part_upper.end(), part_upper.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
         const bool is_large = (part_upper == "SYSTEM" || part_upper == "USERDATA" || part_upper == "SUPER");
 
         const std::string lower_basename = to_lower_copy(basename);
-        const bool is_lz4 = (lower_basename.find(".lz4") != std::string::npos);
+        const bool is_lz4 = ends_with_case_insensitive(lower_basename, ".lz4");
 
         log_verbose("TAR entry: " + filename + " (" + std::to_string(data_size) + " bytes) -> PIT: " + partition_name +
                     " (ID " + std::to_string(pit_entry->identifier) + ")");

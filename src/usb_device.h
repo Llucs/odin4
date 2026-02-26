@@ -40,6 +40,7 @@ class UsbDevice {
     uint8_t endpoint_out = 0x01;
     uint8_t endpoint_in = 0x81;
     int interface_number = 0;
+    bool kernel_driver_detached = false;
 
     size_t max_chunk_bytes = 1048576;
     uint16_t endpoint_out_max_packet = 512;

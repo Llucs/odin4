@@ -457,30 +457,22 @@ static ExitCode process_arguments_and_run(int argc, char** argv) {
             log_error("No compatible devices detected in Download Mode.");
             return ExitCode::Usb;
         }
-        for (const auto& dev_path : devices) {
-            OdinConfig one = cfg;
-            one.device_path = dev_path;
-            log_info("Using device: " + dev_path);
-            const ExitCode rc = run_for_device(one);
-            if (rc != ExitCode::Success)
-                return rc;
+        if (devices.size() > 1) {
+            log_error("Multiple compatible devices detected in Download Mode. Use -d to select one device.");
+            for (const auto& dev_path : devices)
+                log_info("Detected device: " + dev_path);
+            return ExitCode::Usb;
         }
-        return ExitCode::Success;
+        OdinConfig one = cfg;
+        one.device_path = devices.front();
+        log_info("Using device: " + one.device_path);
+        return run_for_device(one);
     }
 
     return run_for_device(cfg);
 }
 
 int main(int argc, char** argv) {
-    int err = libusb_init(NULL);
-    if (err < 0) {
-        std::cerr << "Failed to initialize libusb: " << libusb_error_name(err) << std::endl;
-        std::cerr << "This may indicate that libusb is missing or incompatible on this system." << std::endl;
-        return static_cast<int>(ExitCode::Usb);
-    }
-
     const ExitCode rc = process_arguments_and_run(argc, argv);
-
-    libusb_exit(NULL);
     return static_cast<int>(rc);
 }

@@ -11,16 +11,27 @@
 #include <unordered_set>
 #include <limits>
 #include <mutex>
+#include <cstdlib>
 
 namespace {
 libusb_context* g_libusb_ctx = nullptr;
 std::once_flag g_libusb_once;
 
+void cleanup_libusb_context() {
+    if (g_libusb_ctx) {
+        libusb_exit(g_libusb_ctx);
+        g_libusb_ctx = nullptr;
+    }
+}
+
 bool ensure_libusb_initialized() {
     std::call_once(g_libusb_once, []() {
         int rc = libusb_init(&g_libusb_ctx);
-        if (rc != 0)
+        if (rc != 0) {
             g_libusb_ctx = nullptr;
+            return;
+        }
+        std::atexit(cleanup_libusb_context);
     });
     return g_libusb_ctx != nullptr;
 }
@@ -46,6 +57,10 @@ static int retry_backoff_ms(int attempt) {
 UsbDevice::~UsbDevice() {
     if (handle) {
         libusb_release_interface(handle, interface_number);
+        if (kernel_driver_detached) {
+            (void) libusb_attach_kernel_driver(handle, interface_number);
+            kernel_driver_detached = false;
+        }
         libusb_close(handle);
         handle = nullptr;
     }
@@ -219,6 +234,10 @@ bool UsbDevice::open_device(const std::string& specific_path, const UsbSelection
 
     if (handle) {
         libusb_release_interface(handle, interface_number);
+        if (kernel_driver_detached) {
+            (void) libusb_attach_kernel_driver(handle, interface_number);
+            kernel_driver_detached = false;
+        }
         libusb_close(handle);
         handle = nullptr;
     }
@@ -305,6 +324,7 @@ bool UsbDevice::open_device(const std::string& specific_path, const UsbSelection
     if (chosen_if.ep_out_mps != 0)
         endpoint_out_max_packet = chosen_if.ep_out_mps;
     interface_number = chosen_if.interface_number;
+    kernel_driver_detached = false;
 
     const int open_err = libusb_open(target, &handle);
     if (open_err < 0 || !handle) {
@@ -319,7 +339,16 @@ bool UsbDevice::open_device(const std::string& specific_path, const UsbSelection
         return false;
     }
 
-    if (libusb_kernel_driver_active(handle, interface_number) == 1) {
+    const int kernel_driver_state = libusb_kernel_driver_active(handle, interface_number);
+    if (kernel_driver_state < 0) {
+        last_open_libusb_err = kernel_driver_state;
+        last_open_error = (kernel_driver_state == LIBUSB_ERROR_ACCESS) ? UsbOpenError::AccessDenied : UsbOpenError::Other;
+        log_error("Failed to claim USB interface", kernel_driver_state);
+        libusb_close(handle);
+        handle = nullptr;
+        return false;
+    }
+    if (kernel_driver_state == 1) {
         const int detach_err = libusb_detach_kernel_driver(handle, interface_number);
         if (detach_err < 0) {
             last_open_error = (detach_err == LIBUSB_ERROR_ACCESS) ? UsbOpenError::AccessDenied : UsbOpenError::Other;
@@ -329,6 +358,7 @@ bool UsbDevice::open_device(const std::string& specific_path, const UsbSelection
             handle = nullptr;
             return false;
         }
+        kernel_driver_detached = true;
     }
 
     const int claim_err = libusb_claim_interface(handle, interface_number);
@@ -339,6 +369,10 @@ bool UsbDevice::open_device(const std::string& specific_path, const UsbSelection
         else
             last_open_error = UsbOpenError::Other;
         log_error("Failed to claim USB interface", claim_err);
+        if (kernel_driver_detached) {
+            (void) libusb_attach_kernel_driver(handle, interface_number);
+            kernel_driver_detached = false;
+        }
         libusb_close(handle);
         handle = nullptr;
         return false;
@@ -443,6 +477,10 @@ bool UsbDevice::handshake() {
     int actual_length = 0;
     if (!receive_packet(&rsp, sizeof(rsp), &actual_length, true, sizeof(rsp)))
         return false;
+    if (le16toh(rsp.header.packet_type) != THOR_PACKET_RESPONSE) {
+        log_error("Handshake failed with unexpected packet type: " + std::to_string(le16toh(rsp.header.packet_type)));
+        return false;
+    }
     uint32_t code = le32_to_h(rsp.response_code);
     if (code != 0) {
         log_error("Handshake failed with response code: " + std::to_string(code));
@@ -1205,9 +1243,9 @@ bool UsbDevice::odin_dump_pit(std::vector<unsigned char>& pit_out) {
 
         int got = 0;
         std::vector<unsigned char> data(block, 0);
-        if (!bulk_read_once(data.data(), data.size(), &got, 5000))
+        if (!receive_packet(data.data(), data.size(), &got, false, data.size(), 5000))
             return false;
-        if (got <= 0)
+        if (got != static_cast<int>(data.size()))
             return false;
 
         size_t off = static_cast<size_t>(i) * block;
@@ -1268,22 +1306,21 @@ bool UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
             const uint32_t parts = aligned_size / static_cast<uint32_t>(odin_flash_packet_size);
             for (uint32_t j = 0; j < parts; ++j) {
                 std::fill(part.begin(), part.end(), 0);
-                stream.read(reinterpret_cast<char*>(part.data()), part.size());
-                std::streamsize got = stream.gcount();
-                if (got < 0)
-                    got = 0;
 
-                if (total_sent + static_cast<uint64_t>(got) > size) {
-                    uint64_t remain = size - total_sent;
-                    if (remain < static_cast<uint64_t>(part.size())) {
-                        for (size_t k = static_cast<size_t>(remain); k < part.size(); ++k)
-                            part[k] = 0;
-                    }
+                uint64_t remaining_file_bytes = 0;
+                if (total_sent < size)
+                    remaining_file_bytes = size - total_sent;
+                const size_t to_read = static_cast<size_t>(std::min<uint64_t>(remaining_file_bytes, part.size()));
+
+                if (to_read > 0) {
+                    stream.read(reinterpret_cast<char*>(part.data()), static_cast<std::streamsize>(to_read));
+                    if (static_cast<size_t>(stream.gcount()) != to_read)
+                        return false;
                 }
 
                 if (!odin_send_file_part_and_ack(part.data(), part.size(), expected_index++))
                     return false;
-                total_sent += static_cast<uint64_t>(odin_flash_packet_size);
+                total_sent += static_cast<uint64_t>(to_read);
             }
 
             if (!odin_end_sequence_flash(pit_entry, real_size, last ? 1u : 0u))
