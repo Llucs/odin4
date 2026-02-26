@@ -4,22 +4,27 @@ on:
   workflow_dispatch:
     inputs:
       suffix:
-        description: 'Optional suffix appended to the filename (e.g. -rc1, -beta). Leave empty for none.'
+        description: "Optional suffix appended to the filename (e.g. -rc1, -beta). Leave empty for none."
         required: false
-        default: ''
+        default: ""
       bundle:
-        description: 'Also create a single zip containing both architectures'
+        description: "Also create a single zip containing both architectures"
         required: false
         type: boolean
         default: true
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: odin4-build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     name: Build for Linux (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
@@ -32,10 +37,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Install dependencies
+        shell: bash
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y \
             cmake \
@@ -52,9 +59,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          A_PATH="$(find /usr -type f -name 'libcryptopp.a' 2>/dev/null | head -n 1 || true)"
+          A_PATH="$(find /usr /usr/local -type f -name 'libcryptopp.a' 2>/dev/null | head -n 1 || true)"
           if [ -z "$A_PATH" ]; then
-            echo "Building Crypto++ static..."
             rm -rf /tmp/cryptopp
             git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git /tmp/cryptopp
             cd /tmp/cryptopp
@@ -78,17 +84,9 @@ jobs:
             exit 1
           fi
 
-          EVENT="${{ github.event_name }}"
-
-          if [ "$EVENT" = "push" ]; then
-            DATE="$(date -u +%Y%m%d)"
-            SHA="$(git rev-parse --short=7 HEAD)"
-            SUFFIX="-nightly-${DATE}-${SHA}"
-          else
-            SUFFIX="${{ inputs.suffix }}"
-            if [ -n "$SUFFIX" ] && [[ "$SUFFIX" != -* ]]; then
-              SUFFIX="-$SUFFIX"
-            fi
+          SUFFIX="${{ inputs.suffix }}"
+          if [ -n "$SUFFIX" ] && [[ "$SUFFIX" != -* ]]; then
+            SUFFIX="-$SUFFIX"
           fi
 
           echo "ODIN4_VERSION=$VERSION" >> "$GITHUB_ENV"
@@ -96,17 +94,24 @@ jobs:
           echo "ODIN4_OUTNAME=odin4_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
 
       - name: Clean build dir
-        run: rm -rf build
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build
 
       - name: Configure CMake
+        shell: bash
         run: |
+          set -euo pipefail
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="/usr/local"
 
       - name: Build
+        shell: bash
         run: |
-          cmake --build build --parallel $(nproc)
+          set -euo pipefail
+          cmake --build build --parallel "$(nproc)"
 
       - name: Verify runtime dependencies
         shell: bash
@@ -129,26 +134,31 @@ jobs:
           mkdir -p dist
           cp build/odin4 "dist/${ODIN4_OUTNAME}"
           strip "dist/${ODIN4_OUTNAME}" || true
-          cd dist
           ZIP_NAME="odin4-linux-${{ matrix.arch }}-${ODIN4_VERSION}${ODIN4_SUFFIX}.zip"
-          zip "../${ZIP_NAME}" "${ODIN4_OUTNAME}"
+          (
+            cd dist
+            zip "../${ZIP_NAME}" "${ODIN4_OUTNAME}"
+          )
           echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: odin4-linux-${{ matrix.arch }}-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}
           path: ${{ env.ZIP_NAME }}
+          if-no-files-found: error
+          retention-days: 14
 
   bundle:
     name: Bundle (single zip with both arch)
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     needs: build
-    if: ${{ github.event_name == 'push' || inputs.bundle }}
+    if: ${{ inputs.bundle }}
 
     steps:
       - name: Download all build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
 
@@ -158,56 +168,28 @@ jobs:
           set -euo pipefail
           mkdir -p bundle
           find artifacts -type f -name "*.zip" -exec cp {} bundle/ \;
-          SAMPLE="$(ls -1 bundle/*.zip | head -n 1 || true)"
+
+          SAMPLE="$(find bundle -maxdepth 1 -type f -name '*.zip' | head -n 1 || true)"
           if [ -z "$SAMPLE" ]; then
             echo "ERROR: No zip artifacts found." >&2
             exit 1
           fi
+
           BASE="$(basename "$SAMPLE")"
           VERSUFFIX="$(echo "$BASE" | sed -E 's/^odin4-linux-[^-]+-(.+)\.zip$/\1/')"
           OUT="odin4-linux-all-${VERSUFFIX}.zip"
-          (cd bundle && zip "../${OUT}" ./*.zip)
+
+          (
+            cd bundle
+            zip "../${OUT}" ./*.zip
+          )
+
           echo "OUT=${OUT}" >> "$GITHUB_ENV"
 
       - name: Upload bundle artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: odin4-linux-all
           path: ${{ env.OUT }}
-
-  publish_nightly:
-    name: Publish Nightly Pre-Release
-    runs-on: ubuntu-22.04
-    needs: [build, bundle]
-    if: ${{ github.event_name == 'workflow_dispatch' }}
-
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v7
-        with:
-          path: artifacts
-
-      - name: Collect zips
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          find artifacts -type f -name "*.zip" -exec cp {} dist/ \;
-          if ! ls dist/*.zip 1> /dev/null 2>&1; then
-            echo "No zip files found."
-            exit 1
-          fi
-
-      - name: Publish or update Nightly pre-release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: nightly
-          name: Nightly (pre-release)
-          prerelease: true
-          allowUpdates: true
-          replacesArtifacts: true
-          artifacts: "dist/*.zip"
-          body: |
-            Automated nightly build from latest main.
-
-            Commit: ${{ github.sha }}
-            Run: ${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 14
