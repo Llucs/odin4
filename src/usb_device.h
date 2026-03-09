@@ -11,14 +11,11 @@
 
 #include "logger.h"
 
-// Constants used by UsbDevice
 #define SAMSUNG_VID 0x04E8
-#define USB_RETRY_COUNT 3
-#define USB_TIMEOUT_BULK 60000
-#define USB_TIMEOUT_CONTROL 5000
+#define USB_RETRY_COUNT 5
+#define USB_TIMEOUT_BULK 120000
+#define USB_TIMEOUT_CONTROL 10000
 
-// Known Samsung USB product IDs historically used in Download Mode.
-// This list is intentionally conservative and is based on public Heimdall udev rules.
 static constexpr std::array<uint16_t, 3> SAMSUNG_DOWNLOAD_PIDS{{0x6601, 0x685D, 0x68C3}};
 
 struct UsbSelectionCriteria {
@@ -55,7 +52,7 @@ class UsbDevice {
 
     ProtocolMode protocol_mode = ProtocolMode::Thor;
 
-    int odin_flash_timeout_ms = 120000;
+    int odin_flash_timeout_ms = 180000;
     int odin_flash_packet_size = 1048576;
     int odin_flash_sequence_count = 30;
     bool odin_supports_zlp = true;
@@ -78,6 +75,7 @@ class UsbDevice {
 
     bool bulk_write_all(const void* data, size_t size, int timeout_ms);
     bool bulk_read_once(void* data, size_t size, int* actual_length, int timeout_ms);
+    bool send_zlp(int timeout_ms);
 
   public:
     UsbDevice() = default;

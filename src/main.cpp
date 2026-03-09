@@ -1,7 +1,5 @@
-// ============================================================================
 // odin4 - Samsung Device Flashing Tool
 // Protocol: Thor USB Communication
-// ============================================================================
 
 #include <iostream>
 #include <string>
@@ -21,7 +19,7 @@
 #include "usb_device.h"
 #include "firmware_package.h"
 
-#define ODIN4_VERSION "5.0.3-568cd9a"
+#define ODIN4_VERSION "5.0.4"
 
 static void print_usage() {
     std::cout << "Usage: odin4 [options]" << std::endl;

@@ -85,31 +85,20 @@ bool UsbDevice::bulk_write_all(const void* data, size_t size, int timeout_ms) {
                 offset += static_cast<size_t>(actual_length);
             }
             if (err != 0) {
-                log_error("USB bulk write failed", err);
                 if (err == LIBUSB_ERROR_NO_DEVICE)
                     return false;
                 if (err == LIBUSB_ERROR_PIPE)
                     (void) libusb_clear_halt(handle, endpoint_out);
-                // Some devices/controllers behave poorly with ZLP or large transfers.
-                // Fall back to small chunks and retry.
                 if (err == LIBUSB_ERROR_PIPE || err == LIBUSB_ERROR_TIMEOUT) {
-                    max_chunk_bytes = 0x800;
+                    max_chunk_bytes = 0x4000; // 16KB fallback
                 }
                 break;
             }
-            if (actual_length <= 0) {
-                log_error("USB bulk write returned zero length");
-                break;
-            }
+            if (actual_length <= 0) break;
         }
         if (offset == size) {
-            // Only send ZLP once, at the end of the whole transfer.
-            // Some Odin legacy bootloaders expect it when the transfer size is an exact multiple of wMaxPacketSize.
-            if (protocol_mode == ProtocolMode::OdinLegacy && odin_supports_zlp && endpoint_out_max_packet != 0) {
-                if ((size % endpoint_out_max_packet) == 0) {
-                    int zlp_len = 0;
-                    (void) libusb_bulk_transfer(handle, endpoint_out, nullptr, 0, &zlp_len, timeout_ms);
-                }
+            if (odin_supports_zlp && endpoint_out_max_packet != 0 && (size % endpoint_out_max_packet) == 0) {
+                send_zlp(timeout_ms);
             }
             return true;
         }
@@ -118,6 +107,12 @@ bool UsbDevice::bulk_write_all(const void* data, size_t size, int timeout_ms) {
         }
     }
     return false;
+}
+
+bool UsbDevice::send_zlp(int timeout_ms) {
+    int actual = 0;
+    int err = libusb_bulk_transfer(handle, endpoint_out, nullptr, 0, &actual, timeout_ms);
+    return err == 0;
 }
 
 bool UsbDevice::bulk_read_once(void* data, size_t size, int* actual_length, int timeout_ms) {
@@ -1075,11 +1070,11 @@ bool UsbDevice::odin_legacy_handshake() {
     if (!bulk_write_all(preamble, sizeof(preamble), USB_TIMEOUT_CONTROL))
         return false;
 
-    unsigned char reply[4] = {0};
+    unsigned char reply[8] = {0};
     int actual = 0;
-    if (!bulk_read_once(reply, sizeof(reply), &actual, 2000))
+    if (!bulk_read_once(reply, sizeof(reply), &actual, USB_TIMEOUT_CONTROL))
         return false;
-    if (actual != 4)
+    if (actual < 4)
         return false;
     if (!(reply[0] == 'L' && reply[1] == 'O' && reply[2] == 'K' && reply[3] == 'E'))
         return false;
@@ -1090,7 +1085,7 @@ bool UsbDevice::odin_begin_session() {
     std::vector<unsigned char> rsp;
     int32_t max_proto = 0x7FFFFFFF;
     uint32_t le_max = h_to_le32(static_cast<uint32_t>(max_proto));
-    if (!odin_command(0x64, 0x00, &le_max, sizeof(le_max), rsp, 5000))
+    if (!odin_command(0x64, 0x00, &le_max, sizeof(le_max), rsp, USB_TIMEOUT_CONTROL))
         return false;
     if (!odin_fail_check(rsp, "BeginSession", false))
         return false;
@@ -1100,16 +1095,16 @@ bool UsbDevice::odin_begin_session() {
     version = static_cast<uint16_t>(le16toh(version));
 
     if (version <= 1) {
-        odin_flash_timeout_ms = 30000;
+        odin_flash_timeout_ms = 60000;
         odin_flash_packet_size = 131072;
         odin_flash_sequence_count = 240;
     } else {
-        odin_flash_timeout_ms = 120000;
+        odin_flash_timeout_ms = 180000;
         odin_flash_packet_size = 1048576;
         odin_flash_sequence_count = 30;
 
         uint32_t packet_size = h_to_le32(static_cast<uint32_t>(odin_flash_packet_size));
-        if (!odin_command(0x64, 0x05, &packet_size, sizeof(packet_size), rsp, 5000))
+        if (!odin_command(0x64, 0x05, &packet_size, sizeof(packet_size), rsp, USB_TIMEOUT_CONTROL))
             return false;
         if (!odin_fail_check(rsp, "SendFilePartSize", false))
             return false;
@@ -1119,14 +1114,14 @@ bool UsbDevice::odin_begin_session() {
 
 bool UsbDevice::odin_end_session() {
     std::vector<unsigned char> rsp;
-    if (!odin_command(0x67, 0x00, nullptr, 0, rsp, 5000))
+    if (!odin_command(0x67, 0x00, nullptr, 0, rsp, USB_TIMEOUT_CONTROL))
         return false;
     return odin_fail_check(rsp, "EndSession", false);
 }
 
 bool UsbDevice::odin_reboot() {
     std::vector<unsigned char> rsp;
-    if (!odin_command(0x67, 0x01, nullptr, 0, rsp, 5000))
+    if (!odin_command(0x67, 0x01, nullptr, 0, rsp, USB_TIMEOUT_CONTROL))
         return false;
     return odin_fail_check(rsp, "Reboot", false);
 }
@@ -1134,21 +1129,21 @@ bool UsbDevice::odin_reboot() {
 bool UsbDevice::odin_set_total_bytes(uint64_t total_bytes) {
     std::vector<unsigned char> rsp;
     uint64_t le_total = h_to_le64(total_bytes);
-    if (!odin_command(0x64, 0x02, &le_total, sizeof(le_total), rsp, 5000))
+    if (!odin_command(0x64, 0x02, &le_total, sizeof(le_total), rsp, USB_TIMEOUT_CONTROL))
         return false;
     return odin_fail_check(rsp, "SetTotalBytes", false);
 }
 
 bool UsbDevice::odin_reset_flash_count() {
     std::vector<unsigned char> rsp;
-    if (!odin_command(0x64, 0x01, nullptr, 0, rsp, 5000))
+    if (!odin_command(0x64, 0x01, nullptr, 0, rsp, USB_TIMEOUT_CONTROL))
         return false;
     return odin_fail_check(rsp, "ResetFlashCount", false);
 }
 
 bool UsbDevice::odin_request_file_flash() {
     std::vector<unsigned char> rsp;
-    if (!odin_command(0x66, 0x00, nullptr, 0, rsp, 5000))
+    if (!odin_command(0x66, 0x00, nullptr, 0, rsp, USB_TIMEOUT_CONTROL))
         return false;
     return odin_fail_check(rsp, "RequestFileFlash", false);
 }
@@ -1156,7 +1151,7 @@ bool UsbDevice::odin_request_file_flash() {
 bool UsbDevice::odin_request_sequence_flash(uint32_t aligned_size) {
     std::vector<unsigned char> rsp;
     uint32_t le_sz = h_to_le32(aligned_size);
-    if (!odin_command(0x66, 0x02, &le_sz, sizeof(le_sz), rsp, 5000))
+    if (!odin_command(0x66, 0x02, &le_sz, sizeof(le_sz), rsp, USB_TIMEOUT_CONTROL))
         return false;
     return odin_fail_check(rsp, "RequestSequenceFlash", false);
 }
