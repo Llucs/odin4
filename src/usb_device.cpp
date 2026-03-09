@@ -94,7 +94,8 @@ bool UsbDevice::bulk_write_all(const void* data, size_t size, int timeout_ms) {
                 }
                 break;
             }
-            if (actual_length <= 0) break;
+            if (actual_length <= 0)
+                break;
         }
         if (offset == size) {
             if (odin_supports_zlp && endpoint_out_max_packet != 0 && (size % endpoint_out_max_packet) == 0) {
