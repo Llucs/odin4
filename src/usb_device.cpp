@@ -423,8 +423,10 @@ bool UsbDevice::receive_packet(void* data, size_t size, int* actual_length, bool
 
             if (err == LIBUSB_ERROR_PIPE)
                 (void) libusb_clear_halt(handle, endpoint_in);
-            if (err == LIBUSB_ERROR_TIMEOUT && timeout_override_ms > 0) {
-                return false;
+            if (err == LIBUSB_ERROR_TIMEOUT) {
+                if (timeout_override_ms > 0 || attempt == USB_RETRY_COUNT - 1)
+                    return false;
+                continue;
             }
             log_error("USB packet receive failed (attempt " + std::to_string(attempt + 1) + ")", err);
             if (err == LIBUSB_ERROR_NO_DEVICE)
