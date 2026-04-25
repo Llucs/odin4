@@ -26,6 +26,11 @@
 
 <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Llucs/odin4/main/version.json">
 
+  <img src="https://img.shields.io/github/downloads/Llucs/odin4/total?style=for-the-badge&label=TOTAL%20DOWNLOADS&color=blue" alt="Total Downloads">
+  <img src="https://img.shields.io/github/v/release/Llucs/odin4?style=for-the-badge&label=LATEST%20VERSION&color=brightgreen" alt="Latest Version">
+</p>
+
+
   </a>
 </p>
 
