@@ -19,7 +19,7 @@
 #include "usb_device.h"
 #include "firmware_package.h"
 
-#define ODIN4_VERSION "5.0.4-40a0096"
+#define ODIN4_VERSION "5.0.5"
 
 static void print_usage() {
     std::cout << "Usage: odin4 [options]" << std::endl;
@@ -162,11 +162,12 @@ static bool verify_firmware_compatibility(const OdinConfig& cfg, const std::stri
         std::string f;
         f.reserve(fname.size());
         for (unsigned char c : fname) {
-            if (std::isspace(c) || c == '-')
-                continue;
-            f.push_back(static_cast<char>(std::toupper(c)));
+            if (std::isalnum(c))
+                f.push_back(static_cast<char>(std::toupper(c)));
         }
-        return f.find(dt) != std::string::npos;
+        // If device type is short (e.g. "G991B"), it's likely a model number.
+        // If it's very short, we might want to be less strict.
+        return f.find(dt) != std::string::npos || dt.find(f) != std::string::npos;
     };
 
     for (const std::string& p : {cfg.bootloader, cfg.ap, cfg.cp, cfg.csc, cfg.ums}) {

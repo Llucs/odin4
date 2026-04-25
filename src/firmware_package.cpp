@@ -291,7 +291,8 @@ std::string sanitize_filename(const std::string& filename) {
     size_t last_dot = sanitized.find_last_of('.');
     while (last_dot != std::string::npos) {
         std::string ext = sanitized.substr(last_dot);
-        if (ext == ".lz4" || ext == ".ext4" || ext == ".img" || ext == ".bin") {
+        std::string ext_lower = to_lower_copy(ext);
+        if (ext_lower == ".lz4" || ext_lower == ".ext4" || ext_lower == ".img" || ext_lower == ".bin") {
             sanitized = sanitized.substr(0, last_dot);
             last_dot = sanitized.find_last_of('.');
         } else {
