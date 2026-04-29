@@ -66,6 +66,13 @@ The project emphasizes:
 *   **Deterministic and Safe Flashing Logic**: Ensuring predictable and secure flashing operations.
 *   **Clean and Maintainable C++ Code**: A well-structured codebase that is easy to understand, extend, and maintain.
 
+## Why odin4?
+
+- Works natively on Linux (no Wine needed)
+- Open-source and auditable
+- Safer validation system
+- Better logging and debugging tools
+
 ## Core Features
 
 odin4 offers a comprehensive set of features for flashing Samsung devices:
