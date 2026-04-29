@@ -1,36 +1,18 @@
 <p align="center">
-  <img src="./logo.png" width="160" alt="odin4 logo">
-</p>
-
-<h1 align="center">odin4</h1>
-
-<p align="center">
-  Modern Samsung firmware flashing tool for Linux
-</p>
-
-<p align="center">
   <a href="LICENSE">
     <img src="https://img.shields.io/github/license/Llucs/odin4">
   </a>
-
   <a href="https://github.com/Llucs/odin4/actions/workflows/build.yml">
     <img src="https://github.com/Llucs/odin4/actions/workflows/build.yml/badge.svg">
   </a>
-
   <a href="https://github.com/Llucs/odin4/actions/workflows/codeql.yml">
     <img src="https://github.com/Llucs/odin4/actions/workflows/codeql.yml/badge.svg">
   </a>
-
   <img src="https://img.shields.io/badge/platform-linux-blue">
   <img src="https://img.shields.io/badge/language-C%2FC%2B%2B-blue">
-
-<img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Llucs/odin4/main/version.json">
-
-  <img src="https://img.shields.io/github/downloads/Llucs/odin4/total?style=for-the-badge&label=TOTAL%20DOWNLOADS&color=blue" alt="Total Downloads">
-</p>
-
-
-  </a>
+  <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Llucs/odin4/main/version.json">
+  <img src="https://img.shields.io/github/stars/Llucs/odin4?style=for-the-badge">
+  <img src="https://img.shields.io/github/downloads/Llucs/odin4/total?style=for-the-badge&label=TOTAL%20DOWNLOADS&color=blue">
 </p>
 
 ---
