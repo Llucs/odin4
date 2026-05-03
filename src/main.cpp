@@ -13,11 +13,11 @@
 
 #include <libusb.h>
 
-#include "logger.h"
-#include "odin_types.h"
-#include "thor_protocol.h"
-#include "usb_device.h"
-#include "firmware_package.h"
+#include "core/logger.h"
+#include "core/odin_types.h"
+#include "protocol/thor_protocol.h"
+#include "usb/usb_device.h"
+#include "firmware/firmware_package.h"
 
 #define ODIN4_VERSION "5.1.0"
 

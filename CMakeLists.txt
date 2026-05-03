@@ -74,9 +74,9 @@ target_include_directories(lz4_lib PUBLIC lib/lz4)
 # =========================
 add_executable(odin4
     src/main.cpp
-    src/usb_device.cpp
-    src/firmware_package.cpp
-    src/logger.cpp
+    src/core/logger.cpp
+    src/usb/usb_device.cpp
+    src/firmware/firmware_package.cpp
 )
 set_target_properties(odin4 PROPERTIES OUTPUT_NAME "odin4")
 
@@ -93,6 +93,7 @@ target_compile_options(odin4 PRIVATE
 # Includes
 # =========================
 target_include_directories(odin4 PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
     ${LIBUSB_INCLUDE_DIRS}
 )
 

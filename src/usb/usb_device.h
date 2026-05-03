@@ -6,10 +6,10 @@
 #include <array>
 #include <istream>
 #include <libusb.h>
-#include "odin_types.h"
-#include "thor_protocol.h"
+#include "core/odin_types.h"
+#include "protocol/thor_protocol.h"
 
-#include "logger.h"
+#include "core/logger.h"
 
 #define SAMSUNG_VID 0x04E8
 #define USB_RETRY_COUNT 5

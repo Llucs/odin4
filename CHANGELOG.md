@@ -19,11 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Progress reporting for raw (non-LZ4) partition flashing in Thor mode.
+- CHANGELOG.md for tracking changes across releases.
 
 ### Removed
 - Dead `odin_send_pit` function declaration (declared in header but never defined or called).
 
 ### Changed
+- Reorganized `src/` directory into modules: `core/`, `protocol/`, `usb/`, `firmware/` for better code organization and maintainability.
 - Version updated to 5.1.0.
 
 ## [5.0.5] - Previous Release

@@ -3,8 +3,8 @@
 
 #include <string>
 #include <fstream>
-#include "odin_types.h"
-#include "usb_device.h"
+#include "core/odin_types.h"
+#include "usb/usb_device.h"
 
 // Utility functions
 std::string sanitize_filename(const std::string& filename);
