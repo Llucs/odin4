@@ -1,4 +1,4 @@
-#include "usb_device.h"
+#include "usb/usb_device.h"
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -891,9 +891,15 @@ bool UsbDevice::send_file_part_chunk(const void* data, size_t size, uint32_t chu
     return true;
 }
 
+bool UsbDevice::notify_total_bytes(uint64_t total) {
+    if (protocol_mode != ProtocolMode::OdinLegacy)
+        return true;
+    return odin_set_total_bytes(total);
+}
+
 bool UsbDevice::send_file_part_header(uint64_t total_size) {
     if (protocol_mode == ProtocolMode::OdinLegacy)
-        return odin_set_total_bytes(total_size);
+        return true;
 
     ThorFilePartSizePacket size_pkt = {};
     size_pkt.header.packet_size = h_to_le32(sizeof(ThorFilePartSizePacket));
@@ -959,6 +965,8 @@ bool UsbDevice::send_control(uint32_t control_type) {
     if (protocol_mode == ProtocolMode::OdinLegacy) {
         if (control_type == THOR_CONTROL_REBOOT)
             return odin_reboot();
+        if (control_type == THOR_CONTROL_REDOWNLOAD)
+            log_warn("Redownload is not supported in Odin legacy mode.");
         return true;
     }
 
@@ -1195,13 +1203,13 @@ bool UsbDevice::odin_end_sequence_flash(const PitEntry& pit_entry, uint32_t real
     if (pit_entry.binary_type == 1) {
         w32(0, 0x01);
         w32(4, real_size);
-        w32(8, pit_entry.binary_type);
+        w32(8, 0u);
         w32(12, pit_entry.device_type);
         w32(16, is_last ? 1u : 0u);
     } else {
         w32(0, 0x00);
         w32(4, real_size);
-        w32(8, pit_entry.binary_type);
+        w32(8, 0u);
         w32(12, pit_entry.device_type);
         w32(16, pit_entry.identifier);
         w32(20, is_last ? 1u : 0u);
@@ -1337,6 +1345,9 @@ bool UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
     uint64_t remaining = size;
     uint32_t chunk_index = 0;
 
+    uint64_t sent = 0;
+    int last_pct = -1;
+
     while (remaining > 0) {
         size_t to_read = static_cast<size_t>(std::min<uint64_t>(buf.size(), remaining));
         stream.read(reinterpret_cast<char*>(buf.data()), to_read);
@@ -1347,7 +1358,16 @@ bool UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
         if (!send_file_part_chunk(buf.data(), to_read, chunk_index, large_partition))
             return false;
         remaining -= to_read;
+        sent += to_read;
         chunk_index++;
+
+        if (size > 0) {
+            int pct = static_cast<int>((sent * 100) / size);
+            if (pct != last_pct) {
+                log_info("Flashing: " + std::to_string(pct) + "%");
+                last_pct = pct;
+            }
+        }
     }
 
     return true;

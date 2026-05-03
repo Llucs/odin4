@@ -1,5 +1,5 @@
-#include "firmware_package.h"
-#include "logger.h"
+#include "firmware/firmware_package.h"
+#include "core/logger.h"
 
 #include <iostream>
 #include <vector>

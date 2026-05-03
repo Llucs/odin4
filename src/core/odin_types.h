@@ -76,16 +76,16 @@ struct PitEntry {
 #pragma pack(pop)
 
 struct PitTable {
-    uint32_t entry_count;
-    uint32_t header_size;
-    uint32_t unknown1;
-    uint32_t unknown2;
-    uint16_t unknown3;
-    uint16_t unknown4;
-    uint16_t unknown5;
-    uint16_t unknown6;
-    uint16_t unknown7;
-    uint16_t unknown8;
+    uint32_t entry_count = 0;
+    uint32_t header_size = 0;
+    uint32_t unknown1 = 0;
+    uint32_t unknown2 = 0;
+    uint16_t unknown3 = 0;
+    uint16_t unknown4 = 0;
+    uint16_t unknown5 = 0;
+    uint16_t unknown6 = 0;
+    uint16_t unknown7 = 0;
+    uint16_t unknown8 = 0;
     std::vector<PitEntry> entries;
 };
 
