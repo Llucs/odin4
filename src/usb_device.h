@@ -67,7 +67,7 @@ class UsbDevice {
     bool odin_request_sequence_flash(uint32_t aligned_size);
     bool odin_send_file_part_and_ack(const unsigned char* data, size_t size, uint32_t expected_index);
     bool odin_end_sequence_flash(const PitEntry& pit_entry, uint32_t real_size, uint32_t is_last);
-    bool odin_send_pit(const std::vector<unsigned char>& pit);
+
     bool odin_dump_pit(std::vector<unsigned char>& pit_out);
     bool odin_command(uint32_t cmd, uint32_t subcmd, const void* payload, size_t payload_size,
                       std::vector<unsigned char>& rsp, int timeout_ms);
@@ -107,6 +107,7 @@ class UsbDevice {
     bool send_file_part_header(uint64_t total_size);
     bool end_file_transfer(uint32_t partition_id);
     bool send_control(uint32_t control_type);
+    bool notify_total_bytes(uint64_t total);
 
     // Return the device type string obtained via request_device_type().
     // The returned reference remains valid for the lifetime of the UsbDevice instance.

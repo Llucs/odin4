@@ -19,7 +19,7 @@
 #include "usb_device.h"
 #include "firmware_package.h"
 
-#define ODIN4_VERSION "5.0.5-cf3572e"
+#define ODIN4_VERSION "5.1.0"
 
 static void print_usage() {
     std::cout << "Usage: odin4 [options]" << std::endl;
@@ -167,7 +167,7 @@ static bool verify_firmware_compatibility(const OdinConfig& cfg, const std::stri
         }
         // If device type is short (e.g. "G991B"), it's likely a model number.
         // If it's very short, we might want to be less strict.
-        return f.find(dt) != std::string::npos || dt.find(f) != std::string::npos;
+        return f.find(dt) != std::string::npos;
     };
 
     for (const std::string& p : {cfg.bootloader, cfg.ap, cfg.cp, cfg.csc, cfg.ums}) {
@@ -241,6 +241,23 @@ static ExitCode run_for_device(const OdinConfig& cfg) {
     if (has_any_firmware_files(cfg)) {
         const std::vector<std::pair<std::string, std::string>> archives = {
             {"BL", cfg.bootloader}, {"AP", cfg.ap}, {"CP", cfg.cp}, {"CSC", cfg.csc}, {"UMS", cfg.ums}};
+
+        if (usb.is_odin_legacy()) {
+            uint64_t total_bytes = 0;
+            for (const auto& item : archives) {
+                if (item.second.empty())
+                    continue;
+                std::error_code ec;
+                auto sz = std::filesystem::file_size(item.second, ec);
+                if (!ec)
+                    total_bytes += sz;
+            }
+            if (total_bytes > 0 && !usb.notify_total_bytes(total_bytes)) {
+                log_error("Failed to send total bytes to device.");
+                usb.end_session();
+                return ExitCode::Protocol;
+            }
+        }
 
         for (const auto& item : archives) {
             if (item.second.empty())
@@ -437,6 +454,7 @@ static ExitCode process_arguments_and_run(int argc, char** argv) {
     }
 
     apply_log_flags();
+    set_log_file("odin4.log");
 
     if (!has_any_firmware_files(cfg) && !cfg.reboot && !cfg.redownload) {
         print_usage();
@@ -446,6 +464,13 @@ static ExitCode process_arguments_and_run(int argc, char** argv) {
     if (cfg.dry_run && !has_any_firmware_files(cfg)) {
         log_error("--check-only requires at least one firmware archive (-b/-a/-c/-s/-u)");
         return ExitCode::Usage;
+    }
+
+    for (const auto& path : {cfg.bootloader, cfg.ap, cfg.cp, cfg.csc, cfg.ums}) {
+        if (!path.empty() && !std::filesystem::exists(path)) {
+            log_error("Firmware file not found: " + path);
+            return ExitCode::Firmware;
+        }
     }
 
     const UsbSelectionCriteria criteria = criteria_from_config(cfg);
