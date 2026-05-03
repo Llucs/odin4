@@ -456,13 +456,13 @@ static ExitCode process_arguments_and_run(int argc, char** argv) {
     apply_log_flags();
     set_log_file("odin4.log");
 
-    if (!has_any_firmware_files(cfg) && !cfg.reboot && !cfg.redownload) {
-        print_usage();
+    if (cfg.dry_run && !has_any_firmware_files(cfg)) {
+        log_error("--check-only requires at least one firmware archive (-b/-a/-c/-s/-u)");
         return ExitCode::Usage;
     }
 
-    if (cfg.dry_run && !has_any_firmware_files(cfg)) {
-        log_error("--check-only requires at least one firmware archive (-b/-a/-c/-s/-u)");
+    if (!has_any_firmware_files(cfg) && !cfg.reboot && !cfg.redownload) {
+        print_usage();
         return ExitCode::Usage;
     }
 
