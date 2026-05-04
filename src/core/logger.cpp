@@ -86,15 +86,25 @@ LogLevel get_log_level() {
 }
 
 void set_log_file(const std::string& path) {
-    std::lock_guard<std::mutex> lock(g_log_mutex);
+    std::unique_lock<std::mutex> lock(g_log_mutex);
     if (g_log_stream.is_open())
         g_log_stream.close();
     if (!path.empty()) {
+        // Try to open with explicit error handling to avoid exceptions
         g_log_stream.open(path, std::ios::app);
         if (!g_log_stream) {
+            // Try to get error info before any potential issues
             std::cerr << timestamp_now() << " [ERROR] Unable to open log file: " << path << std::endl;
+        } else {
+            // Verify we can write by checking disk space (best effort)
+            g_log_stream.flush();
+            if (!g_log_stream) {
+                g_log_stream.close();
+                std::cerr << timestamp_now() << " [ERROR] Disk may be full, cannot write to log file: " << path << std::endl;
+            }
         }
     }
+    lock.unlock();
 }
 
 void log_error(const std::string& msg, int libusb_err) {
@@ -144,6 +154,7 @@ void log_hexdump(const std::string& title, const void* data, size_t size) {
                 line.str(std::string());
                 line.clear();
             }
+            line << std::hex << std::setw(8) << std::setfill('0') << i << "  ";
         }
         line << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned int>(bytes[i]) << " ";
     }

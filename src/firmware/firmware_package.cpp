@@ -76,9 +76,11 @@ bool parse_octal_u64(const char* field, size_t len, uint64_t& out) {
         if (c < '0' || c > '7')
             return false;
         const uint64_t prev = out;
-        out = (out << 3) + static_cast<uint64_t>(c - '0');
-        if ((out >> 3) != prev)
+        // Check for overflow before shifting: ensure (out << 3) won't overflow
+        if (prev > (UINT64_MAX >> 3)) {
             return false;
+        }
+        out = (out << 3) + static_cast<uint64_t>(c - '0');
         any = true;
     }
 
@@ -252,23 +254,18 @@ bool tar_header_checksum_valid(const char* header) {
     if (!parse_octal_u64(header + 148, 8, expected))
         return false;
 
-    uint64_t sum_unsigned = 0;
-    int64_t sum_signed = 0;
+    // Use unsigned arithmetic to avoid signed overflow
+    uint64_t sum = 0;
     for (int i = 0; i < 512; ++i) {
         unsigned char u = 0;
         if (i >= 148 && i < 156)
             u = static_cast<unsigned char>(' ');
         else
             u = static_cast<unsigned char>(header[i]);
-        sum_unsigned += static_cast<uint64_t>(u);
-        sum_signed += static_cast<int64_t>(static_cast<int8_t>(u));
+        sum += static_cast<uint64_t>(u);
     }
 
-    if (expected == sum_unsigned)
-        return true;
-    if (sum_signed >= 0 && expected == static_cast<uint64_t>(sum_signed))
-        return true;
-    return false;
+    return expected == sum;
 }
 
 std::string sanitize_tar_name(const std::string& s) {

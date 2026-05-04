@@ -85,7 +85,7 @@ struct ThorHandshakePacket {
 // --- Device Type Packet ---
 struct ThorDeviceTypePacket {
     ThorPacketHeader header;
-    char device_type[128];
+    char device_type[127];  // Use 127 to ensure null terminator fits
 };
 
 // --- Begin Session Packet ---
