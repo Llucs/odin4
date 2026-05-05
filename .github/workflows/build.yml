@@ -73,9 +73,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SRC_FILE="src/main.cpp"
-
-          VERSION="$(grep -E '^[[:space:]]*#define[[:space:]]+ODIN4_VERSION[[:space:]]+"' "$SRC_FILE" \
+          SRC_FILE="include/odin4/odin4.h"
+          # Note: Version is now in odin4.cpp but we can also keep it in a central place.
+          # For now, let's extract it from src/odin4.cpp where it's defined.
+          VERSION="$(grep -E '^[[:space:]]*#define[[:space:]]+ODIN4_VERSION[[:space:]]+"' "src/odin4.cpp" \
             | sed -E 's/.*ODIN4_VERSION[[:space:]]+"([^"]+)".*/\1/' \
             | head -n 1)"
 
@@ -92,6 +93,7 @@ jobs:
           echo "ODIN4_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "ODIN4_SUFFIX=$SUFFIX" >> "$GITHUB_ENV"
           echo "ODIN4_OUTNAME=odin4_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
+          echo "LIB_OUTNAME=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}.so" >> "$GITHUB_ENV"
 
       - name: Clean build dir
         shell: bash
@@ -118,10 +120,16 @@ jobs:
         run: |
           set -euo pipefail
           BIN="build/odin4"
+          LIB="build/libodin4.so"
           if [ ! -f "$BIN" ]; then
             echo "ERROR: build/odin4 not found." >&2
             exit 1
           fi
+          if [ ! -f "$LIB" ]; then
+            echo "ERROR: build/libodin4.so not found." >&2
+            exit 1
+          fi
+          # The CLI now depends on libodin4.so, but we want to ensure it doesn't depend on libcrypto++.so directly
           if ldd "$BIN" | grep -qiE 'libcrypto\+\+\.so'; then
             echo "ERROR: Binary still depends on libcrypto++.so." >&2
             exit 1
@@ -133,11 +141,13 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           cp build/odin4 "dist/${ODIN4_OUTNAME}"
+          cp build/libodin4.so "dist/${LIB_OUTNAME}"
           strip "dist/${ODIN4_OUTNAME}" || true
+          strip "dist/${LIB_OUTNAME}" || true
           ZIP_NAME="odin4-linux-${{ matrix.arch }}-${ODIN4_VERSION}${ODIN4_SUFFIX}.zip"
           (
             cd dist
-            zip "../${ZIP_NAME}" "${ODIN4_OUTNAME}"
+            zip "../${ZIP_NAME}" "${ODIN4_OUTNAME}" "${LIB_OUTNAME}"
           )
           echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
 
