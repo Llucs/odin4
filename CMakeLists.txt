@@ -70,46 +70,60 @@ add_library(lz4_lib STATIC
 target_include_directories(lz4_lib PUBLIC lib/lz4)
 
 # =========================
-# Shared Library (C++)
+# Core Library Sources
 # =========================
-add_library(odin4_lib SHARED
+set(ODIN4_CORE_SOURCES
     src/odin4.cpp
     src/core/logger.cpp
     src/usb/usb_device.cpp
     src/firmware/firmware_package.cpp
 )
-set_target_properties(odin4_lib PROPERTIES 
-    OUTPUT_NAME "odin4"
-    VERSION "5.1.0"
-    SOVERSION "5"
-)
 
-target_include_directories(odin4_lib PUBLIC 
+# =========================
+# Static Library (Internal for CLI)
+# =========================
+add_library(odin4_static STATIC ${ODIN4_CORE_SOURCES})
+target_include_directories(odin4_static PUBLIC 
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
 )
-
-target_include_directories(odin4_lib PRIVATE
+target_include_directories(odin4_static PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${LIBUSB_INCLUDE_DIRS}
 )
 
-if (CRYPTOPP_USE_STATIC)
-    target_include_directories(odin4_lib PRIVATE ${CRYPTOPP_INCLUDE_DIR})
-else()
-    target_include_directories(odin4_lib PRIVATE ${CRYPTOPP_INCLUDE_DIRS})
-endif()
-
-target_link_libraries(odin4_lib PRIVATE
-    ${LIBUSB_LIBRARIES}
-    lz4_lib
+# =========================
+# Shared Library (External use)
+# =========================
+add_library(odin4_shared SHARED ${ODIN4_CORE_SOURCES})
+set_target_properties(odin4_shared PROPERTIES 
+    OUTPUT_NAME "odin4"
+    VERSION "5.1.0"
+    SOVERSION "5"
+)
+target_include_directories(odin4_shared PUBLIC 
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+target_include_directories(odin4_shared PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${LIBUSB_INCLUDE_DIRS}
 )
 
-if (CRYPTOPP_USE_STATIC)
-    target_link_libraries(odin4_lib PRIVATE ${CRYPTOPP_STATIC_LIB})
-else()
-    target_link_libraries(odin4_lib PRIVATE ${CRYPTOPP_LIBRARIES})
-endif()
+# =========================
+# Common Configuration for Libraries
+# =========================
+foreach(target odin4_static odin4_shared)
+    if (CRYPTOPP_USE_STATIC)
+        target_include_directories(${target} PRIVATE ${CRYPTOPP_INCLUDE_DIR})
+        target_link_libraries(${target} PRIVATE ${CRYPTOPP_STATIC_LIB})
+    else()
+        target_include_directories(${target} PRIVATE ${CRYPTOPP_INCLUDE_DIRS})
+        target_link_libraries(${target} PRIVATE ${CRYPTOPP_LIBRARIES})
+    endif()
+    
+    target_link_libraries(${target} PRIVATE ${LIBUSB_LIBRARIES} lz4_lib)
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-cast-function-type)
+endforeach()
 
 # =========================
 # Main executable (C++)
@@ -117,24 +131,13 @@ endif()
 add_executable(odin4 src/main.cpp)
 set_target_properties(odin4 PROPERTIES OUTPUT_NAME "odin4")
 
-# =========================
-# Compile options
-# =========================
-target_compile_options(odin4_lib PRIVATE -Wall -Wextra -Wno-cast-function-type)
-target_compile_options(odin4 PRIVATE -Wall -Wextra)
+target_include_directories(odin4 PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
-# =========================
-# Includes
-# =========================
-target_include_directories(odin4 PRIVATE
-    ${CMAKE_SOURCE_DIR}/include
-)
-
-# =========================
-# Linking
-# =========================
+# Link CLI against STATIC library to keep it self-contained
 target_link_libraries(odin4 PRIVATE
-    odin4_lib
+    odin4_static
     -static-libgcc
     -static-libstdc++
 )
+
+target_compile_options(odin4 PRIVATE -Wall -Wextra)
