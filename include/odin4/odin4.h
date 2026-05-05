@@ -12,15 +12,7 @@ extern "C" {
 /**
  * @brief Exit codes for Odin4 operations.
  */
-enum class OdinExitCode : int {
-    Success = 0,
-    Usage = 1,
-    Usb = 2,
-    Protocol = 3,
-    Pit = 4,
-    Firmware = 5,
-    Unknown = 99
-};
+enum class OdinExitCode : int { Success = 0, Usage = 1, Usb = 2, Protocol = 3, Pit = 4, Firmware = 5, Unknown = 99 };
 
 /**
  * @brief Configuration for Odin4 operations.

@@ -41,7 +41,7 @@ void odin4_init(const OdinConfig& cfg) {
         set_log_level(LogLevel::Error);
     else
         set_log_level(LogLevel::Info);
-    
+
     set_log_file("odin4.log");
 }
 
