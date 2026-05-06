@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="LICENSE">
-    <img src="https://img.shields.io/github/license/Llucs/odin4?style=for-the-badge">
+    <img src="https://img.shields.io/github/license/Llucs/odin4?style=for-the-badge&cacheSeconds=0">
   </a>
   <a href="https://github.com/Llucs/odin4/actions/workflows/build.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/build.yml?style=for-the-badge">
