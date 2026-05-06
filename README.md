@@ -10,20 +10,21 @@
 
 <p align="center">
   <a href="LICENSE">
-    <img src="https://img.shields.io/github/license/Llucs/odin4?style=for-the-badge&cacheSeconds=0">
+    <img src="https://img.shields.io/github/license/Llucs/odin4?style=for-the-badge&logo=opensourceinitiative&logoColor=white&cacheSeconds=0">
   </a>
   <a href="https://github.com/Llucs/odin4/actions/workflows/build.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/build.yml?style=for-the-badge">
+    <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/build.yml?style=for-the-badge&logo=githubactions&logoColor=white">
   </a>
   <a href="https://github.com/Llucs/odin4/actions/workflows/codeql.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/codeql.yml?style=for-the-badge">
+    <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/codeql.yml?style=for-the-badge&logo=github&logoColor=white">
   </a>
-  <img src="https://img.shields.io/badge/platform-linux-blue?style=for-the-badge">
-  <img src="https://img.shields.io/badge/language-C%2FC%2B%2B-blue?style=for-the-badge">
-  <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Llucs/odin4/main/version.json&style=for-the-badge">
-  <img src="https://img.shields.io/github/stars/Llucs/odin4?style=for-the-badge">
-  <img src="https://img.shields.io/github/downloads/Llucs/odin4/total?style=for-the-badge&label=downloads">
+  <img src="https://img.shields.io/badge/platform-linux-blue?style=for-the-badge&logo=linux&logoColor=white">
+  <img src="https://img.shields.io/badge/language-C%2FC%2B%2B-blue?style=for-the-badge&logo=cplusplus&logoColor=white">
+  <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Llucs/odin4/main/version.json&style=for-the-badge&logo=git&logoColor=white">
+  <img src="https://img.shields.io/github/stars/Llucs/odin4?style=for-the-badge&logo=github&logoColor=white&color=E3B341">
+  <img src="https://img.shields.io/github/downloads/Llucs/odin4/total?style=for-the-badge&label=downloads&logo=github&logoColor=white&color=2ea44f">
 </p>
+
 
 ---
 
