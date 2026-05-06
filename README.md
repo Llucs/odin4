@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/language-C%2FC%2B%2B-blue?style=for-the-badge&logo=cplusplus&logoColor=white">
   <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Llucs/odin4/main/version.json&style=for-the-badge&logo=git&logoColor=white">
   <img src="https://img.shields.io/github/stars/Llucs/odin4?style=for-the-badge&logo=github&logoColor=white&color=E3B341">
-  <img src="https://img.shields.io/github/downloads/Llucs/odin4/total?style=for-the-badge&logo=github&logoColor=white&color=2ea44f">
+  <img src="https://img.shields.io/github/downloads/Llucs/odin4/total?style=for-the-badge&label=downloads">  
 </p>
 
 
