@@ -30,6 +30,8 @@
   </a>
 </p>
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Llucs/odin4/badge)](https://scorecard.dev/viewer/?uri=github.com/Llucs/odin4)
+
 ---
 
 ## Table of Contents
