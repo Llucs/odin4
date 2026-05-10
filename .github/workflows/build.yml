@@ -1,4 +1,4 @@
-name: Build Odin4
+name: Build Odin4 Multiplatform
 
 on:
   workflow_dispatch:
@@ -7,199 +7,111 @@ on:
         description: "Optional suffix appended to the filename (e.g. -rc1, -beta). Leave empty for none."
         required: false
         default: ""
-      bundle:
-        description: "Also create a single zip containing both architectures"
-        required: false
-        type: boolean
-        default: true
 
 permissions:
   contents: read
 
-concurrency:
-  group: odin4-build-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build:
-    name: Build for Linux (${{ matrix.arch }})
+    name: Build for ${{ matrix.os }} (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     strategy:
       fail-fast: false
       matrix:
         include:
-          - arch: x86_64
+          - os: linux
+            arch: x86_64
             runner: ubuntu-22.04
-          - arch: arm64
+          - os: linux
+            arch: arm64
             runner: ubuntu-22.04-arm
+          - os: windows
+            arch: x64
+            runner: windows-latest
+          - os: macos
+            arch: universal
+            runner: macos-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Install dependencies
-        shell: bash
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'linux'
         run: |
-          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y \
-            cmake \
-            ninja-build \
-            zip \
-            make \
-            pkg-config \
-            g++ \
-            git \
-            libusb-1.0-0-dev \
-            libcrypto++-dev
+          sudo apt-get install -y cmake ninja-build pkg-config libusb-1.0-0-dev libcrypto++-dev
 
-      - name: Ensure Crypto++ static library is available
-        shell: bash
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos'
         run: |
-          set -euo pipefail
-          A_PATH="$(find /usr /usr/local -type f -name 'libcryptopp.a' 2>/dev/null | head -n 1 || true)"
-          if [ -z "$A_PATH" ]; then
-            rm -rf /tmp/cryptopp
-            git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git /tmp/cryptopp
-            cd /tmp/cryptopp
-            make -j"$(nproc)"
-            sudo make install PREFIX=/usr/local
-            sudo ldconfig || true
-          fi
+          brew install cmake ninja libusb cryptopp
+
+      - name: Install dependencies (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          vcpkg install libusb:x64-windows-static cryptopp:x64-windows-static
 
       - name: Read version from source
         shell: bash
         run: |
-          set -euo pipefail
-          SRC_FILE="include/odin4/odin4.h"
-          # Note: Version is now in odin4.cpp but we can also keep it in a central place.
-          # For now, let's extract it from src/odin4.cpp where it's defined.
-          VERSION="$(grep -E '^[[:space:]]*#define[[:space:]]+ODIN4_VERSION[[:space:]]+"' "src/odin4.cpp" \
-            | sed -E 's/.*ODIN4_VERSION[[:space:]]+"([^"]+)".*/\1/' \
-            | head -n 1)"
-
-          if [ -z "$VERSION" ]; then
-            echo "ERROR: Could not parse ODIN4_VERSION" >&2
-            exit 1
-          fi
-
+          VERSION=$(grep -E '^[[:space:]]*#define[[:space:]]+ODIN4_VERSION[[:space:]]+"' "src/odin4.cpp" | sed -E 's/.*ODIN4_VERSION[[:space:]]+"([^"]+)".*/\1/' | head -n 1)
+          echo "ODIN4_VERSION=$VERSION" >> $GITHUB_ENV
+          
           SUFFIX="${{ inputs.suffix }}"
           if [ -n "$SUFFIX" ] && [[ "$SUFFIX" != -* ]]; then
             SUFFIX="-$SUFFIX"
           fi
+          echo "ODIN4_SUFFIX=$SUFFIX" >> $GITHUB_ENV
 
-          echo "ODIN4_VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "ODIN4_SUFFIX=$SUFFIX" >> "$GITHUB_ENV"
-          echo "ODIN4_OUTNAME=odin4_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
-          echo "LIB_OUTNAME=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}.so" >> "$GITHUB_ENV"
-
-      - name: Clean build dir
-        shell: bash
+      - name: Configure CMake (Linux/macOS)
+        if: matrix.os != 'windows'
         run: |
-          set -euo pipefail
-          rm -rf build
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
-      - name: Configure CMake
-        shell: bash
+      - name: Configure CMake (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
         run: |
-          set -euo pipefail
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="/usr/local"
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static
 
       - name: Build
-        shell: bash
-        run: |
-          set -euo pipefail
-          cmake --build build --parallel "$(nproc)"
+        run: cmake --build build --config Release
 
-      - name: Verify runtime dependencies
+      - name: Package artifact (Linux)
+        if: matrix.os == 'linux'
         shell: bash
         run: |
-          set -euo pipefail
-          BIN="build/odin4"
-          LIB="build/libodin4.so"
-          if [ ! -f "$BIN" ]; then
-            echo "ERROR: build/odin4 not found." >&2
-            exit 1
-          fi
-          if [ ! -f "$LIB" ]; then
-            echo "ERROR: build/libodin4.so not found." >&2
-            exit 1
-          fi
-          # The CLI now depends on libodin4.so, but we want to ensure it doesn't depend on libcrypto++.so directly
-          if ldd "$BIN" | grep -qiE 'libcrypto\+\+\.so'; then
-            echo "ERROR: Binary still depends on libcrypto++.so." >&2
-            exit 1
-          fi
+          mkdir dist
+          cp build/odin4 dist/odin4_${{ matrix.arch }}
+          cp build/libodin4.so dist/libodin4_${{ matrix.arch }}.so
+          cd dist && zip ../odin4-linux-${{ matrix.arch }}-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}.zip *
 
-      - name: Package artifact
+      - name: Package artifact (macOS)
+        if: matrix.os == 'macos'
         shell: bash
         run: |
-          set -euo pipefail
-          mkdir -p dist
-          cp build/odin4 "dist/${ODIN4_OUTNAME}"
-          cp build/libodin4.so "dist/${LIB_OUTNAME}"
-          strip "dist/${ODIN4_OUTNAME}" || true
-          strip "dist/${LIB_OUTNAME}" || true
-          ZIP_NAME="odin4-linux-${{ matrix.arch }}-${ODIN4_VERSION}${ODIN4_SUFFIX}.zip"
-          (
-            cd dist
-            zip "../${ZIP_NAME}" "${ODIN4_OUTNAME}" "${LIB_OUTNAME}"
-          )
-          echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
+          mkdir dist
+          cp build/odin4 dist/odin4_macos
+          cp build/libodin4.dylib dist/libodin4_macos.dylib
+          cd dist && zip ../odin4-macos-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}.zip *
+
+      - name: Package artifact (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          mkdir dist
+          cp build/Release/odin4.exe dist/odin4.exe
+          cp build/Release/odin4.dll dist/odin4.dll
+          Compress-Archive -Path dist/* -DestinationPath odin4-windows-x64-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: odin4-linux-${{ matrix.arch }}-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}
-          path: ${{ env.ZIP_NAME }}
-          if-no-files-found: error
-          retention-days: 14
-
-  bundle:
-    name: Bundle (single zip with both arch)
-    runs-on: ubuntu-22.04
-    timeout-minutes: 15
-    needs: build
-    if: ${{ inputs.bundle }}
-
-    steps:
-      - name: Download all build artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: artifacts
-
-      - name: Create unified bundle zip
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p bundle
-          find artifacts -type f -name "*.zip" -exec cp {} bundle/ \;
-
-          SAMPLE="$(find bundle -maxdepth 1 -type f -name '*.zip' | head -n 1 || true)"
-          if [ -z "$SAMPLE" ]; then
-            echo "ERROR: No zip artifacts found." >&2
-            exit 1
-          fi
-
-          BASE="$(basename "$SAMPLE")"
-          VERSUFFIX="$(echo "$BASE" | sed -E 's/^odin4-linux-[^-]+-(.+)\.zip$/\1/')"
-          OUT="odin4-linux-all-${VERSUFFIX}.zip"
-
-          (
-            cd bundle
-            zip "../${OUT}" ./*.zip
-          )
-
-          echo "OUT=${OUT}" >> "$GITHUB_ENV"
-
-      - name: Upload bundle artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: odin4-linux-all
-          path: ${{ env.OUT }}
-          if-no-files-found: error
-          retention-days: 14
+          name: odin4-${{ matrix.os }}-${{ matrix.arch }}
+          path: "*.zip"

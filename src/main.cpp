@@ -6,14 +6,14 @@
 
 static void print_usage() {
     std::cout << "Usage: odin4 [options]" << std::endl;
-    std::cout << "Samsung firmware flashing tool for Linux. Version: " << odin4_get_version() << std::endl;
+    std::cout << "Samsung firmware flashing tool. Version: " << odin4_get_version() << std::endl;
     std::cout << std::endl;
     std::cout << "Options:" << std::endl;
     std::cout << "  -h                  Show this help message" << std::endl;
     std::cout << "  -v                  Show version" << std::endl;
     std::cout << "  -w                  Show license" << std::endl;
     std::cout << "  -l                  List detected Download Mode devices" << std::endl;
-    std::cout << "  -d <path>            Select a specific USB device path (e.g. /dev/bus/usb/001/002)" << std::endl;
+    std::cout << "  -d <path>            Select a specific USB device path (e.g. 1:2)" << std::endl;
     std::cout << "  -b <file>            Bootloader archive (.tar or .tar.md5)" << std::endl;
     std::cout << "  -a <file>            AP archive (.tar or .tar.md5)" << std::endl;
     std::cout << "  -c <file>            CP archive (.tar or .tar.md5)" << std::endl;
@@ -34,9 +34,10 @@ static void print_usage() {
     std::cout << "  --pid <hex>          Override USB product ID (hex)" << std::endl;
     std::cout << "  --usb-interface <n>  Force a specific USB interface number" << std::endl;
     std::cout << std::endl;
-    std::cout << "Linux permissions:" << std::endl;
-    std::cout << "  If you get LIBUSB_ERROR_ACCESS, install the provided udev rule:" << std::endl;
-    std::cout << "    udev/60-odin4.rules -> /etc/udev/rules.d/60-odin4.rules" << std::endl;
+    std::cout << "Permissions:" << std::endl;
+    std::cout << "  - Linux: If you get LIBUSB_ERROR_ACCESS, install the udev rule in the 'udev' folder." << std::endl;
+    std::cout << "  - Windows: Use Zadig to install the WinUSB driver for the device." << std::endl;
+    std::cout << "  - macOS: No additional drivers are usually required." << std::endl;
 }
 
 static void print_version() {

@@ -14,48 +14,78 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # =========================
 # Build flags
 # =========================
-set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+if(MSVC)
+    set(CMAKE_C_FLAGS_RELEASE "/O2 /DNDEBUG")
+    set(CMAKE_CXX_FLAGS_RELEASE "/O2 /DNDEBUG")
+    add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+else()
+    set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+endif()
 
 # =========================
 # Dependencies
 # =========================
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 
-# Prefer Crypto++ static to avoid runtime dependency on libcrypto++.so
-find_path(CRYPTOPP_INCLUDE_DIR cryptlib.h
-    PATHS
-        /usr/local/include
-        /usr/include
-    PATH_SUFFIXES
-        cryptopp
-        crypto++
-)
-
-# Force static lookup for Crypto++ only
-set(_OLD_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
-set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
-
-find_library(CRYPTOPP_STATIC_LIB
-    NAMES cryptopp libcryptopp
-    PATHS
-        /usr/local/lib
-        /usr/local/lib64
-        /usr/lib
-        /usr/lib64
-        /usr/lib/x86_64-linux-gnu
-        /usr/lib/aarch64-linux-gnu
-)
-
-set(CMAKE_FIND_LIBRARY_SUFFIXES ${_OLD_CMAKE_FIND_LIBRARY_SUFFIXES})
-
-if (CRYPTOPP_INCLUDE_DIR AND CRYPTOPP_STATIC_LIB AND CRYPTOPP_STATIC_LIB MATCHES "\\.a$")
-    set(CRYPTOPP_USE_STATIC ON)
+# LibUSB
+if(WIN32)
+    # On Windows, we often expect libusb to be provided via CMAKE_PREFIX_PATH or found in system
+    find_path(LIBUSB_INCLUDE_DIR libusb.h PATH_SUFFIXES libusb-1.0)
+    find_library(LIBUSB_LIBRARY NAMES usb-1.0 libusb-1.0)
+    if(LIBUSB_INCLUDE_DIR AND LIBUSB_LIBRARY)
+        set(LIBUSB_FOUND TRUE)
+        set(LIBUSB_INCLUDE_DIRS ${LIBUSB_INCLUDE_DIR})
+        set(LIBUSB_LIBRARIES ${LIBUSB_LIBRARY})
+    endif()
 else()
-    set(CRYPTOPP_USE_STATIC OFF)
     find_package(PkgConfig REQUIRED)
-    pkg_check_modules(CRYPTOPP REQUIRED libcrypto++)
+    pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+endif()
+
+if(NOT LIBUSB_FOUND)
+    message(FATAL_ERROR "libusb-1.0 not found")
+endif()
+
+# Crypto++
+if(WIN32)
+    find_path(CRYPTOPP_INCLUDE_DIR cryptlib.h PATH_SUFFIXES cryptopp crypto++)
+    find_library(CRYPTOPP_LIBRARY NAMES cryptopp libcryptopp)
+    if(CRYPTOPP_INCLUDE_DIR AND CRYPTOPP_LIBRARY)
+        set(CRYPTOPP_FOUND TRUE)
+        set(CRYPTOPP_INCLUDE_DIRS ${CRYPTOPP_INCLUDE_DIR})
+        set(CRYPTOPP_LIBRARIES ${CRYPTOPP_LIBRARY})
+        set(CRYPTOPP_USE_STATIC ON)
+    endif()
+else()
+    # Prefer Crypto++ static on Linux/macOS
+    find_path(CRYPTOPP_INCLUDE_DIR cryptlib.h
+        PATHS /usr/local/include /usr/include /opt/homebrew/include
+        PATH_SUFFIXES cryptopp crypto++
+    )
+
+    set(_OLD_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
+    if(APPLE)
+        set(CMAKE_FIND_LIBRARY_SUFFIXES .a .dylib)
+    else()
+        set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+    endif()
+
+    find_library(CRYPTOPP_STATIC_LIB
+        NAMES cryptopp libcryptopp
+        PATHS /usr/local/lib /usr/lib /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu /opt/homebrew/lib
+    )
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ${_OLD_CMAKE_FIND_LIBRARY_SUFFIXES})
+
+    if (CRYPTOPP_INCLUDE_DIR AND CRYPTOPP_STATIC_LIB)
+        set(CRYPTOPP_FOUND TRUE)
+        set(CRYPTOPP_USE_STATIC ON)
+        set(CRYPTOPP_INCLUDE_DIRS ${CRYPTOPP_INCLUDE_DIR})
+        set(CRYPTOPP_LIBRARIES ${CRYPTOPP_STATIC_LIB})
+    else()
+        pkg_check_modules(CRYPTOPP REQUIRED libcrypto++)
+        set(CRYPTOPP_FOUND TRUE)
+        set(CRYPTOPP_USE_STATIC OFF)
+    endif()
 endif()
 
 # =========================
@@ -89,6 +119,7 @@ target_include_directories(odin4_static PUBLIC
 target_include_directories(odin4_static PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${LIBUSB_INCLUDE_DIRS}
+    ${CRYPTOPP_INCLUDE_DIRS}
 )
 
 # =========================
@@ -97,7 +128,7 @@ target_include_directories(odin4_static PRIVATE
 add_library(odin4_shared SHARED ${ODIN4_CORE_SOURCES})
 set_target_properties(odin4_shared PROPERTIES 
     OUTPUT_NAME "odin4"
-    VERSION "5.1.0"
+    VERSION "5.2.0"
     SOVERSION "5"
 )
 target_include_directories(odin4_shared PUBLIC 
@@ -107,22 +138,17 @@ target_include_directories(odin4_shared PUBLIC
 target_include_directories(odin4_shared PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${LIBUSB_INCLUDE_DIRS}
+    ${CRYPTOPP_INCLUDE_DIRS}
 )
 
 # =========================
 # Common Configuration for Libraries
 # =========================
 foreach(target odin4_static odin4_shared)
-    if (CRYPTOPP_USE_STATIC)
-        target_include_directories(${target} PRIVATE ${CRYPTOPP_INCLUDE_DIR})
-        target_link_libraries(${target} PRIVATE ${CRYPTOPP_STATIC_LIB})
-    else()
-        target_include_directories(${target} PRIVATE ${CRYPTOPP_INCLUDE_DIRS})
-        target_link_libraries(${target} PRIVATE ${CRYPTOPP_LIBRARIES})
+    target_link_libraries(${target} PRIVATE ${CRYPTOPP_LIBRARIES} ${LIBUSB_LIBRARIES} lz4_lib)
+    if(NOT MSVC)
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-cast-function-type)
     endif()
-    
-    target_link_libraries(${target} PRIVATE ${LIBUSB_LIBRARIES} lz4_lib)
-    target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-cast-function-type)
 endforeach()
 
 # =========================
@@ -134,10 +160,12 @@ set_target_properties(odin4 PROPERTIES OUTPUT_NAME "odin4")
 target_include_directories(odin4 PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
 # Link CLI against STATIC library to keep it self-contained
-target_link_libraries(odin4 PRIVATE
-    odin4_static
-    -static-libgcc
-    -static-libstdc++
-)
+target_link_libraries(odin4 PRIVATE odin4_static)
 
-target_compile_options(odin4 PRIVATE -Wall -Wextra)
+if(NOT MSVC)
+    target_compile_options(odin4 PRIVATE -Wall -Wextra)
+    if(NOT APPLE)
+        # Static link stdlibs on Linux for better portability
+        target_link_libraries(odin4 PRIVATE -static-libgcc -static-libstdc++)
+    endif()
+endif()

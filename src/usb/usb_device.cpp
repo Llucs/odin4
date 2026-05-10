@@ -136,8 +136,7 @@ bool UsbDevice::bulk_read_once(void* data, size_t size, int* actual_length, int 
 
 static std::string usb_path_for_device(libusb_device* dev) {
     std::ostringstream oss;
-    oss << "/dev/bus/usb/" << std::setfill('0') << std::setw(3) << static_cast<int>(libusb_get_bus_number(dev)) << "/"
-        << std::setfill('0') << std::setw(3) << static_cast<int>(libusb_get_device_address(dev));
+    oss << static_cast<int>(libusb_get_bus_number(dev)) << ":" << static_cast<int>(libusb_get_device_address(dev));
     return oss.str();
 }
 
