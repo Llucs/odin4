@@ -140,6 +140,27 @@ static std::string usb_path_for_device(libusb_device* dev) {
     return oss.str();
 }
 
+static std::string normalize_usb_path(const std::string& path) {
+    if (path.empty())
+        return "";
+    // If it's a Linux path like /dev/bus/usb/001/002, convert to 1:2
+    if (path.find("/dev/bus/usb/") == 0) {
+        std::string sub = path.substr(13);
+        size_t slash = sub.find('/');
+        if (slash != std::string::npos) {
+            try {
+                int bus = std::stoi(sub.substr(0, slash));
+                int addr = std::stoi(sub.substr(slash + 1));
+                return std::to_string(bus) + ":" + std::to_string(addr);
+            } catch (...) {
+                return path;
+            }
+        }
+    }
+    // Already in bus:address format or something else, return as is
+    return path;
+}
+
 static bool is_known_download_pid(uint16_t pid) {
     for (uint16_t known : SAMSUNG_DOWNLOAD_PIDS) {
         if (pid == known)
@@ -281,7 +302,7 @@ bool UsbDevice::open_device(const std::string& specific_path, const UsbSelection
 
         if (criteria.has_pid && pid != criteria.pid)
             continue;
-        if (!specific_path.empty() && usb_path_for_device(dev) != specific_path)
+        if (!specific_path.empty() && usb_path_for_device(dev) != normalize_usb_path(specific_path))
             continue;
 
         InterfaceCandidate cand = find_best_interface(dev, criteria);

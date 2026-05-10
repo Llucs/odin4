@@ -67,10 +67,16 @@ jobs:
           fi
           echo "ODIN4_SUFFIX=$SUFFIX" >> $GITHUB_ENV
 
-      - name: Configure CMake (Linux/macOS)
-        if: matrix.os != 'windows'
+      - name: Configure CMake (Linux)
+        if: matrix.os == 'linux'
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Configure CMake (macOS Universal)
+        if: matrix.os == 'macos'
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
 
       - name: Configure CMake (Windows)
         if: matrix.os == 'windows'
@@ -92,14 +98,14 @@ jobs:
           cp build/libodin4.so dist/libodin4_${{ matrix.arch }}.so
           cd dist && zip ../odin4-linux-${{ matrix.arch }}-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}.zip *
 
-      - name: Package artifact (macOS)
+      - name: Package artifact (macOS Universal)
         if: matrix.os == 'macos'
         shell: bash
         run: |
           mkdir dist
-          cp build/odin4 dist/odin4_macos
-          cp build/libodin4.dylib dist/libodin4_macos.dylib
-          cd dist && zip ../odin4-macos-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}.zip *
+          cp build/odin4 dist/odin4_macos_universal
+          cp build/libodin4.dylib dist/libodin4_macos_universal.dylib
+          cd dist && zip ../odin4-macos-universal-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}.zip *
 
       - name: Package artifact (Windows)
         if: matrix.os == 'windows'

@@ -10,11 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Multi-platform support (Windows, macOS, Linux).
 - Updated CMake for cross-platform builds.
-- GitHub Actions CI for Windows (x64) and macOS (Universal).
-- Portable USB device identification (bus:address format).
+- GitHub Actions CI for Windows (x64), macOS (Universal), and Linux (x86_64, arm64).
+- Portable USB device identification (bus:address format) with legacy Linux path compatibility.
 
 ### Changed
-- Removed Linux-specific `/dev/bus/usb/` path dependencies.
+- Refactored USB device identification to be platform-agnostic while maintaining support for `/dev/bus/usb/` paths.
 - Updated CLI help text with multi-platform instructions.
 - Incremented version to 5.2.0.
 

@@ -29,7 +29,6 @@ endif()
 
 # LibUSB
 if(WIN32)
-    # On Windows, we often expect libusb to be provided via CMAKE_PREFIX_PATH or found in system
     find_path(LIBUSB_INCLUDE_DIR libusb.h PATH_SUFFIXES libusb-1.0)
     find_library(LIBUSB_LIBRARY NAMES usb-1.0 libusb-1.0)
     if(LIBUSB_INCLUDE_DIR AND LIBUSB_LIBRARY)
@@ -54,37 +53,38 @@ if(WIN32)
         set(CRYPTOPP_FOUND TRUE)
         set(CRYPTOPP_INCLUDE_DIRS ${CRYPTOPP_INCLUDE_DIR})
         set(CRYPTOPP_LIBRARIES ${CRYPTOPP_LIBRARY})
-        set(CRYPTOPP_USE_STATIC ON)
     endif()
 else()
-    # Prefer Crypto++ static on Linux/macOS
     find_path(CRYPTOPP_INCLUDE_DIR cryptlib.h
         PATHS /usr/local/include /usr/include /opt/homebrew/include
         PATH_SUFFIXES cryptopp crypto++
     )
+    set(CRYPTOPP_INCLUDE_DIRS ${CRYPTOPP_INCLUDE_DIR})
 
+    # Find static for the static target
     set(_OLD_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
-    if(APPLE)
-        set(CMAKE_FIND_LIBRARY_SUFFIXES .a .dylib)
-    else()
-        set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
-    endif()
-
+    set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
     find_library(CRYPTOPP_STATIC_LIB
         NAMES cryptopp libcryptopp
         PATHS /usr/local/lib /usr/lib /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu /opt/homebrew/lib
     )
     set(CMAKE_FIND_LIBRARY_SUFFIXES ${_OLD_CMAKE_FIND_LIBRARY_SUFFIXES})
 
-    if (CRYPTOPP_INCLUDE_DIR AND CRYPTOPP_STATIC_LIB)
-        set(CRYPTOPP_FOUND TRUE)
-        set(CRYPTOPP_USE_STATIC ON)
-        set(CRYPTOPP_INCLUDE_DIRS ${CRYPTOPP_INCLUDE_DIR})
-        set(CRYPTOPP_LIBRARIES ${CRYPTOPP_STATIC_LIB})
+    # Find shared for the shared target
+    if(APPLE)
+        set(CMAKE_FIND_LIBRARY_SUFFIXES .dylib)
     else()
+        set(CMAKE_FIND_LIBRARY_SUFFIXES .so)
+    endif()
+    find_library(CRYPTOPP_SHARED_LIB
+        NAMES cryptopp libcryptopp
+        PATHS /usr/local/lib /usr/lib /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu /opt/homebrew/lib
+    )
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ${_OLD_CMAKE_FIND_LIBRARY_SUFFIXES})
+
+    if(NOT CRYPTOPP_STATIC_LIB AND NOT CRYPTOPP_SHARED_LIB)
         pkg_check_modules(CRYPTOPP REQUIRED libcrypto++)
-        set(CRYPTOPP_FOUND TRUE)
-        set(CRYPTOPP_USE_STATIC OFF)
+        set(CRYPTOPP_SHARED_LIB ${CRYPTOPP_LIBRARIES})
     endif()
 endif()
 
@@ -98,6 +98,9 @@ add_library(lz4_lib STATIC
     lib/lz4/xxhash.c
 )
 target_include_directories(lz4_lib PUBLIC lib/lz4)
+if(NOT MSVC)
+    set_target_properties(lz4_lib PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
 
 # =========================
 # Core Library Sources
@@ -121,6 +124,11 @@ target_include_directories(odin4_static PRIVATE
     ${LIBUSB_INCLUDE_DIRS}
     ${CRYPTOPP_INCLUDE_DIRS}
 )
+if(WIN32)
+    target_link_libraries(odin4_static PRIVATE ${CRYPTOPP_LIBRARIES} ${LIBUSB_LIBRARIES} lz4_lib)
+else()
+    target_link_libraries(odin4_static PRIVATE ${CRYPTOPP_STATIC_LIB} ${LIBUSB_LIBRARIES} lz4_lib)
+endif()
 
 # =========================
 # Shared Library (External use)
@@ -140,12 +148,22 @@ target_include_directories(odin4_shared PRIVATE
     ${LIBUSB_INCLUDE_DIRS}
     ${CRYPTOPP_INCLUDE_DIRS}
 )
+if(WIN32)
+    target_link_libraries(odin4_shared PRIVATE ${CRYPTOPP_LIBRARIES} ${LIBUSB_LIBRARIES} lz4_lib)
+else()
+    if(CRYPTOPP_SHARED_LIB)
+        target_link_libraries(odin4_shared PRIVATE ${CRYPTOPP_SHARED_LIB} ${LIBUSB_LIBRARIES} lz4_lib)
+    else()
+        # Fallback to static if shared not found, but warn
+        message(WARNING "Crypto++ shared library not found, falling back to static for shared target")
+        target_link_libraries(odin4_shared PRIVATE ${CRYPTOPP_STATIC_LIB} ${LIBUSB_LIBRARIES} lz4_lib)
+    endif()
+endif()
 
 # =========================
 # Common Configuration for Libraries
 # =========================
 foreach(target odin4_static odin4_shared)
-    target_link_libraries(${target} PRIVATE ${CRYPTOPP_LIBRARIES} ${LIBUSB_LIBRARIES} lz4_lib)
     if(NOT MSVC)
         target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-cast-function-type)
     endif()
