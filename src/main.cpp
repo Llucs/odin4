@@ -221,12 +221,18 @@ int main(int argc, char** argv) {
                 return 1;
             }
             char* val_ptr = strdup(value.c_str());
-            if (arg == "-b") cfg.bootloader = val_ptr;
-            else if (arg == "-a") cfg.ap = val_ptr;
-            else if (arg == "-c") cfg.cp = val_ptr;
-            else if (arg == "-s") cfg.csc = val_ptr;
-            else if (arg == "-u") cfg.ums = val_ptr;
-            else if (arg == "-d") cfg.device_path = val_ptr;
+            if (arg == "-b")
+                cfg.bootloader = val_ptr;
+            else if (arg == "-a")
+                cfg.ap = val_ptr;
+            else if (arg == "-c")
+                cfg.cp = val_ptr;
+            else if (arg == "-s")
+                cfg.csc = val_ptr;
+            else if (arg == "-u")
+                cfg.ums = val_ptr;
+            else if (arg == "-d")
+                cfg.device_path = val_ptr;
             continue;
         }
 

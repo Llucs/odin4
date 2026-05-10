@@ -51,7 +51,8 @@ void odin4_init(const OdinConfig* cfg) {
 char** odin4_list_devices(const OdinConfig* cfg, int* count) {
     std::vector<std::string> devices = UsbDevice::list_download_devices(criteria_from_config(cfg));
     *count = static_cast<int>(devices.size());
-    if (devices.empty()) return nullptr;
+    if (devices.empty())
+        return nullptr;
 
     char** list = static_cast<char**>(malloc(sizeof(char*) * devices.size()));
     for (size_t i = 0; i < devices.size(); ++i) {
@@ -61,7 +62,8 @@ char** odin4_list_devices(const OdinConfig* cfg, int* count) {
 }
 
 void odin4_free_device_list(char** list, int count) {
-    if (!list) return;
+    if (!list)
+        return;
     for (int i = 0; i < count; ++i) {
         free(list[i]);
     }
@@ -69,11 +71,8 @@ void odin4_free_device_list(char** list, int count) {
 }
 
 static bool has_any_firmware_files(const OdinConfig* cfg) {
-    return (cfg->bootloader && strlen(cfg->bootloader) > 0) || 
-           (cfg->ap && strlen(cfg->ap) > 0) || 
-           (cfg->cp && strlen(cfg->cp) > 0) || 
-           (cfg->csc && strlen(cfg->csc) > 0) || 
-           (cfg->ums && strlen(cfg->ums) > 0);
+    return (cfg->bootloader && strlen(cfg->bootloader) > 0) || (cfg->ap && strlen(cfg->ap) > 0) ||
+           (cfg->cp && strlen(cfg->cp) > 0) || (cfg->csc && strlen(cfg->csc) > 0) || (cfg->ums && strlen(cfg->ums) > 0);
 }
 
 static bool verify_firmware_compatibility(const OdinConfig* cfg, const std::string& device_type) {
@@ -83,11 +82,16 @@ static bool verify_firmware_compatibility(const OdinConfig* cfg, const std::stri
     }
 
     std::vector<std::string> files;
-    if (cfg->bootloader) files.push_back(cfg->bootloader);
-    if (cfg->ap) files.push_back(cfg->ap);
-    if (cfg->cp) files.push_back(cfg->cp);
-    if (cfg->csc) files.push_back(cfg->csc);
-    if (cfg->ums) files.push_back(cfg->ums);
+    if (cfg->bootloader)
+        files.push_back(cfg->bootloader);
+    if (cfg->ap)
+        files.push_back(cfg->ap);
+    if (cfg->cp)
+        files.push_back(cfg->cp);
+    if (cfg->csc)
+        files.push_back(cfg->csc);
+    if (cfg->ums)
+        files.push_back(cfg->ums);
 
     std::string dt = device_type;
     std::transform(dt.begin(), dt.end(), dt.begin(), [](unsigned char c) { return std::tolower(c); });
@@ -173,11 +177,16 @@ OdinExitCode odin4_run(const OdinConfig* cfg) {
     }
 
     std::vector<std::pair<std::string, std::string>> archives;
-    if (cfg->bootloader) archives.push_back({"BL", cfg->bootloader});
-    if (cfg->ap) archives.push_back({"AP", cfg->ap});
-    if (cfg->cp) archives.push_back({"CP", cfg->cp});
-    if (cfg->csc) archives.push_back({"CSC", cfg->csc});
-    if (cfg->ums) archives.push_back({"UMS", cfg->ums});
+    if (cfg->bootloader)
+        archives.push_back({"BL", cfg->bootloader});
+    if (cfg->ap)
+        archives.push_back({"AP", cfg->ap});
+    if (cfg->cp)
+        archives.push_back({"CP", cfg->cp});
+    if (cfg->csc)
+        archives.push_back({"CSC", cfg->csc});
+    if (cfg->ums)
+        archives.push_back({"UMS", cfg->ums});
 
     for (const auto& archive : archives) {
         log_info("Processing " + archive.first + " archive: " + archive.second);

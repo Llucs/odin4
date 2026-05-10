@@ -378,8 +378,8 @@ bool UsbDevice::open_device(const std::string& specific_path, const UsbSelection
 bool UsbDevice::send_packet(const void* data, size_t size, bool is_control) {
     if (is_control) {
         int err = libusb_control_transfer(handle, LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE, 0, 0, 0,
-                                          static_cast<unsigned char*>(const_cast<void*>(data)),
-                                          clamp_size_to_int(size), USB_TIMEOUT_CONTROL);
+                                          static_cast<unsigned char*>(const_cast<void*>(data)), clamp_size_to_int(size),
+                                          USB_TIMEOUT_CONTROL);
         return err >= 0;
     }
     return bulk_write_all(data, size, USB_TIMEOUT_BULK);
@@ -389,8 +389,9 @@ bool UsbDevice::receive_packet(void* data, size_t size, int* actual_length, bool
                                int timeout_override_ms) {
     int timeout = timeout_override_ms > 0 ? timeout_override_ms : (is_control ? USB_TIMEOUT_CONTROL : USB_TIMEOUT_BULK);
     if (is_control) {
-        int err = libusb_control_transfer(handle, LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE | LIBUSB_ENDPOINT_IN,
-                                          0, 0, 0, static_cast<unsigned char*>(data), clamp_size_to_int(size), timeout);
+        int err =
+            libusb_control_transfer(handle, LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE | LIBUSB_ENDPOINT_IN,
+                                    0, 0, 0, static_cast<unsigned char*>(data), clamp_size_to_int(size), timeout);
         if (err >= 0) {
             *actual_length = err;
             return true;
@@ -723,7 +724,8 @@ bool UsbDevice::odin_command(uint32_t cmd, uint32_t subcmd, const void* payload,
     return true;
 }
 
-bool UsbDevice::odin_fail_check(const std::vector<unsigned char>& rsp, const std::string& context, bool allow_progress) {
+bool UsbDevice::odin_fail_check(const std::vector<unsigned char>& rsp, const std::string& context,
+                                bool allow_progress) {
     if (rsp.size() < 4) {
         log_error(context + ": Response too short");
         return false;
