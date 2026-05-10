@@ -2,18 +2,19 @@
 #include <string>
 #include <vector>
 #include <filesystem>
+#include <cstring>
 #include "odin4/odin4.h"
 
 static void print_usage() {
     std::cout << "Usage: odin4 [options]" << std::endl;
-    std::cout << "Samsung firmware flashing tool for Linux. Version: " << odin4_get_version() << std::endl;
+    std::cout << "Samsung firmware flashing tool. Version: " << odin4_get_version() << std::endl;
     std::cout << std::endl;
     std::cout << "Options:" << std::endl;
     std::cout << "  -h                  Show this help message" << std::endl;
     std::cout << "  -v                  Show version" << std::endl;
     std::cout << "  -w                  Show license" << std::endl;
     std::cout << "  -l                  List detected Download Mode devices" << std::endl;
-    std::cout << "  -d <path>            Select a specific USB device path (e.g. /dev/bus/usb/001/002)" << std::endl;
+    std::cout << "  -d <path>            Select a specific USB device path (e.g. 1:2)" << std::endl;
     std::cout << "  -b <file>            Bootloader archive (.tar or .tar.md5)" << std::endl;
     std::cout << "  -a <file>            AP archive (.tar or .tar.md5)" << std::endl;
     std::cout << "  -c <file>            CP archive (.tar or .tar.md5)" << std::endl;
@@ -34,9 +35,10 @@ static void print_usage() {
     std::cout << "  --pid <hex>          Override USB product ID (hex)" << std::endl;
     std::cout << "  --usb-interface <n>  Force a specific USB interface number" << std::endl;
     std::cout << std::endl;
-    std::cout << "Linux permissions:" << std::endl;
-    std::cout << "  If you get LIBUSB_ERROR_ACCESS, install the provided udev rule:" << std::endl;
-    std::cout << "    udev/60-odin4.rules -> /etc/udev/rules.d/60-odin4.rules" << std::endl;
+    std::cout << "Permissions:" << std::endl;
+    std::cout << "  - Linux: If you get LIBUSB_ERROR_ACCESS, install the udev rule in the 'udev' folder." << std::endl;
+    std::cout << "  - Windows: Use Zadig to install the WinUSB driver for the device." << std::endl;
+    std::cout << "  - macOS: No additional drivers are usually required." << std::endl;
 }
 
 static void print_version() {
@@ -90,11 +92,11 @@ static bool parse_int(const std::string& s, int& out) {
 }
 
 static bool has_any_firmware_files(const OdinConfig& cfg) {
-    return !cfg.bootloader.empty() || !cfg.ap.empty() || !cfg.cp.empty() || !cfg.csc.empty() || !cfg.ums.empty();
+    return cfg.bootloader || cfg.ap || cfg.cp || cfg.csc || cfg.ums;
 }
 
 int main(int argc, char** argv) {
-    OdinConfig cfg;
+    OdinConfig cfg = {};
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -198,14 +200,16 @@ int main(int argc, char** argv) {
         }
 
         if (arg == "-l") {
-            odin4_init(cfg);
-            const std::vector<std::string> devices = odin4_list_devices(cfg);
-            if (devices.empty()) {
+            odin4_init(&cfg);
+            int count = 0;
+            char** devices = odin4_list_devices(&cfg, &count);
+            if (count == 0 || !devices) {
                 std::cout << "No devices detected in Download Mode." << std::endl;
             } else {
-                for (const auto& path : devices) {
-                    std::cout << path << std::endl;
+                for (int j = 0; j < count; ++j) {
+                    std::cout << devices[j] << std::endl;
                 }
+                odin4_free_device_list(devices, count);
             }
             return 0;
         }
@@ -216,18 +220,13 @@ int main(int argc, char** argv) {
                 std::cerr << "Error: Option requires an argument: " << arg << std::endl;
                 return 1;
             }
-            if (arg == "-b")
-                cfg.bootloader = value;
-            else if (arg == "-a")
-                cfg.ap = value;
-            else if (arg == "-c")
-                cfg.cp = value;
-            else if (arg == "-s")
-                cfg.csc = value;
-            else if (arg == "-u")
-                cfg.ums = value;
-            else if (arg == "-d")
-                cfg.device_path = value;
+            char* val_ptr = strdup(value.c_str());
+            if (arg == "-b") cfg.bootloader = val_ptr;
+            else if (arg == "-a") cfg.ap = val_ptr;
+            else if (arg == "-c") cfg.cp = val_ptr;
+            else if (arg == "-s") cfg.csc = val_ptr;
+            else if (arg == "-u") cfg.ums = val_ptr;
+            else if (arg == "-d") cfg.device_path = val_ptr;
             continue;
         }
 
@@ -237,7 +236,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    odin4_init(cfg);
+    odin4_init(&cfg);
 
     if (cfg.dry_run && !has_any_firmware_files(cfg)) {
         std::cerr << "Error: --check-only requires at least one firmware archive (-b/-a/-c/-s/-u)" << std::endl;
@@ -249,12 +248,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    for (const auto& path : {cfg.bootloader, cfg.ap, cfg.cp, cfg.csc, cfg.ums}) {
-        if (!path.empty() && !std::filesystem::exists(path)) {
+    const char* paths[] = {cfg.bootloader, cfg.ap, cfg.cp, cfg.csc, cfg.ums};
+    for (const char* path : paths) {
+        if (path && strlen(path) > 0 && !std::filesystem::exists(path)) {
             std::cerr << "Error: Firmware file not found: " << path << std::endl;
             return 5; // Firmware error
         }
     }
 
-    return static_cast<int>(odin4_run(cfg));
+    return static_cast<int>(odin4_run(&cfg));
 }

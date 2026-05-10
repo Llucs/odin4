@@ -8,36 +8,39 @@
 #include <iostream>
 #include <algorithm>
 #include <filesystem>
+#include <vector>
+#include <string>
+#include <cstring>
 
-#define ODIN4_VERSION "5.1.0-695053a"
+#define ODIN4_VERSION "5.2.0"
 
 const char* odin4_get_version() {
     return ODIN4_VERSION;
 }
 
-static UsbSelectionCriteria criteria_from_config(const OdinConfig& cfg) {
+static UsbSelectionCriteria criteria_from_config(const OdinConfig* cfg) {
     UsbSelectionCriteria c;
-    if (cfg.has_vid) {
+    if (cfg->has_vid) {
         c.has_vid = true;
-        c.vid = cfg.vid;
+        c.vid = cfg->vid;
     }
-    if (cfg.has_pid) {
+    if (cfg->has_pid) {
         c.has_pid = true;
-        c.pid = cfg.pid;
+        c.pid = cfg->pid;
     }
-    if (cfg.has_usb_interface) {
+    if (cfg->has_usb_interface) {
         c.has_interface = true;
-        c.interface_number = cfg.usb_interface;
+        c.interface_number = cfg->usb_interface;
     }
     return c;
 }
 
-void odin4_init(const OdinConfig& cfg) {
-    if (cfg.debug)
+void odin4_init(const OdinConfig* cfg) {
+    if (cfg->debug)
         set_log_level(LogLevel::Debug);
-    else if (cfg.verbose)
+    else if (cfg->verbose)
         set_log_level(LogLevel::Verbose);
-    else if (cfg.quiet)
+    else if (cfg->quiet)
         set_log_level(LogLevel::Error);
     else
         set_log_level(LogLevel::Info);
@@ -45,197 +48,177 @@ void odin4_init(const OdinConfig& cfg) {
     set_log_file("odin4.log");
 }
 
-std::vector<std::string> odin4_list_devices(const OdinConfig& cfg) {
-    return UsbDevice::list_download_devices(criteria_from_config(cfg));
+char** odin4_list_devices(const OdinConfig* cfg, int* count) {
+    std::vector<std::string> devices = UsbDevice::list_download_devices(criteria_from_config(cfg));
+    *count = static_cast<int>(devices.size());
+    if (devices.empty()) return nullptr;
+
+    char** list = static_cast<char**>(malloc(sizeof(char*) * devices.size()));
+    for (size_t i = 0; i < devices.size(); ++i) {
+        list[i] = strdup(devices[i].c_str());
+    }
+    return list;
 }
 
-static bool has_any_firmware_files(const OdinConfig& cfg) {
-    return !cfg.bootloader.empty() || !cfg.ap.empty() || !cfg.cp.empty() || !cfg.csc.empty() || !cfg.ums.empty();
+void odin4_free_device_list(char** list, int count) {
+    if (!list) return;
+    for (int i = 0; i < count; ++i) {
+        free(list[i]);
+    }
+    free(list);
 }
 
-static bool verify_firmware_compatibility(const OdinConfig& cfg, const std::string& device_type) {
+static bool has_any_firmware_files(const OdinConfig* cfg) {
+    return (cfg->bootloader && strlen(cfg->bootloader) > 0) || 
+           (cfg->ap && strlen(cfg->ap) > 0) || 
+           (cfg->cp && strlen(cfg->cp) > 0) || 
+           (cfg->csc && strlen(cfg->csc) > 0) || 
+           (cfg->ums && strlen(cfg->ums) > 0);
+}
+
+static bool verify_firmware_compatibility(const OdinConfig* cfg, const std::string& device_type) {
     if (device_type.empty()) {
         log_verbose("Device type is empty; skipping filename compatibility checks.");
         return true;
     }
 
+    std::vector<std::string> files;
+    if (cfg->bootloader) files.push_back(cfg->bootloader);
+    if (cfg->ap) files.push_back(cfg->ap);
+    if (cfg->cp) files.push_back(cfg->cp);
+    if (cfg->csc) files.push_back(cfg->csc);
+    if (cfg->ums) files.push_back(cfg->ums);
+
     std::string dt = device_type;
-    dt.erase(std::remove_if(dt.begin(), dt.end(),
-                            [](unsigned char c) { return std::isspace(c) || c == '\\' || c == '/' || c == '-'; }),
-             dt.end());
+    std::transform(dt.begin(), dt.end(), dt.begin(), [](unsigned char c) { return std::tolower(c); });
 
-    std::transform(dt.begin(), dt.end(), dt.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    for (const auto& path : files) {
+        std::string f = std::filesystem::path(path).filename().string();
+        std::transform(f.begin(), f.end(), f.begin(), [](unsigned char c) { return std::tolower(c); });
 
-    if (dt.rfind("SM", 0) == 0)
-        dt = dt.substr(2);
-
-    auto file_matches = [&](const std::string& path) -> bool {
-        if (path.empty())
+        if (dt.find(f) != std::string::npos) {
+            log_debug("Firmware file '" + f + "' matches device type '" + dt + "'.");
             return true;
-        std::string fname = std::filesystem::path(path).filename().string();
-        std::string f;
-        f.reserve(fname.size());
-        for (unsigned char c : fname) {
-            if (std::isalnum(c))
-                f.push_back(static_cast<char>(std::toupper(c)));
-        }
-        return f.find(dt) != std::string::npos;
-    };
-
-    for (const std::string& p : {cfg.bootloader, cfg.ap, cfg.cp, cfg.csc, cfg.ums}) {
-        if (p.empty())
-            continue;
-        if (!file_matches(p)) {
-            log_error("Firmware file name does not appear to match device type: " +
-                      std::filesystem::path(p).filename().string() + " vs " + device_type);
-            return false;
         }
     }
 
+    log_warn("None of the provided firmware filenames seem to match the device type: " + device_type);
     return true;
 }
 
-static void print_access_hint() {
-    log_error("Permission denied while opening the USB device. This usually means udev rules are missing.");
-    log_info("Install the udev rule shipped with odin4: udev/60-odin4.rules");
-    log_info("Then reload udev rules and reconnect the device.");
-}
+OdinExitCode odin4_run(const OdinConfig* cfg) {
+    UsbDevice dev;
+    std::string device_path = cfg->device_path ? cfg->device_path : "";
 
-static OdinExitCode run_for_device(const OdinConfig& cfg) {
-    UsbDevice usb;
-    const UsbSelectionCriteria criteria = criteria_from_config(cfg);
+    if (device_path.empty()) {
+        std::vector<std::string> devices = UsbDevice::list_download_devices(criteria_from_config(cfg));
+        if (devices.empty()) {
+            log_error("No Samsung devices detected in Download Mode.");
+            return ODIN_USB;
+        }
+        if (devices.size() > 1) {
+            log_error("Multiple Samsung devices detected. Please specify one with -d.");
+            for (const auto& p : devices) {
+                log_error("  Detected: " + p);
+            }
+            return ODIN_USB;
+        }
+        device_path = devices[0];
+        log_info("Auto-detected device at " + device_path);
+    }
 
-    if (!usb.open_device(cfg.device_path, criteria)) {
-        if (usb.get_last_open_error() == UsbOpenError::AccessDenied) {
-            print_access_hint();
-        } else if (usb.get_last_open_error() == UsbOpenError::NotDownloadMode) {
-            log_error("Device detected, but it does not appear to be in Download Mode.");
+    if (!dev.open_device(device_path, criteria_from_config(cfg))) {
+        UsbOpenError err = dev.get_last_open_error();
+        if (err == UsbOpenError::AccessDenied) {
+            log_error("Access denied to USB device. Try running as root or check udev rules.");
+        } else if (err == UsbOpenError::NotDownloadMode) {
+            log_error("Device is not in Download Mode.");
         } else {
-            log_error("No compatible device could be opened. Ensure the device is in Download Mode and try again.");
+            log_error("Failed to open USB device at " + device_path, dev.get_last_open_libusb_error());
         }
-        return OdinExitCode::Usb;
+        return ODIN_USB;
     }
 
-    if (!usb.handshake()) {
-        log_error("USB handshake failed.");
-        return OdinExitCode::Protocol;
-    }
-    log_info("Handshake successful.");
-
-    if (!usb.request_device_type()) {
-        log_error("Failed to query device type.");
-        return OdinExitCode::Protocol;
+    if (!dev.handshake()) {
+        log_error("Protocol handshake failed.");
+        return ODIN_PROTOCOL;
     }
 
-    const std::string device_type = usb.get_device_type();
-    if (!device_type.empty())
-        log_info("Device type: " + device_type);
-
-    if (has_any_firmware_files(cfg)) {
-        if (!verify_firmware_compatibility(cfg, device_type)) {
-            return OdinExitCode::Pit;
-        }
+    if (!dev.request_device_type()) {
+        log_error("Failed to request device type.");
+        return ODIN_PROTOCOL;
     }
 
-    if (!usb.begin_session()) {
-        log_error("Failed to begin session.");
-        return OdinExitCode::Protocol;
+    log_info("Device type: " + dev.get_device_type());
+
+    if (!verify_firmware_compatibility(cfg, dev.get_device_type())) {
+        log_error("Firmware is not compatible with this device.");
+        return ODIN_FIRMWARE;
     }
 
     PitTable pit;
-    if (!usb.request_pit(pit)) {
-        log_error("Failed to retrieve or parse PIT from device.");
-        usb.end_session();
-        return OdinExitCode::Pit;
+    if (!dev.request_pit(pit)) {
+        log_error("Failed to request PIT table.");
+        return ODIN_PIT;
     }
-    log_info("PIT received with " + std::to_string(pit.entries.size()) + " entries.");
 
-    if (has_any_firmware_files(cfg)) {
-        const std::vector<std::pair<std::string, std::string>> archives = {
-            {"BL", cfg.bootloader}, {"AP", cfg.ap}, {"CP", cfg.cp}, {"CSC", cfg.csc}, {"UMS", cfg.ums}};
+    if (cfg->dry_run) {
+        log_info("Dry run: PIT and firmware validation successful.");
+        return ODIN_SUCCESS;
+    }
 
-        if (usb.is_odin_legacy()) {
-            uint64_t total_bytes = 0;
-            for (const auto& item : archives) {
-                if (item.second.empty())
+    if (!dev.begin_session()) {
+        log_error("Failed to begin session.");
+        return ODIN_PROTOCOL;
+    }
+
+    std::vector<std::pair<std::string, std::string>> archives;
+    if (cfg->bootloader) archives.push_back({"BL", cfg->bootloader});
+    if (cfg->ap) archives.push_back({"AP", cfg->ap});
+    if (cfg->cp) archives.push_back({"CP", cfg->cp});
+    if (cfg->csc) archives.push_back({"CSC", cfg->csc});
+    if (cfg->ums) archives.push_back({"UMS", cfg->ums});
+
+    for (const auto& archive : archives) {
+        log_info("Processing " + archive.first + " archive: " + archive.second);
+        FirmwarePackage pkg(archive.second);
+        if (!pkg.open()) {
+            log_error("Failed to open archive: " + archive.second);
+            return ODIN_FIRMWARE;
+        }
+
+        for (const auto& entry : pkg.get_entries()) {
+            const PitEntry* pe = pit.find_entry_by_name(entry.name);
+            if (!pe) {
+                if (cfg->allow_unknown) {
+                    log_warn("Skipping unknown partition: " + entry.name);
                     continue;
-                std::error_code ec;
-                auto sz = std::filesystem::file_size(item.second, ec);
-                if (!ec)
-                    total_bytes += sz;
+                } else {
+                    log_error("Partition not found in PIT: " + entry.name);
+                    return ODIN_PIT;
+                }
             }
-            if (total_bytes > 0 && !usb.notify_total_bytes(total_bytes)) {
-                log_error("Failed to send total bytes to device.");
-                usb.end_session();
-                return OdinExitCode::Protocol;
-            }
-        }
 
-        for (const auto& item : archives) {
-            if (item.second.empty())
-                continue;
-            ExitCode rc = process_tar_file(item.second, usb, pit, !cfg.dry_run, cfg.allow_unknown);
-            if (rc != ExitCode::Success) {
-                usb.end_session();
-                return static_cast<OdinExitCode>(rc);
+            log_info("Flashing " + entry.name + "...");
+            auto stream = pkg.get_entry_stream(entry);
+            if (!dev.flash_partition_stream(*stream, entry.size, *pe, false)) {
+                log_error("Failed to flash partition: " + entry.name);
+                return ODIN_PROTOCOL;
             }
         }
     }
 
-    if (!cfg.dry_run) {
-        if (cfg.reboot) {
-            if (!usb.send_control(THOR_CONTROL_REBOOT)) {
-                log_error("Failed to send reboot command.");
-                usb.end_session();
-                return OdinExitCode::Protocol;
-            }
-        }
-        if (cfg.redownload) {
-            if (!usb.send_control(THOR_CONTROL_REDOWNLOAD)) {
-                log_error("Failed to send redownload command.");
-                usb.end_session();
-                return OdinExitCode::Protocol;
-            }
-        }
-    } else {
-        if (cfg.reboot || cfg.redownload) {
-            log_verbose("Check-only mode: reboot/redownload commands skipped.");
-        }
+    if (!dev.end_session()) {
+        log_warn("Failed to end session cleanly.");
     }
 
-    if (!usb.end_session()) {
-        log_error("Failed to end session.");
-        return OdinExitCode::Protocol;
+    if (cfg->reboot) {
+        log_info("Rebooting device...");
+        dev.send_control(THOR_CONTROL_REBOOT);
+    } else if (cfg->redownload) {
+        log_info("Rebooting to download mode...");
+        dev.send_control(THOR_CONTROL_REDOWNLOAD);
     }
 
-    if (cfg.dry_run) {
-        log_info("Validation completed successfully (check-only).");
-    } else if (has_any_firmware_files(cfg)) {
-        log_info("Flashing completed successfully.");
-    }
-
-    return OdinExitCode::Success;
-}
-
-OdinExitCode odin4_run(const OdinConfig& cfg) {
-    if (cfg.device_path.empty()) {
-        const std::vector<std::string> devices = UsbDevice::list_download_devices(criteria_from_config(cfg));
-        if (devices.empty()) {
-            log_error("No compatible devices detected in Download Mode.");
-            return OdinExitCode::Usb;
-        }
-        if (devices.size() > 1) {
-            log_error("Multiple compatible devices detected in Download Mode. Use -d to select one device.");
-            for (const auto& dev_path : devices)
-                log_info("Detected device: " + dev_path);
-            return OdinExitCode::Usb;
-        }
-        OdinConfig one = cfg;
-        one.device_path = devices.front();
-        log_info("Using device: " + one.device_path);
-        return run_for_device(one);
-    }
-
-    return run_for_device(cfg);
+    return ODIN_SUCCESS;
 }
