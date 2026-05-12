@@ -14,7 +14,7 @@ std::ofstream g_log_stream;
 std::mutex g_log_mutex;
 LogLevel g_level = LogLevel::Info;
 
-std::string timestamp_now() {
+auto timestamp_now() -> std::string {
     using namespace std::chrono;
     const auto now = system_clock::now();
     const auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
@@ -31,7 +31,7 @@ std::string timestamp_now() {
     return oss.str();
 }
 
-const char* level_tag(LogLevel lvl) {
+auto level_tag(LogLevel lvl) -> const char* {
     switch (lvl) {
     case LogLevel::Error:
         return "ERROR";
@@ -48,30 +48,33 @@ const char* level_tag(LogLevel lvl) {
     }
 }
 
-bool should_emit(LogLevel lvl) {
-    if (lvl == LogLevel::Error)
+auto should_emit(LogLevel lvl) -> bool {
+    if (lvl == LogLevel::Error) {
         return true;
+}
     return static_cast<int>(lvl) <= static_cast<int>(g_level);
 }
 
 void write_line(std::ostream& os, LogLevel lvl, const std::string& msg) {
-    os << timestamp_now() << " [" << level_tag(lvl) << "] " << msg << std::endl;
+    os << timestamp_now() << " [" << level_tag(lvl) << "] " << msg << '\n';
 }
 
 void write_to_file(LogLevel lvl, const std::string& msg) {
     std::lock_guard<std::mutex> lock(g_log_mutex);
-    if (!g_log_stream.is_open())
+    if (!g_log_stream.is_open()) {
         return;
-    g_log_stream << timestamp_now() << " [" << level_tag(lvl) << "] " << msg << std::endl;
+}
+    g_log_stream << timestamp_now() << " [" << level_tag(lvl) << "] " << msg << '\n';
     g_log_stream.flush();
 }
 
 void log_impl(LogLevel lvl, const std::string& msg, bool to_stderr) {
     if (should_emit(lvl)) {
-        if (to_stderr)
+        if (to_stderr) {
             write_line(std::cerr, lvl, msg);
-        else
+        } else {
             write_line(std::cout, lvl, msg);
+}
     }
     write_to_file(lvl, msg);
 }
@@ -81,18 +84,19 @@ void set_log_level(LogLevel level) {
     g_level = level;
 }
 
-LogLevel get_log_level() {
+auto get_log_level() -> LogLevel {
     return g_level;
 }
 
 void set_log_file(const std::string& path) {
     std::lock_guard<std::mutex> lock(g_log_mutex);
-    if (g_log_stream.is_open())
+    if (g_log_stream.is_open()) {
         g_log_stream.close();
+}
     if (!path.empty()) {
         g_log_stream.open(path, std::ios::app);
         if (!g_log_stream) {
-            std::cerr << timestamp_now() << " [ERROR] Unable to open log file: " << path << std::endl;
+            std::cerr << timestamp_now() << " [ERROR] Unable to open log file: " << path << '\n';
         }
     }
 }
@@ -102,7 +106,7 @@ void log_error(const std::string& msg, int libusb_err) {
     if (libusb_err != 0) {
         const char* err_name = libusb_error_name(libusb_err);
         final_msg += " (libusb: ";
-        final_msg += err_name ? err_name : "unknown";
+        final_msg += (err_name != nullptr) ? err_name : "unknown";
         final_msg += ")";
     }
     log_impl(LogLevel::Error, final_msg, true);
@@ -125,12 +129,14 @@ void log_debug(const std::string& msg) {
 }
 
 void log_hexdump(const std::string& title, const void* data, size_t size) {
-    if (get_log_level() != LogLevel::Debug)
+    if (get_log_level() != LogLevel::Debug) {
         return;
-    if (!data || size == 0)
+}
+    if ((data == nullptr) || size == 0) {
         return;
+}
 
-    const unsigned char* bytes = static_cast<const unsigned char*>(data);
+    const auto* bytes = static_cast<const unsigned char*>(data);
 
     std::ostringstream header;
     header << title << " (" << size << " bytes)";
@@ -147,6 +153,7 @@ void log_hexdump(const std::string& title, const void* data, size_t size) {
         }
         line << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned int>(bytes[i]) << " ";
     }
-    if (!line.str().empty())
+    if (!line.str().empty()) {
         log_debug(line.str());
+}
 }
