@@ -344,7 +344,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 
     LZ4F_decompressionContext_t dctx;
     LZ4F_errorCode_t err = LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
-    if (LZ4F_isError(err) != 0u) {
+    if (LZ4F_isError(err) != 0U) {
         log_error("Failed to create LZ4 decompression context: " + std::string(LZ4F_getErrorName(err)));
         return false;
     }
@@ -388,7 +388,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
     LZ4F_frameInfo_t frame_info;
     size_t consumed = header_read_size;
     err = LZ4F_getFrameInfo(dctx, &frame_info, header_buf.data(), &consumed);
-    if (LZ4F_isError(err) != 0u) {
+    if (LZ4F_isError(err) != 0U) {
         log_error("Failed to get LZ4 frame info for " + filename + ": " + std::string(LZ4F_getErrorName(err)));
         return false;
     }
@@ -399,7 +399,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
         log_info("LZ4 frame for " + filename + " does not include uncompressed size; scanning to determine size.");
         LZ4F_decompressionContext_t scan_ctx;
         LZ4F_errorCode_t scan_err = LZ4F_createDecompressionContext(&scan_ctx, LZ4F_VERSION);
-        if (LZ4F_isError(scan_err) != 0u) {
+        if (LZ4F_isError(scan_err) != 0U) {
             log_error("Failed to create LZ4 scan context: " + std::string(LZ4F_getErrorName(scan_err)));
             return false;
         }
@@ -436,7 +436,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
                 size_t src_consumed = src_size;
                 scan_err = LZ4F_decompress(scan_ctx, out_buf.data(), &dst_sz, in_buf.data() + src_offset, &src_consumed,
                                            nullptr);
-                if (LZ4F_isError(scan_err) != 0u) {
+                if (LZ4F_isError(scan_err) != 0U) {
                     log_error("LZ4 scan decompression error for " + filename + ": " +
                               std::string(LZ4F_getErrorName(scan_err)));
                     LZ4F_freeDecompressionContext(scan_ctx);
@@ -559,7 +559,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
             size_t dst_size = out_buf_size;
             size_t src_consumed = src_size;
             err = LZ4F_decompress(dctx, out_buf.data(), &dst_size, in_buf.data() + src_offset, &src_consumed, nullptr);
-            if (LZ4F_isError(err) != 0u) {
+            if (LZ4F_isError(err) != 0U) {
                 log_error("LZ4 decompression error for " + filename + ": " + std::string(LZ4F_getErrorName(err)));
                 return false;
             }

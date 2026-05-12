@@ -53,20 +53,20 @@ void odin4_init(const OdinConfig& cfg);
  * @param cfg The configuration containing USB selection criteria.
  * @return A list of device paths.
  */
-std::vector<std::string> odin4_list_devices(const OdinConfig& cfg);
+auto odin4_list_devices(const OdinConfig& cfg) -> std::vector<std::string>;
 
 /**
  * @brief Run the flashing process or validation for a specific device.
  * @param cfg The configuration for the operation.
  * @return OdinExitCode indicating success or failure.
  */
-OdinExitCode odin4_run(const OdinConfig& cfg);
+auto odin4_run(const OdinConfig& cfg) -> OdinExitCode;
 
 /**
  * @brief Get the version string of the library.
  * @return The version string.
  */
-const char* odin4_get_version();
+auto odin4_get_version() -> const char*;
 
 #ifdef __cplusplus
 }
