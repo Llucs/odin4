@@ -142,7 +142,7 @@ The `odin4` tool is operated via the command line. Here are the available option
 
 ```
 Usage: odin4 [options]
-Samsung firmware flashing tool for Linux. Version: x.x.x-abcdefg
+Samsung firmware flashing tool for Linux. Version: x.x.x-xxxxxx
 
 Options:
   -h                  Show this help message
