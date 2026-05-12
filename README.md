@@ -180,31 +180,31 @@ USB selection overrides (optional):
 
 *   **Flash firmware (all components)**:
     ```bash
-    ./build/odin4 \ 
-      -b BL_XXXX.tar.md5 \ 
-      -a AP_XXXX.tar.md5 \ 
-      -c CP_XXXX.tar.md5 \ 
+    ./build/odin4 \
+      -b BL_XXXX.tar.md5 \
+      -a AP_XXXX.tar.md5 \
+      -c CP_XXXX.tar.md5 \
       -s CSC_XXXX.tar.md5
     ```
 
 *   **Flash a specific device with selected components**:
     ```bash
-    ./build/odin4 -d /dev/bus/usb/001/002 \ 
-      -b BL_XXXX.tar.md5 \ 
+    ./build/odin4 -d /dev/bus/usb/001/002 \
+      -b BL_XXXX.tar.md5 \
       -a AP_XXXX.tar.md5
     ```
 
 *   **Perform a dry-run (validation only)**:
     ```bash
-    ./build/odin4 --check-only \ 
-      -b BL_XXXX.tar.md5 \ 
+    ./build/odin4 --check-only \
+      -b BL_XXXX.tar.md5 \
       -a AP_XXXX.tar.md5
     ```
 
 *   **Reboot device after flashing**:
     ```bash
-    ./build/odin4 --reboot \ 
-      -b BL_XXXX.tar.md5 \ 
+    ./build/odin4 --reboot \
+      -b BL_XXXX.tar.md5 \
       -a AP_XXXX.tar.md5
     ```
 
