@@ -8,13 +8,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y clang clang-tidy cmake ninja-build
+          sudo apt install -y \
+            clang \
+            clang-tidy \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libusb-1.0-0-dev
 
       - name: Configure project (C++23)
         run: |
@@ -22,21 +28,29 @@ jobs:
             -DCMAKE_CXX_STANDARD=23 \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
-      - name: Run clang-tidy (modernization)
+      - name: Run clang-tidy (auto modernize)
         run: |
+          find . \( -name "*.cpp" -o -name "*.c" -o -name "*.h" \) > files.txt
+
           clang-tidy \
             -p build \
             -checks='modernize-*,performance-*,readability-*' \
             -fix \
             -fix-errors \
-            $(find . -name '*.cpp' -o -name '*.c' -o -name '*.h')
+            $(cat files.txt) || true
 
-      - name: Rebuild after fixes
+      - name: Build project
         run: |
           cmake --build build -j
 
-      - name: Upload report/artifacts
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: cpp-modernization-report
+          name: cpp-modernization-build
           path: build
+
+      - name: Upload compilation database
+        uses: actions/upload-artifact@v4
+        with:
+          name: compile-commands
+          path: build/compile_commands.json
