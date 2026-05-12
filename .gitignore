@@ -1,4 +1,54 @@
-build/
+# Build
+/build/
+/out/
+/dist/
+/bin/
+/obj/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+Makefile
+
+# Ninja
+.ninja_deps
+.ninja_log
+build.ninja
+
+# CodeQL
+_codeql_build_dir/
+_codeql_databases/
+_codeql*
+
+# Reports
+reports/
+*.xml
+*.sarif
+
+# Object files
 *.o
+*.obj
+*.d
 *.a
+*.so
+*.so.*
+*.dll
+*.dylib
+
+# Debug
 *.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+tmp/
+temp/
+*.tmp
