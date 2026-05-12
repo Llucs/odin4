@@ -23,7 +23,7 @@ jobs:
 
       - name: Run clang-format
         run: |
-          files=$(git ls-files '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hpp' '*.hxx')
+          files=$(git ls-files '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hpp' '*.hxx' | grep -v '^lib/' || true)
           if [ -n "$files" ]; then
             clang-format -i $files
           fi
