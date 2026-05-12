@@ -230,10 +230,10 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ env.BRANCH }}
           base: main
-          commit-message: "refactor: ultra automatic modernization"
-          title: "refactor: ultra automatic modernization"
+          commit-message: "refactor: automatic modernization"
+          title: "refactor: automatic modernization"
           body: |
-            ## Ultra Automatic Refactor
+            ## Automatic Refactor
 
             This PR was automatically generated.
 
