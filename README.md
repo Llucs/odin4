@@ -237,10 +237,10 @@ We welcome and encourage contributions from the community. Please refer to our [
 
 odin4 is licensed under the **Apache License 2.0**.
 
-See the `LICENSE` file for full details.
+See the [LICENSE](./LICENSE) file for full details.
 
 ## Disclaimer
 
-Flashing firmware always carries inherent risks. This tool is provided **as-is**, without any warranties of any kind, express or implied. The developers are not responsible for any damage or loss of data that may occur from its use. Use at your own responsibility.
+Flashing firmware always carries inherent risks. This tool is provided **as-is**, without any warranties of any kind, express or implied. The developers are not responsible for any damage or loss of data that may occur from its use. Use at your own risk.
 
 © 2026 Llucs
