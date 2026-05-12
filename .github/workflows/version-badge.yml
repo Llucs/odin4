@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - "src/main.cpp"
+      - "src/odin4.cpp"
 
 permissions:
   contents: write
@@ -25,26 +25,26 @@ jobs:
         run: |
           set -e
 
-          BEFORE="$(git show HEAD~1:src/main.cpp 2>/dev/null \
+          BEFORE="$(git show HEAD~1:src/odin4.cpp 2>/dev/null \
             | grep -E '^[[:space:]]*#define[[:space:]]+ODIN4_VERSION[[:space:]]+"' \
             | sed -E 's/.*"([^"]+)".*/\1/' | head -n 1 || true)"
 
-          AFTER="$(git show HEAD:src/main.cpp \
+          AFTER="$(git show HEAD:src/odin4.cpp 2>/dev/null \
             | grep -E '^[[:space:]]*#define[[:space:]]+ODIN4_VERSION[[:space:]]+"' \
-            | sed -E 's/.*"([^"]+)".*/\1/' | head -n 1)"
+            | sed -E 's/.*"([^"]+)".*/\1/' | head -n 1 || true)"
 
           echo "before=$BEFORE" >> "$GITHUB_OUTPUT"
           echo "after=$AFTER" >> "$GITHUB_OUTPUT"
 
-          if [ "$BEFORE" = "$AFTER" ]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
+          if [ -n "$AFTER" ] && [ "$BEFORE" != "$AFTER" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Stop if version did not change
+      - name: Stop if version did not change or is empty
         if: steps.vercheck.outputs.changed != 'true'
-        run: echo "ODIN4_VERSION unchanged. Skipping."
+        run: echo "ODIN4_VERSION unchanged or not found. Skipping."
 
       - name: Generate version.json
         if: steps.vercheck.outputs.changed == 'true'
