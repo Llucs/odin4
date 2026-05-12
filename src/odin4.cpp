@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <filesystem>
 
-#define ODIN4_VERSION "5.1.0-695053a"
+#define ODIN4_VERSION "5.1.1-ef8f688"
 
 const char* odin4_get_version() {
     return ODIN4_VERSION;
