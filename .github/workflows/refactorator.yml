@@ -1,4 +1,4 @@
-name: Odin4 Ultra Refactor
+name: Odin4 Refactor
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: odin4-ultra-refactor
+  group: odin4-refactor
   cancel-in-progress: true
 
 env:
@@ -20,15 +20,20 @@ env:
 
 jobs:
   ultra-refactor:
-    name: Ultra Refactor + Static Analysis
+    name: Refactor + Static Analysis
     runs-on: ubuntu-24.04
     timeout-minutes: 90
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+
+      - name: Generate branch name
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "BRANCH=auto/refactor-$(date +%Y%m%d-%H%M%S)" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         shell: bash
@@ -89,17 +94,6 @@ jobs:
             ~/.cache
           key: ${{ runner.os }}-cmake-${{ hashFiles('**/CMakeLists.txt') }}
 
-      - name: Create branch
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          BRANCH="auto/ultra-refactor-$(date +%Y%m%d-%H%M%S)"
-
-          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
-
-          git checkout -b "$BRANCH"
-
       - name: Configure CMake
         shell: bash
         run: |
@@ -110,8 +104,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DCMAKE_CXX_STANDARD=23 \
-            -DCMAKE_CXX_EXTENSIONS=OFF \
-            -DCMAKE_CXX_CLANG_TIDY="clang-tidy"
+            -DCMAKE_CXX_EXTENSIONS=OFF
 
       - name: Run clang-format
         shell: bash
@@ -131,7 +124,7 @@ jobs:
               clang-format -i "$file"
             done
 
-      - name: Run clang-tidy modernize
+      - name: Run clang-tidy
         shell: bash
         run: |
           set -euo pipefail
@@ -150,9 +143,7 @@ jobs:
                   readability-*,
                   bugprone-*,
                   portability-*,
-                  cppcoreguidelines-*,
                   clang-analyzer-*,
-                  -cppcoreguidelines-avoid-magic-numbers,
                   -readability-identifier-length
                 ' || true
 
@@ -167,13 +158,11 @@ jobs:
             --enable=all \
             --inconclusive \
             --std=c++23 \
-            --language=c++ \
             --force \
-            --inline-suppr \
             --quiet \
             src include || true
 
-      - name: Remove trailing spaces
+      - name: Cleanup formatting
         shell: bash
         run: |
           set -euo pipefail
@@ -187,11 +176,6 @@ jobs:
               -name '*.yml' \
             \) \
             -exec sed -i 's/[[:space:]]*$//' {} +
-
-      - name: Normalize line endings
-        shell: bash
-        run: |
-          set -euo pipefail
 
           find . -type f \
             \( \
@@ -217,28 +201,15 @@ jobs:
 
           test -f build/odin4
 
-      - name: Generate warnings report
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mkdir -p reports
-
-          cppcheck \
-            --enable=all \
-            --xml \
-            --xml-version=2 \
-            src include 2> reports/cppcheck.xml || true
-
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: cpp
 
-      - name: Autobuild for CodeQL
+      - name: Autobuild CodeQL
         uses: github/codeql-action/autobuild@v3
 
-      - name: Run CodeQL analysis
+      - name: Analyze CodeQL
         uses: github/codeql-action/analyze@v3
 
       - name: Check for changes
@@ -252,56 +223,31 @@ jobs:
             echo "NO_CHANGES=false" >> "$GITHUB_ENV"
           fi
 
-      - name: Commit changes
-        if: env.NO_CHANGES == 'false'
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add .
-
-          git commit -m "refactor: ultra automatic modernization"
-
-      - name: Push changes
-        if: env.NO_CHANGES == 'false'
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          git push origin "$BRANCH"
-
       - name: Create Pull Request
         if: env.NO_CHANGES == 'false'
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ env.BRANCH }}
+          base: main
+          commit-message: "refactor: ultra automatic modernization"
           title: "refactor: ultra automatic modernization"
           body: |
             ## Ultra Automatic Refactor
 
             This PR was automatically generated.
 
-            ### Applied improvements
-
+            ### Improvements
             - clang-format
             - clang-tidy modernization
             - performance optimizations
-            - readability improvements
+            - readability cleanup
             - bug-prone fixes
             - static analysis
-            - line ending normalization
-            - trailing whitespace cleanup
-            - CodeQL security analysis
-            - automatic rebuild validation
+            - CodeQL security scan
+            - rebuild validation
 
             ### Validation
-
             - Build succeeded
-            - Static analysis passed
+            - Static analysis completed
             - Security analysis completed
-
-            Generated automatically for Odin4.
