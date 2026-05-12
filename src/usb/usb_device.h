@@ -71,7 +71,8 @@ class UsbDevice {
     auto odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool;
     auto odin_command(uint32_t cmd, uint32_t subcmd, const void* payload, size_t payload_size,
                       std::vector<unsigned char>& rsp, int timeout_ms) -> bool;
-    static auto odin_fail_check(const std::vector<unsigned char>& rsp, const std::string& context, bool allow_progress) -> bool;
+    static auto odin_fail_check(const std::vector<unsigned char>& rsp, const std::string& context,
+                                bool allow_progress) -> bool;
 
     auto bulk_write_all(const void* data, size_t size, int timeout_ms) -> bool;
     auto bulk_read_once(void* data, size_t size, int* actual_length, int timeout_ms) -> bool;
@@ -102,8 +103,10 @@ class UsbDevice {
     auto end_session() -> bool;
     auto request_pit(PitTable& pit_table) -> bool;
     auto receive_pit_table(PitTable& pit_table) -> bool;
-    auto flash_partition_stream(std::istream& stream, uint64_t size, const PitEntry& pit_entry, bool large_partition) -> bool;
-    auto send_file_part_chunk(const void* data, size_t size, uint32_t chunk_index, bool large_partition = false) -> bool;
+    auto flash_partition_stream(std::istream& stream, uint64_t size, const PitEntry& pit_entry,
+                                bool large_partition) -> bool;
+    auto send_file_part_chunk(const void* data, size_t size, uint32_t chunk_index,
+                              bool large_partition = false) -> bool;
     auto send_file_part_header(uint64_t total_size) -> bool;
     auto end_file_transfer(uint32_t partition_id) -> bool;
     auto send_control(uint32_t control_type) -> bool;
