@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.22)
 project(odin4 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 99)
