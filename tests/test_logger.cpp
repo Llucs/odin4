@@ -28,18 +28,18 @@
 
 TEST(LogLevelEnum, OrderingIsCorrect) {
     // Error (0) < Warn (1) < Info (2) < Verbose (3) < Debug (4)
-    EXPECT_LT(static_cast<int>(LogLevel::Error),   static_cast<int>(LogLevel::Warn));
-    EXPECT_LT(static_cast<int>(LogLevel::Warn),    static_cast<int>(LogLevel::Info));
-    EXPECT_LT(static_cast<int>(LogLevel::Info),    static_cast<int>(LogLevel::Verbose));
+    EXPECT_LT(static_cast<int>(LogLevel::Error), static_cast<int>(LogLevel::Warn));
+    EXPECT_LT(static_cast<int>(LogLevel::Warn), static_cast<int>(LogLevel::Info));
+    EXPECT_LT(static_cast<int>(LogLevel::Info), static_cast<int>(LogLevel::Verbose));
     EXPECT_LT(static_cast<int>(LogLevel::Verbose), static_cast<int>(LogLevel::Debug));
 }
 
 TEST(LogLevelEnum, ExplicitValues) {
-    EXPECT_EQ(static_cast<int>(LogLevel::Error),   0);
-    EXPECT_EQ(static_cast<int>(LogLevel::Warn),    1);
-    EXPECT_EQ(static_cast<int>(LogLevel::Info),    2);
+    EXPECT_EQ(static_cast<int>(LogLevel::Error), 0);
+    EXPECT_EQ(static_cast<int>(LogLevel::Warn), 1);
+    EXPECT_EQ(static_cast<int>(LogLevel::Info), 2);
     EXPECT_EQ(static_cast<int>(LogLevel::Verbose), 3);
-    EXPECT_EQ(static_cast<int>(LogLevel::Debug),   4);
+    EXPECT_EQ(static_cast<int>(LogLevel::Debug), 4);
 }
 
 // ---------------------------------------------------------------------------
@@ -87,15 +87,11 @@ TEST_F(LoggerLevelTest, SetAndGetDebug) {
 }
 
 TEST_F(LoggerLevelTest, MultipleSetGetRoundtrip) {
-    const LogLevel levels[] = {
-        LogLevel::Debug, LogLevel::Error, LogLevel::Verbose,
-        LogLevel::Warn, LogLevel::Info
-    };
+    const LogLevel levels[] = {LogLevel::Debug, LogLevel::Error, LogLevel::Verbose, LogLevel::Warn, LogLevel::Info};
     for (LogLevel lvl : levels) {
         set_log_level(lvl);
-        EXPECT_EQ(get_log_level(), lvl)
-            << "Expected level " << static_cast<int>(lvl)
-            << " but got " << static_cast<int>(get_log_level());
+        EXPECT_EQ(get_log_level(), lvl) << "Expected level " << static_cast<int>(lvl) << " but got "
+                                        << static_cast<int>(get_log_level());
     }
 }
 

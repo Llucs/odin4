@@ -132,7 +132,7 @@ TEST(SanitizeFilename, TripleExtension) {
     //   strip .bin -> "file.img"
     //   strip .img -> "file"
     //   npos       -> return "file"
-    EXPECT_EQ(sanitize_filename("file.img.bin.lz4"),   "file");
+    EXPECT_EQ(sanitize_filename("file.img.bin.lz4"), "file");
     EXPECT_EQ(sanitize_filename("vendor.img.bin.lz4"), "vendor");
 }
 
@@ -161,12 +161,12 @@ TEST(SanitizeFilename, LongNameWithLz4) {
 
 TEST(SanitizeFilename, SamsungTypicalNames) {
     // Names commonly found in Samsung firmware packages
-    EXPECT_EQ(sanitize_filename("BOOT.img"),              "BOOT");
-    EXPECT_EQ(sanitize_filename("AP_firmware.tar.md5"),   "AP_firmware.tar.md5");
-    EXPECT_EQ(sanitize_filename("system.img.lz4"),        "system");
-    EXPECT_EQ(sanitize_filename("userdata.ext4.lz4"),     "userdata");
-    EXPECT_EQ(sanitize_filename("modem.bin"),             "modem");
-    EXPECT_EQ(sanitize_filename("recovery.img"),          "recovery");
+    EXPECT_EQ(sanitize_filename("BOOT.img"), "BOOT");
+    EXPECT_EQ(sanitize_filename("AP_firmware.tar.md5"), "AP_firmware.tar.md5");
+    EXPECT_EQ(sanitize_filename("system.img.lz4"), "system");
+    EXPECT_EQ(sanitize_filename("userdata.ext4.lz4"), "userdata");
+    EXPECT_EQ(sanitize_filename("modem.bin"), "modem");
+    EXPECT_EQ(sanitize_filename("recovery.img"), "recovery");
 }
 
 // ---------------------------------------------------------------------------
@@ -193,8 +193,7 @@ TEST(CheckMd5Signature, NonTarMd5FileReturnsTrueWithoutChecking) {
     // A file without .tar.md5 extension is considered valid (no MD5 to check)
     auto path = write_temp_file(".bin", {0x01, 0x02, 0x03});
     ASSERT_FALSE(path.empty());
-    EXPECT_TRUE(check_md5_signature(path))
-        << "Files without .tar.md5 extension must always pass MD5 check";
+    EXPECT_TRUE(check_md5_signature(path)) << "Files without .tar.md5 extension must always pass MD5 check";
     std::remove(path.c_str());
 }
 

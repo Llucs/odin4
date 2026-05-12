@@ -101,22 +101,22 @@ TEST(ThorPacketSizes, ResponsePacketSize) {
 // ---------------------------------------------------------------------------
 
 TEST(ThorPacketTypeEnums, Values) {
-    EXPECT_EQ(THOR_PACKET_HANDSHAKE,          0x0001);
-    EXPECT_EQ(THOR_PACKET_DEVICE_TYPE,        0x0002);
-    EXPECT_EQ(THOR_PACKET_FILE_PART,          0x0003);
-    EXPECT_EQ(THOR_PACKET_END_FILE_TRANSFER,  0x0004);
-    EXPECT_EQ(THOR_PACKET_END_SESSION,        0x0005);
-    EXPECT_EQ(THOR_PACKET_RESPONSE,           0x0006);
-    EXPECT_EQ(THOR_PACKET_PIT_FILE,           0x0007);
-    EXPECT_EQ(THOR_PACKET_BEGIN_SESSION,      0x0008);
-    EXPECT_EQ(THOR_PACKET_FILE_PART_SIZE,     0x0009);
-    EXPECT_EQ(THOR_PACKET_RECEIVE_FILE_PART,  0x000A);
-    EXPECT_EQ(THOR_PACKET_CONTROL,            0x000B);
+    EXPECT_EQ(THOR_PACKET_HANDSHAKE, 0x0001);
+    EXPECT_EQ(THOR_PACKET_DEVICE_TYPE, 0x0002);
+    EXPECT_EQ(THOR_PACKET_FILE_PART, 0x0003);
+    EXPECT_EQ(THOR_PACKET_END_FILE_TRANSFER, 0x0004);
+    EXPECT_EQ(THOR_PACKET_END_SESSION, 0x0005);
+    EXPECT_EQ(THOR_PACKET_RESPONSE, 0x0006);
+    EXPECT_EQ(THOR_PACKET_PIT_FILE, 0x0007);
+    EXPECT_EQ(THOR_PACKET_BEGIN_SESSION, 0x0008);
+    EXPECT_EQ(THOR_PACKET_FILE_PART_SIZE, 0x0009);
+    EXPECT_EQ(THOR_PACKET_RECEIVE_FILE_PART, 0x000A);
+    EXPECT_EQ(THOR_PACKET_CONTROL, 0x000B);
 }
 
 TEST(ThorControlTypeEnums, Values) {
-    EXPECT_EQ(THOR_CONTROL_REBOOT,      0x0001);
-    EXPECT_EQ(THOR_CONTROL_REDOWNLOAD,  0x0002);
+    EXPECT_EQ(THOR_CONTROL_REBOOT, 0x0001);
+    EXPECT_EQ(THOR_CONTROL_REDOWNLOAD, 0x0002);
 }
 
 // ---------------------------------------------------------------------------
@@ -247,8 +247,7 @@ TEST(Endianness64, IdentityAfterDoubleConversion) {
         0x0000000100000002ull,
     };
     for (uint64_t v : values) {
-        EXPECT_EQ(le64_to_h(h_to_le64(v)), v)
-            << "le64_to_h(h_to_le64(0x" << std::hex << v << ")) != 0x" << v;
+        EXPECT_EQ(le64_to_h(h_to_le64(v)), v) << "le64_to_h(h_to_le64(0x" << std::hex << v << ")) != 0x" << v;
     }
 }
 
@@ -307,16 +306,11 @@ TEST(ThorPacketHeader, FieldLayout) {
 // ---------------------------------------------------------------------------
 
 TEST(EndiannesReturnTypes, CorrectTypes) {
-    static_assert(std::is_same_v<decltype(le32_to_h(uint32_t{})), uint32_t>,
-                  "le32_to_h must return uint32_t");
-    static_assert(std::is_same_v<decltype(h_to_le32(uint32_t{})), uint32_t>,
-                  "h_to_le32 must return uint32_t");
-    static_assert(std::is_same_v<decltype(h_to_le16(uint16_t{})), uint16_t>,
-                  "h_to_le16 must return uint16_t");
-    static_assert(std::is_same_v<decltype(le64_to_h(uint64_t{})), uint64_t>,
-                  "le64_to_h must return uint64_t");
-    static_assert(std::is_same_v<decltype(h_to_le64(uint64_t{})), uint64_t>,
-                  "h_to_le64 must return uint64_t");
+    static_assert(std::is_same_v<decltype(le32_to_h(uint32_t{})), uint32_t>, "le32_to_h must return uint32_t");
+    static_assert(std::is_same_v<decltype(h_to_le32(uint32_t{})), uint32_t>, "h_to_le32 must return uint32_t");
+    static_assert(std::is_same_v<decltype(h_to_le16(uint16_t{})), uint16_t>, "h_to_le16 must return uint16_t");
+    static_assert(std::is_same_v<decltype(le64_to_h(uint64_t{})), uint64_t>, "le64_to_h must return uint64_t");
+    static_assert(std::is_same_v<decltype(h_to_le64(uint64_t{})), uint64_t>, "h_to_le64 must return uint64_t");
     // If we get here, static_asserts passed at compile time
     SUCCEED();
 }

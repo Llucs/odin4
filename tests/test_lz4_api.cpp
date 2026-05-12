@@ -58,8 +58,7 @@ TEST(LZ4CompressBound, ZeroInput) {
 TEST(LZ4CompressBound, SmallInput) {
     // The bound must always be larger than the input size
     for (int sz : {1, 16, 64, 512, 4096}) {
-        EXPECT_GT(LZ4_compressBound(sz), sz)
-            << "compressBound(" << sz << ") must exceed input size";
+        EXPECT_GT(LZ4_compressBound(sz), sz) << "compressBound(" << sz << ") must exceed input size";
     }
 }
 
@@ -87,8 +86,7 @@ TEST(LZ4BlockRoundtrip, CompressibleData) {
     std::vector<char> decompressed(src_size);
     int decompressed_size = LZ4_decompress_safe(dst.data(), decompressed.data(), compressed_size, src_size);
     ASSERT_EQ(decompressed_size, src_size) << "Decompressed size must match original";
-    EXPECT_EQ(std::memcmp(src.data(), decompressed.data(), src_size), 0)
-        << "Decompressed data must match original";
+    EXPECT_EQ(std::memcmp(src.data(), decompressed.data(), src_size), 0) << "Decompressed data must match original";
 }
 
 TEST(LZ4BlockRoundtrip, IncompressibleData) {

@@ -25,6 +25,6 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 // match any PIT entry, the function reports an error instead of silently
 // skipping it.
 auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const PitTable& pit_table,
-                          bool do_flash = true, bool allow_unknown = false) -> ExitCode;
+                      bool do_flash = true, bool allow_unknown = false) -> ExitCode;
 
 #endif // FIRMWARE_PACKAGE_H
