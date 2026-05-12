@@ -22,77 +22,89 @@ struct TarMd5Info {
     std::string expected_md5;
 };
 
-bool is_hex_char(unsigned char c) {
+auto is_hex_char(unsigned char c) -> bool {
     return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 }
 
-bool is_hex32(const std::string& s) {
-    if (s.size() != 32)
+auto is_hex32(const std::string& s) -> bool {
+    if (s.size() != 32) {
         return false;
+}
     for (unsigned char c : s) {
-        if (!is_hex_char(c))
+        if (!is_hex_char(c)) {
             return false;
+}
     }
     return true;
 }
 
-std::string to_lower_copy(std::string s) {
+auto to_lower_copy(std::string s) -> std::string {
     std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return s;
 }
 
-bool ends_with_case_insensitive(const std::string& s, const std::string& suffix) {
-    if (s.size() < suffix.size())
+auto ends_with_case_insensitive(const std::string& s, const std::string& suffix) -> bool {
+    if (s.size() < suffix.size()) {
         return false;
+}
     return to_lower_copy(s.substr(s.size() - suffix.size())) == to_lower_copy(suffix);
 }
 
-std::string tar_field_string(const char* field, size_t max_len) {
+auto tar_field_string(const char* field, size_t max_len) -> std::string {
     size_t n = 0;
-    while (n < max_len && field[n] != '\0')
+    while (n < max_len && field[n] != '\0') {
         ++n;
+}
     std::string s(field, n);
-    while (!s.empty() && (s.back() == ' ' || s.back() == '\t'))
+    while (!s.empty() && (s.back() == ' ' || s.back() == '\t')) {
         s.pop_back();
+}
     return s;
 }
 
-bool parse_octal_u64(const char* field, size_t len, uint64_t& out) {
+auto parse_octal_u64(const char* field, size_t len, uint64_t& out) -> bool {
     out = 0;
-    if (!field || len == 0)
+    if ((field == nullptr) || len == 0) {
         return true;
+}
 
     size_t i = 0;
-    while (i < len && (field[i] == ' ' || field[i] == '\t'))
+    while (i < len && (field[i] == ' ' || field[i] == '\t')) {
         ++i;
-    if (i < len && field[i] == '\0')
+}
+    if (i < len && field[i] == '\0') {
         return true;
+}
 
     bool any = false;
     for (; i < len; ++i) {
-        const unsigned char c = static_cast<unsigned char>(field[i]);
-        if (c == '\0' || c == ' ' || c == '\t')
+        const auto c = static_cast<unsigned char>(field[i]);
+        if (c == '\0' || c == ' ' || c == '\t') {
             break;
-        if (c < '0' || c > '7')
+}
+        if (c < '0' || c > '7') {
             return false;
+}
         const uint64_t prev = out;
         out = (out << 3) + static_cast<uint64_t>(c - '0');
-        if ((out >> 3) != prev)
+        if ((out >> 3) != prev) {
             return false;
+}
         any = true;
     }
 
-    if (!any)
+    if (!any) {
         out = 0;
+}
     return true;
 }
 
-bool read_exact(std::ifstream& file, void* buf, size_t len) {
+auto read_exact(std::ifstream& file, void* buf, size_t len) -> bool {
     file.read(static_cast<char*>(buf), static_cast<std::streamsize>(len));
     return static_cast<size_t>(file.gcount()) == len;
 }
 
-ExitCode detect_tar_md5_info(const std::string& file_path, TarMd5Info& info) {
+auto detect_tar_md5_info(const std::string& file_path, TarMd5Info& info) -> ExitCode {
     info = TarMd5Info{};
 
     std::ifstream file(file_path, std::ios::binary | std::ios::ate);
@@ -106,7 +118,7 @@ ExitCode detect_tar_md5_info(const std::string& file_path, TarMd5Info& info) {
         log_error("Failed to determine file size: " + file_path);
         return ExitCode::Firmware;
     }
-    const uint64_t file_size = static_cast<uint64_t>(sp);
+    const auto file_size = static_cast<uint64_t>(sp);
     file.seekg(0);
 
     info.content_end = file_size;
@@ -138,14 +150,16 @@ ExitCode detect_tar_md5_info(const std::string& file_path, TarMd5Info& info) {
                 break;
             }
         }
-        if (!ok)
+        if (!ok) {
             continue;
+}
 
         const bool left_ok = (pos == 0) || !is_hex_char(static_cast<unsigned char>(tail[static_cast<size_t>(pos - 1)]));
         const bool right_ok = (static_cast<size_t>(pos + 32) >= tail.size()) ||
                               !is_hex_char(static_cast<unsigned char>(tail[static_cast<size_t>(pos + 32)]));
-        if (!left_ok || !right_ok)
+        if (!left_ok || !right_ok) {
             continue;
+}
 
         best_pos = pos;
         break;
@@ -189,9 +203,10 @@ ExitCode detect_tar_md5_info(const std::string& file_path, TarMd5Info& info) {
     return ExitCode::Success;
 }
 
-ExitCode verify_tar_md5(const std::string& file_path, const TarMd5Info& info) {
-    if (!info.has_md5)
+auto verify_tar_md5(const std::string& file_path, const TarMd5Info& info) -> ExitCode {
+    if (!info.has_md5) {
         return ExitCode::Success;
+}
 
     if (info.content_end == 0) {
         log_error("Invalid MD5 content size (0): " + file_path);
@@ -239,54 +254,61 @@ ExitCode verify_tar_md5(const std::string& file_path, const TarMd5Info& info) {
     return ExitCode::Success;
 }
 
-bool is_all_zeros_block(const char* header) {
+auto is_all_zeros_block(const char* header) -> bool {
     for (int i = 0; i < 512; ++i) {
-        if (header[i] != 0)
+        if (header[i] != 0) {
             return false;
+}
     }
     return true;
 }
 
-bool tar_header_checksum_valid(const char* header) {
+auto tar_header_checksum_valid(const char* header) -> bool {
     uint64_t expected = 0;
-    if (!parse_octal_u64(header + 148, 8, expected))
+    if (!parse_octal_u64(header + 148, 8, expected)) {
         return false;
+}
 
     uint64_t sum_unsigned = 0;
     int64_t sum_signed = 0;
     for (int i = 0; i < 512; ++i) {
         unsigned char u = 0;
-        if (i >= 148 && i < 156)
+        if (i >= 148 && i < 156) {
             u = static_cast<unsigned char>(' ');
-        else
+        } else {
             u = static_cast<unsigned char>(header[i]);
+}
         sum_unsigned += static_cast<uint64_t>(u);
         sum_signed += static_cast<int64_t>(static_cast<int8_t>(u));
     }
 
-    if (expected == sum_unsigned)
+    if (expected == sum_unsigned) {
         return true;
-    if (sum_signed >= 0 && expected == static_cast<uint64_t>(sum_signed))
+}
+    if (sum_signed >= 0 && expected == static_cast<uint64_t>(sum_signed)) {
         return true;
+}
     return false;
 }
 
-std::string sanitize_tar_name(const std::string& s) {
+auto sanitize_tar_name(const std::string& s) -> std::string {
     std::string out = s;
-    while (!out.empty() && (out.back() == '\0' || out.back() == '\n' || out.back() == '\r'))
+    while (!out.empty() && (out.back() == '\0' || out.back() == '\n' || out.back() == '\r')) {
         out.pop_back();
+}
     return out;
 }
 
-std::string base_name_from_path(const std::string& p) {
+auto base_name_from_path(const std::string& p) -> std::string {
     const size_t pos = p.find_last_of("/\\");
-    if (pos == std::string::npos)
+    if (pos == std::string::npos) {
         return p;
+}
     return p.substr(pos + 1);
 }
 } // namespace
 
-std::string sanitize_filename(const std::string& filename) {
+auto sanitize_filename(const std::string& filename) -> std::string {
     std::string sanitized = filename;
     size_t last_dot = sanitized.find_last_of('.');
     while (last_dot != std::string::npos) {
@@ -302,26 +324,27 @@ std::string sanitize_filename(const std::string& filename) {
     return sanitized;
 }
 
-bool check_md5_signature(const std::string& file_path) {
+auto check_md5_signature(const std::string& file_path) -> bool {
     TarMd5Info info;
     const ExitCode di = detect_tar_md5_info(file_path, info);
-    if (di != ExitCode::Success)
+    if (di != ExitCode::Success) {
         return false;
+}
     const ExitCode vr = verify_tar_md5(file_path, info);
     return vr == ExitCode::Success;
 }
 
-bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDevice& usb_device,
-                           const std::string& filename, bool large_partition, bool do_flash) {
+auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDevice& usb_device,
+                           const std::string& filename, bool large_partition, bool do_flash) -> bool {
     const std::streampos entry_start = file.tellg();
     if (entry_start < 0) {
         log_error("Unexpected end of file during LZ4 streaming.");
         return false;
     }
 
-    LZ4F_decompressionContext_t dctx;
+    LZ4F_decompressionContext_t dctx = nullptr;
     LZ4F_errorCode_t err = LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
-    if (LZ4F_isError(err)) {
+    if (LZ4F_isError(err) != 0u) {
         log_error("Failed to create LZ4 decompression context: " + std::string(LZ4F_getErrorName(err)));
         return false;
     }
@@ -365,7 +388,7 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
     LZ4F_frameInfo_t frame_info;
     size_t consumed = header_read_size;
     err = LZ4F_getFrameInfo(dctx, &frame_info, header_buf.data(), &consumed);
-    if (LZ4F_isError(err)) {
+    if (LZ4F_isError(err) != 0u) {
         log_error("Failed to get LZ4 frame info for " + filename + ": " + std::string(LZ4F_getErrorName(err)));
         return false;
     }
@@ -374,9 +397,9 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 
     if (uncompressed_size == 0) {
         log_info("LZ4 frame for " + filename + " does not include uncompressed size; scanning to determine size.");
-        LZ4F_decompressionContext_t scan_ctx;
+        LZ4F_decompressionContext_t scan_ctx = nullptr;
         LZ4F_errorCode_t scan_err = LZ4F_createDecompressionContext(&scan_ctx, LZ4F_VERSION);
-        if (LZ4F_isError(scan_err)) {
+        if (LZ4F_isError(scan_err) != 0u) {
             log_error("Failed to create LZ4 scan context: " + std::string(LZ4F_getErrorName(scan_err)));
             return false;
         }
@@ -395,9 +418,9 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 
         while (!frame_ended && (scan_remaining > 0 || src_size > 0)) {
             if (src_size == 0 && scan_remaining > 0) {
-                const size_t to_read = static_cast<size_t>(std::min<uint64_t>(in_buf_size, scan_remaining));
+                const auto to_read = static_cast<size_t>(std::min<uint64_t>(in_buf_size, scan_remaining));
                 file.read(reinterpret_cast<char*>(in_buf.data()), static_cast<std::streamsize>(to_read));
-                const size_t read = static_cast<size_t>(file.gcount());
+                const auto read = static_cast<size_t>(file.gcount());
                 if (read == 0) {
                     log_error("Unexpected end of file during LZ4 streaming.");
                     LZ4F_freeDecompressionContext(scan_ctx);
@@ -413,7 +436,7 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
                 size_t src_consumed = src_size;
                 scan_err = LZ4F_decompress(scan_ctx, out_buf.data(), &dst_sz, in_buf.data() + src_offset, &src_consumed,
                                            nullptr);
-                if (LZ4F_isError(scan_err)) {
+                if (LZ4F_isError(scan_err) != 0u) {
                     log_error("LZ4 scan decompression error for " + filename + ": " +
                               std::string(LZ4F_getErrorName(scan_err)));
                     LZ4F_freeDecompressionContext(scan_ctx);
@@ -448,7 +471,7 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
                         src_offset = 0;
                     }
                     const size_t space = in_buf_size - src_size;
-                    const size_t to_read = static_cast<size_t>(std::min<uint64_t>(space, scan_remaining));
+                    const auto to_read = static_cast<size_t>(std::min<uint64_t>(space, scan_remaining));
                     if (to_read == 0) {
                         log_error("LZ4 scan decompression error for " + filename + ": " +
                                   std::string(LZ4F_getErrorName(scan_err)));
@@ -456,7 +479,7 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
                         return false;
                     }
                     file.read(reinterpret_cast<char*>(in_buf.data() + src_size), static_cast<std::streamsize>(to_read));
-                    const size_t read = static_cast<size_t>(file.gcount());
+                    const auto read = static_cast<size_t>(file.gcount());
                     if (read == 0) {
                         log_error("Unexpected end of file during LZ4 streaming.");
                         LZ4F_freeDecompressionContext(scan_ctx);
@@ -507,8 +530,9 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
     }
 
     if (do_flash) {
-        if (!usb_device.send_file_part_header(uncompressed_size))
+        if (!usb_device.send_file_part_header(uncompressed_size)) {
             return false;
+}
     }
 
     // Reset the decompression context to ensure we can start decoding from the
@@ -520,7 +544,7 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 
     while (remaining_compressed > 0 || src_size > 0) {
         if (src_size == 0 && remaining_compressed > 0) {
-            const size_t to_read = static_cast<size_t>(std::min<uint64_t>(in_buf_size, remaining_compressed));
+            const auto to_read = static_cast<size_t>(std::min<uint64_t>(in_buf_size, remaining_compressed));
             file.read(reinterpret_cast<char*>(in_buf.data()), static_cast<std::streamsize>(to_read));
             src_size = static_cast<size_t>(file.gcount());
             if (src_size == 0) {
@@ -535,7 +559,7 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
             size_t dst_size = out_buf_size;
             size_t src_consumed = src_size;
             err = LZ4F_decompress(dctx, out_buf.data(), &dst_size, in_buf.data() + src_offset, &src_consumed, nullptr);
-            if (LZ4F_isError(err)) {
+            if (LZ4F_isError(err) != 0u) {
                 log_error("LZ4 decompression error for " + filename + ": " + std::string(LZ4F_getErrorName(err)));
                 return false;
             }
@@ -555,14 +579,14 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
                 }
 
                 const size_t space = in_buf_size - src_size;
-                const size_t to_read = static_cast<size_t>(std::min<uint64_t>(space, remaining_compressed));
+                const auto to_read = static_cast<size_t>(std::min<uint64_t>(space, remaining_compressed));
                 if (to_read == 0) {
                     log_error("LZ4 decompression made no progress for " + filename);
                     return false;
                 }
 
                 file.read(reinterpret_cast<char*>(in_buf.data() + src_size), static_cast<std::streamsize>(to_read));
-                const size_t read = static_cast<size_t>(file.gcount());
+                const auto read = static_cast<size_t>(file.gcount());
                 if (read == 0) {
                     log_error("Unexpected end of file during LZ4 streaming.");
                     return false;
@@ -574,8 +598,9 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 
             if (dst_size > 0) {
                 if (do_flash) {
-                    if (!usb_device.send_file_part_chunk(out_buf.data(), dst_size, chunk_index++, large_partition))
+                    if (!usb_device.send_file_part_chunk(out_buf.data(), dst_size, chunk_index++, large_partition)) {
                         return false;
+}
                 }
                 total_uncompressed += dst_size;
                 if (show_progress && uncompressed_size > 0) {
@@ -590,11 +615,13 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 
             src_offset += src_consumed;
             src_size -= src_consumed;
-            if (err == 0)
+            if (err == 0) {
                 break;
+}
         }
-        if (err == 0)
+        if (err == 0) {
             break;
+}
     }
 
     file.clear();
@@ -610,9 +637,9 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
     }
 
     if (show_progress && uncompressed_size > 0) {
-        std::cout << "\r[Flash] " << filename << ": 100%" << std::endl;
+        std::cout << "\r[Flash] " << filename << ": 100%" << '\n';
     } else if (show_progress) {
-        std::cout << std::endl;
+        std::cout << '\n';
     }
 
     if (uncompressed_size != 0 && total_uncompressed != uncompressed_size) {
@@ -624,17 +651,19 @@ bool process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
     return true;
 }
 
-ExitCode process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const PitTable& pit_table, bool do_flash,
-                          bool allow_unknown) {
+auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const PitTable& pit_table, bool do_flash,
+                          bool allow_unknown) -> ExitCode {
     log_info("Processing archive: " + tar_path);
 
     TarMd5Info md5_info;
     ExitCode ec = detect_tar_md5_info(tar_path, md5_info);
-    if (ec != ExitCode::Success)
+    if (ec != ExitCode::Success) {
         return ec;
+}
     ec = verify_tar_md5(tar_path, md5_info);
-    if (ec != ExitCode::Success)
+    if (ec != ExitCode::Success) {
         return ec;
+}
 
     std::ifstream file(tar_path, std::ios::binary);
     if (!file) {
@@ -648,7 +677,7 @@ ExitCode process_tar_file(const std::string& tar_path, UsbDevice& usb_device, co
         log_error("Failed to determine archive size: " + tar_path);
         return ExitCode::Firmware;
     }
-    const uint64_t file_size = static_cast<uint64_t>(sp);
+    const auto file_size = static_cast<uint64_t>(sp);
     file.seekg(0);
 
     const uint64_t content_end = md5_info.has_md5 ? md5_info.content_end : file_size;
@@ -659,11 +688,13 @@ ExitCode process_tar_file(const std::string& tar_path, UsbDevice& usb_device, co
 
     auto pit_field_to_string = [](const char* field, size_t max_len) -> std::string {
         size_t n = 0;
-        while (n < max_len && field[n] != '\0')
+        while (n < max_len && field[n] != '\0') {
             ++n;
+}
         std::string s(field, n);
-        while (!s.empty() && (s.back() == ' ' || s.back() == '\t'))
+        while (!s.empty() && (s.back() == ' ' || s.back() == '\t')) {
             s.pop_back();
+}
         return s;
     };
 
@@ -679,9 +710,10 @@ ExitCode process_tar_file(const std::string& tar_path, UsbDevice& usb_device, co
             log_error("Archive read error: " + tar_path);
             return ExitCode::Firmware;
         }
-        const uint64_t pos = static_cast<uint64_t>(hpos);
-        if (pos + 512 > content_end)
+        const auto pos = static_cast<uint64_t>(hpos);
+        if (pos + 512 > content_end) {
             break;
+}
 
         if (!read_exact(file, header, 512)) {
             log_error("Failed to read TAR header (truncated archive): " + tar_path);
@@ -716,10 +748,11 @@ ExitCode process_tar_file(const std::string& tar_path, UsbDevice& usb_device, co
             const std::string name = tar_field_string(header, 100);
             if (std::memcmp(header + 257, "ustar", 5) == 0) {
                 const std::string prefix = tar_field_string(header + 345, 155);
-                if (!prefix.empty())
+                if (!prefix.empty()) {
                     filename = prefix + "/" + name;
-                else
+                } else {
                     filename = name;
+}
             } else {
                 filename = name;
             }
@@ -732,7 +765,7 @@ ExitCode process_tar_file(const std::string& tar_path, UsbDevice& usb_device, co
             log_error("Archive read error: " + tar_path);
             return ExitCode::Firmware;
         }
-        const uint64_t data_start = static_cast<uint64_t>(dspos);
+        const auto data_start = static_cast<uint64_t>(dspos);
         if (data_start > content_end || data_size > (content_end - data_start)) {
             log_error("Archive entry exceeds declared content length: " + filename);
             return ExitCode::Firmware;
@@ -769,8 +802,9 @@ ExitCode process_tar_file(const std::string& tar_path, UsbDevice& usb_device, co
             }
             std::string long_name(buf.begin(), buf.end());
             const size_t nul = long_name.find('\0');
-            if (nul != std::string::npos)
+            if (nul != std::string::npos) {
                 long_name = long_name.substr(0, nul);
+}
             pending_gnu_long_name = sanitize_tar_name(long_name);
             const uint64_t padding = (512 - (data_size % 512)) % 512;
             file.seekg(static_cast<std::streamoff>(padding), std::ios::cur);
@@ -809,8 +843,9 @@ ExitCode process_tar_file(const std::string& tar_path, UsbDevice& usb_device, co
                         }
                     }
                 }
-                if (nl == std::string::npos)
+                if (nl == std::string::npos) {
                     break;
+}
                 off = nl + 1;
             }
             const uint64_t padding = (512 - (data_size % 512)) % 512;
@@ -823,10 +858,11 @@ ExitCode process_tar_file(const std::string& tar_path, UsbDevice& usb_device, co
         }
 
         // Skip non-regular entries (directories, symlinks, etc.)
-        if (!(typeflag == 0 || typeflag == '0')) {
+        if (typeflag != 0 && typeflag != '0') {
             ec = skip_entry_data(data_size);
-            if (ec != ExitCode::Success)
+            if (ec != ExitCode::Success) {
                 return ec;
+}
             continue;
         }
 
@@ -866,12 +902,13 @@ ExitCode process_tar_file(const std::string& tar_path, UsbDevice& usb_device, co
             }
         }
 
-        if (!pit_entry) {
+        if (pit_entry == nullptr) {
             if (allow_unknown) {
                 log_warn("Skipping unknown archive entry (no PIT match): " + filename);
                 ec = skip_entry_data(data_size);
-                if (ec != ExitCode::Success)
+                if (ec != ExitCode::Success) {
                     return ec;
+}
                 continue;
             }
             log_error("Archive entry does not match any PIT partition: " + filename);

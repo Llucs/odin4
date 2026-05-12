@@ -1,0 +1,6 @@
+/home/runner/work/odin4/odin4/_codeql_build_dir/CMakeFiles/lz4_lib.dir
+/home/runner/work/odin4/odin4/_codeql_build_dir/CMakeFiles/odin4_static.dir
+/home/runner/work/odin4/odin4/_codeql_build_dir/CMakeFiles/odin4_shared.dir
+/home/runner/work/odin4/odin4/_codeql_build_dir/CMakeFiles/odin4.dir
+/home/runner/work/odin4/odin4/_codeql_build_dir/CMakeFiles/edit_cache.dir
+/home/runner/work/odin4/odin4/_codeql_build_dir/CMakeFiles/rebuild_cache.dir

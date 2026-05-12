@@ -1,0 +1,1 @@
+/home/runner/work/_temp/codeql_databases/cpp/working/autobuild/bin/c++ -O3 -DNDEBUG -z relro -z now -pie -Wl,--dependency-file=CMakeFiles/odin4.dir/link.d CMakeFiles/odin4.dir/src/main.cpp.o -o odin4  libodin4_static.a -static-libgcc -static-libstdc++ /usr/local/lib/libcryptopp.a -lusb-1.0 liblz4_lib.a

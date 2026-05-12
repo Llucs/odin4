@@ -71,7 +71,7 @@ class UsbDevice {
     bool odin_dump_pit(std::vector<unsigned char>& pit_out);
     bool odin_command(uint32_t cmd, uint32_t subcmd, const void* payload, size_t payload_size,
                       std::vector<unsigned char>& rsp, int timeout_ms);
-    bool odin_fail_check(const std::vector<unsigned char>& rsp, const std::string& context, bool allow_progress);
+    static bool odin_fail_check(const std::vector<unsigned char>& rsp, const std::string& context, bool allow_progress);
 
     bool bulk_write_all(const void* data, size_t size, int timeout_ms);
     bool bulk_read_once(void* data, size_t size, int* actual_length, int timeout_ms);

@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<results version="2">
+    <cppcheck version="2.13.0"/>
+    <errors>
+        <error id="missingInclude" severity="information" msg="Include file: &quot;core/logger.h&quot; not found." verbose="Include file: &quot;core/logger.h&quot; not found.">
+            <location file="src/core/logger.cpp" line="1" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;iostream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;iostream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/core/logger.cpp" line="3" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;fstream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;fstream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/core/logger.cpp" line="4" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;mutex&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;mutex&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/core/logger.cpp" line="5" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;ctime&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;ctime&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/core/logger.cpp" line="6" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;iomanip&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;iomanip&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/core/logger.cpp" line="7" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;sstream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;sstream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/core/logger.cpp" line="8" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;chrono&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;chrono&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/core/logger.cpp" line="9" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;libusb.h&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;libusb.h&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/core/logger.cpp" line="10" column="0"/>
+        </error>
+        <error id="missingInclude" severity="information" msg="Include file: &quot;firmware/firmware_package.h&quot; not found." verbose="Include file: &quot;firmware/firmware_package.h&quot; not found.">
+            <location file="src/firmware/firmware_package.cpp" line="1" column="0"/>
+        </error>
+        <error id="missingInclude" severity="information" msg="Include file: &quot;core/logger.h&quot; not found." verbose="Include file: &quot;core/logger.h&quot; not found.">
+            <location file="src/firmware/firmware_package.cpp" line="2" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;iostream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;iostream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/firmware/firmware_package.cpp" line="4" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;vector&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;vector&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/firmware/firmware_package.cpp" line="5" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;algorithm&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;algorithm&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/firmware/firmware_package.cpp" line="6" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;cstring&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;cstring&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/firmware/firmware_package.cpp" line="7" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;cctype&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;cctype&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/firmware/firmware_package.cpp" line="8" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;unordered_set&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;unordered_set&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/firmware/firmware_package.cpp" line="9" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;sstream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;sstream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/firmware/firmware_package.cpp" line="10" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;limits&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;limits&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/firmware/firmware_package.cpp" line="11" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;lz4frame.h&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;lz4frame.h&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/firmware/firmware_package.cpp" line="12" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;cryptopp/md5.h&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;cryptopp/md5.h&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/firmware/firmware_package.cpp" line="15" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;cryptopp/hex.h&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;cryptopp/hex.h&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/firmware/firmware_package.cpp" line="16" column="0"/>
+        </error>
+        <error id="uselessCallsSubstr" severity="performance" msg="Ineffective call of function &apos;substr&apos; because a prefix of the string is assigned to itself. Use resize() or pop_back() instead." verbose="Ineffective call of function &apos;substr&apos; because a prefix of the string is assigned to itself. Use resize() or pop_back() instead." cwe="398" file0="src/firmware/firmware_package.cpp">
+            <location file="src/firmware/firmware_package.cpp" line="318" column="25"/>
+        </error>
+        <error id="uselessCallsSubstr" severity="performance" msg="Ineffective call of function &apos;substr&apos; because a prefix of the string is assigned to itself. Use resize() or pop_back() instead." verbose="Ineffective call of function &apos;substr&apos; because a prefix of the string is assigned to itself. Use resize() or pop_back() instead." cwe="398" file0="src/firmware/firmware_package.cpp">
+            <location file="src/firmware/firmware_package.cpp" line="806" column="29"/>
+        </error>
+        <error id="useStlAlgorithm" severity="style" msg="Consider using std::all_of or std::none_of algorithm instead of a raw loop." verbose="Consider using std::all_of or std::none_of algorithm instead of a raw loop." cwe="398" file0="src/firmware/firmware_package.cpp">
+            <location file="src/firmware/firmware_package.cpp" line="33" column="5"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;iostream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;iostream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/main.cpp" line="1" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;string&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;string&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/main.cpp" line="2" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;vector&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;vector&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/main.cpp" line="3" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;filesystem&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;filesystem&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/main.cpp" line="4" column="0"/>
+        </error>
+        <error id="missingInclude" severity="information" msg="Include file: &quot;odin4/odin4.h&quot; not found." verbose="Include file: &quot;odin4/odin4.h&quot; not found.">
+            <location file="src/main.cpp" line="5" column="0"/>
+        </error>
+        <error id="useStlAlgorithm" severity="style" msg="Consider using std::all_of or std::none_of algorithm instead of a raw loop." verbose="Consider using std::all_of or std::none_of algorithm instead of a raw loop." cwe="398" file0="src/main.cpp">
+            <location file="src/main.cpp" line="69" column="5"/>
+        </error>
+        <error id="missingInclude" severity="information" msg="Include file: &quot;odin4/odin4.h&quot; not found." verbose="Include file: &quot;odin4/odin4.h&quot; not found.">
+            <location file="src/odin4.cpp" line="1" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;string&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;string&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/core/logger.h" line="4" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;cstddef&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;cstddef&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/core/logger.h" line="5" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;string&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;string&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/core/odin_types.h" line="4" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;vector&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;vector&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/core/odin_types.h" line="5" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;cstdint&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;cstdint&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/core/odin_types.h" line="6" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;cstdint&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;cstdint&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/protocol/thor_protocol.h" line="4" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;string&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;string&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.h" line="4" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;vector&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;vector&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.h" line="5" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;array&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;array&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.h" line="6" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;istream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;istream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.h" line="7" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;libusb.h&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;libusb.h&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.h" line="8" column="0"/>
+        </error>
+        <error id="missingInclude" severity="information" msg="Include file: &quot;core/odin_types.h&quot; not found." verbose="Include file: &quot;core/odin_types.h&quot; not found.">
+            <location file="src/usb/usb_device.h" line="9" column="0"/>
+        </error>
+        <error id="missingInclude" severity="information" msg="Include file: &quot;protocol/thor_protocol.h&quot; not found." verbose="Include file: &quot;protocol/thor_protocol.h&quot; not found.">
+            <location file="src/usb/usb_device.h" line="10" column="0"/>
+        </error>
+        <error id="missingInclude" severity="information" msg="Include file: &quot;core/logger.h&quot; not found." verbose="Include file: &quot;core/logger.h&quot; not found.">
+            <location file="src/usb/usb_device.h" line="12" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;string&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;string&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/firmware/firmware_package.h" line="4" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;fstream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;fstream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/firmware/firmware_package.h" line="5" column="0"/>
+        </error>
+        <error id="missingInclude" severity="information" msg="Include file: &quot;core/odin_types.h&quot; not found." verbose="Include file: &quot;core/odin_types.h&quot; not found.">
+            <location file="src/firmware/firmware_package.h" line="6" column="0"/>
+        </error>
+        <error id="missingInclude" severity="information" msg="Include file: &quot;usb/usb_device.h&quot; not found." verbose="Include file: &quot;usb/usb_device.h&quot; not found.">
+            <location file="src/firmware/firmware_package.h" line="7" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;iostream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;iostream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/odin4.cpp" line="8" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;algorithm&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;algorithm&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/odin4.cpp" line="9" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;filesystem&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;filesystem&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/odin4.cpp" line="10" column="0"/>
+        </error>
+        <error id="useStlAlgorithm" severity="style" msg="Consider using std::all_of or std::none_of algorithm instead of a raw loop." verbose="Consider using std::all_of or std::none_of algorithm instead of a raw loop." cwe="398" file0="src/odin4.cpp">
+            <location file="src/odin4.cpp" line="90" column="5"/>
+        </error>
+        <error id="missingInclude" severity="information" msg="Include file: &quot;usb/usb_device.h&quot; not found." verbose="Include file: &quot;usb/usb_device.h&quot; not found.">
+            <location file="src/usb/usb_device.cpp" line="1" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;iostream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;iostream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.cpp" line="2" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;iomanip&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;iomanip&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.cpp" line="3" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;sstream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;sstream&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.cpp" line="4" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;thread&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;thread&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.cpp" line="5" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;chrono&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;chrono&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.cpp" line="6" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;cstring&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;cstring&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.cpp" line="7" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;vector&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;vector&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.cpp" line="8" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;algorithm&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;algorithm&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.cpp" line="9" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;cctype&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;cctype&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.cpp" line="10" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;unordered_set&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;unordered_set&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.cpp" line="11" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;limits&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;limits&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.cpp" line="12" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;mutex&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;mutex&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.cpp" line="13" column="0"/>
+        </error>
+        <error id="missingIncludeSystem" severity="information" msg="Include file: &lt;cstdlib&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results." verbose="Include file: &lt;cstdlib&gt; not found. Please note: Cppcheck does not need standard library headers to get proper results.">
+            <location file="src/usb/usb_device.cpp" line="14" column="0"/>
+        </error>
+        <error id="duplicateCondition" severity="style" msg="The if condition is the same as the previous if condition" verbose="The if condition is the same as the previous if condition" cwe="398" file0="src/usb/usb_device.cpp">
+            <location file="src/usb/usb_device.cpp" line="1143" column="9" info="Second condition"/>
+            <location file="src/usb/usb_device.cpp" line="1118" column="9" info="First condition"/>
+        </error>
+        <error id="useStlAlgorithm" severity="style" msg="Consider using std::any_of algorithm instead of a raw loop." verbose="Consider using std::any_of algorithm instead of a raw loop." cwe="398" file0="src/usb/usb_device.cpp">
+            <location file="src/usb/usb_device.cpp" line="153" column="5"/>
+        </error>
+        <error id="useStlAlgorithm" severity="style" msg="Consider using std::all_of or std::none_of algorithm instead of a raw loop." verbose="Consider using std::all_of or std::none_of algorithm instead of a raw loop." cwe="398" file0="src/usb/usb_device.cpp">
+            <location file="src/usb/usb_device.cpp" line="772" column="9"/>
+        </error>
+        <error id="unusedFunction" severity="style" msg="The function &apos;check_md5_signature&apos; is never used." verbose="The function &apos;check_md5_signature&apos; is never used." cwe="561">
+            <location file="src/firmware/firmware_package.cpp" line="327" column="0"/>
+            <symbol>check_md5_signature</symbol>
+        </error>
+        <error id="unusedFunction" severity="style" msg="The function &apos;thor_swap16&apos; is never used." verbose="The function &apos;thor_swap16&apos; is never used." cwe="561">
+            <location file="src/protocol/thor_protocol.h" line="14" column="0"/>
+            <symbol>thor_swap16</symbol>
+        </error>
+        <error id="unusedFunction" severity="style" msg="The function &apos;thor_swap64&apos; is never used." verbose="The function &apos;thor_swap64&apos; is never used." cwe="561">
+            <location file="src/protocol/thor_protocol.h" line="20" column="0"/>
+            <symbol>thor_swap64</symbol>
+        </error>
+        <error id="unusedFunction" severity="style" msg="The function &apos;le64_to_h&apos; is never used." verbose="The function &apos;le64_to_h&apos; is never used." cwe="561">
+            <location file="src/protocol/thor_protocol.h" line="155" column="0"/>
+            <symbol>le64_to_h</symbol>
+        </error>
+        <error id="unusedFunction" severity="style" msg="The function &apos;get_last_open_libusb_error&apos; is never used." verbose="The function &apos;get_last_open_libusb_error&apos; is never used." cwe="561">
+            <location file="src/usb/usb_device.h" line="90" column="0"/>
+            <symbol>get_last_open_libusb_error</symbol>
+        </error>
+        <error id="checkersReport" severity="information" msg="Active checkers: 161/592 (use --checkers-report=&lt;filename&gt; to see details)" verbose="Active checkers: 161/592 (use --checkers-report=&lt;filename&gt; to see details)"/>
+    </errors>
+</results>

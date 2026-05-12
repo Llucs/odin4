@@ -1,0 +1,2 @@
+/usr/bin/ar qc libodin4_static.a CMakeFiles/odin4_static.dir/src/odin4.cpp.o CMakeFiles/odin4_static.dir/src/core/logger.cpp.o CMakeFiles/odin4_static.dir/src/usb/usb_device.cpp.o CMakeFiles/odin4_static.dir/src/firmware/firmware_package.cpp.o
+/usr/bin/ranlib libodin4_static.a
