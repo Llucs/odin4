@@ -1,0 +1,42 @@
+name: C++ Modernization (C++23 + Clang-Tidy)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  modernize:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y clang clang-tidy cmake ninja-build
+
+      - name: Configure project (C++23)
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_CXX_STANDARD=23 \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Run clang-tidy (modernization)
+        run: |
+          clang-tidy \
+            -p build \
+            -checks='modernize-*,performance-*,readability-*' \
+            -fix \
+            -fix-errors \
+            $(find . -name '*.cpp' -o -name '*.c' -o -name '*.h')
+
+      - name: Rebuild after fixes
+        run: |
+          cmake --build build -j
+
+      - name: Upload report/artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpp-modernization-report
+          path: build
