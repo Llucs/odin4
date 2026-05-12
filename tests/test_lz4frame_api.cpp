@@ -39,11 +39,10 @@ static std::vector<uint8_t> make_compressible(size_t n) {
 }
 
 static std::vector<uint8_t> compress_frame(const uint8_t* src, size_t src_size,
-                                            const LZ4F_preferences_t* prefs = nullptr) {
+                                           const LZ4F_preferences_t* prefs = nullptr) {
     size_t bound = LZ4F_compressFrameBound(src_size, prefs);
     std::vector<uint8_t> dst(bound);
-    size_t result = LZ4F_compressFrame(dst.data(), bound,
-                                       src, src_size, prefs);
+    size_t result = LZ4F_compressFrame(dst.data(), bound, src, src_size, prefs);
     if (LZ4F_isError(result)) {
         return {};
     }
@@ -76,8 +75,7 @@ TEST(LZ4FErrorHelpers, GetErrorNameReturnsNonNullForError) {
     size_t dst_size = 1024;
     std::vector<uint8_t> dst(dst_size);
     size_t src_size = sizeof(bad_frame);
-    LZ4F_errorCode_t result = LZ4F_decompress(dctx, dst.data(), &dst_size,
-                                               bad_frame, &src_size, nullptr);
+    LZ4F_errorCode_t result = LZ4F_decompress(dctx, dst.data(), &dst_size, bad_frame, &src_size, nullptr);
     LZ4F_freeDecompressionContext(dctx);
 
     if (LZ4F_isError(result)) {
@@ -165,8 +163,8 @@ TEST(LZ4FRoundtrip, SmallCompressibleBlock) {
     std::vector<uint8_t> decompressed(src.size() * 2, 0);
     size_t dst_size = decompressed.size();
     size_t src_size_in = compressed.size();
-    LZ4F_errorCode_t result = LZ4F_decompress(dctx, decompressed.data(), &dst_size,
-                                               compressed.data(), &src_size_in, nullptr);
+    LZ4F_errorCode_t result =
+        LZ4F_decompress(dctx, decompressed.data(), &dst_size, compressed.data(), &src_size_in, nullptr);
     LZ4F_freeDecompressionContext(dctx);
 
     ASSERT_FALSE(LZ4F_isError(result)) << LZ4F_getErrorName(result);
@@ -187,8 +185,8 @@ TEST(LZ4FRoundtrip, LargeCompressibleBlock) {
     std::vector<uint8_t> decompressed(src.size(), 0);
     size_t dst_size = decompressed.size();
     size_t src_size_in = compressed.size();
-    LZ4F_errorCode_t result = LZ4F_decompress(dctx, decompressed.data(), &dst_size,
-                                               compressed.data(), &src_size_in, nullptr);
+    LZ4F_errorCode_t result =
+        LZ4F_decompress(dctx, decompressed.data(), &dst_size, compressed.data(), &src_size_in, nullptr);
     LZ4F_freeDecompressionContext(dctx);
 
     ASSERT_FALSE(LZ4F_isError(result));
@@ -207,8 +205,7 @@ TEST(LZ4FRoundtrip, EmptyInput) {
     uint8_t dummy = 0;
     size_t dst_size = sizeof(dummy);
     size_t src_size_in = compressed.size();
-    LZ4F_errorCode_t result = LZ4F_decompress(dctx, &dummy, &dst_size,
-                                               compressed.data(), &src_size_in, nullptr);
+    LZ4F_errorCode_t result = LZ4F_decompress(dctx, &dummy, &dst_size, compressed.data(), &src_size_in, nullptr);
     LZ4F_freeDecompressionContext(dctx);
 
     EXPECT_FALSE(LZ4F_isError(result));
@@ -230,8 +227,8 @@ TEST(LZ4FRoundtrip, WithContentChecksum) {
     std::vector<uint8_t> decompressed(src.size(), 0);
     size_t dst_size = decompressed.size();
     size_t src_size_in = compressed.size();
-    LZ4F_errorCode_t result = LZ4F_decompress(dctx, decompressed.data(), &dst_size,
-                                               compressed.data(), &src_size_in, nullptr);
+    LZ4F_errorCode_t result =
+        LZ4F_decompress(dctx, decompressed.data(), &dst_size, compressed.data(), &src_size_in, nullptr);
     LZ4F_freeDecompressionContext(dctx);
 
     ASSERT_FALSE(LZ4F_isError(result));
@@ -254,8 +251,8 @@ TEST(LZ4FRoundtrip, WithBlockLinkedMode) {
     std::vector<uint8_t> decompressed(src.size(), 0);
     size_t dst_size = decompressed.size();
     size_t src_size_in = compressed.size();
-    LZ4F_errorCode_t result = LZ4F_decompress(dctx, decompressed.data(), &dst_size,
-                                               compressed.data(), &src_size_in, nullptr);
+    LZ4F_errorCode_t result =
+        LZ4F_decompress(dctx, decompressed.data(), &dst_size, compressed.data(), &src_size_in, nullptr);
     LZ4F_freeDecompressionContext(dctx);
 
     ASSERT_FALSE(LZ4F_isError(result));
@@ -302,8 +299,7 @@ TEST(LZ4FCctxAPI, BeginUpdateEnd) {
     ASSERT_FALSE(LZ4F_isError(pos)) << LZ4F_getErrorName(pos);
 
     // Update
-    size_t written = LZ4F_compressUpdate(cctx, dst.data() + pos, dst.size() - pos,
-                                          src.data(), src.size(), nullptr);
+    size_t written = LZ4F_compressUpdate(cctx, dst.data() + pos, dst.size() - pos, src.data(), src.size(), nullptr);
     ASSERT_FALSE(LZ4F_isError(written)) << LZ4F_getErrorName(written);
     pos += written;
 
@@ -323,8 +319,7 @@ TEST(LZ4FCctxAPI, BeginUpdateEnd) {
     std::vector<uint8_t> decompressed(src.size(), 0);
     size_t dst_size = decompressed.size();
     size_t src_size_in = dst.size();
-    LZ4F_errorCode_t result = LZ4F_decompress(dctx, decompressed.data(), &dst_size,
-                                               dst.data(), &src_size_in, nullptr);
+    LZ4F_errorCode_t result = LZ4F_decompress(dctx, decompressed.data(), &dst_size, dst.data(), &src_size_in, nullptr);
     LZ4F_freeDecompressionContext(dctx);
 
     ASSERT_FALSE(LZ4F_isError(result));
@@ -379,9 +374,8 @@ TEST(LZ4FDecompress, IncrementalFeeding) {
         size_t dst_size = sizeof(out_buf);
         size_t src_size_in = to_feed;
 
-        LZ4F_errorCode_t result = LZ4F_decompress(dctx, out_buf, &dst_size,
-                                                    compressed.data() + in_pos,
-                                                    &src_size_in, nullptr);
+        LZ4F_errorCode_t result =
+            LZ4F_decompress(dctx, out_buf, &dst_size, compressed.data() + in_pos, &src_size_in, nullptr);
         if (LZ4F_isError(result)) {
             LZ4F_freeDecompressionContext(dctx);
             FAIL() << "LZ4F_decompress returned error: " << LZ4F_getErrorName(result);
