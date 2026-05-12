@@ -1,9 +1,13 @@
 odin4
 Copyright 2026 Llucs
 
-This project includes third-party libraries:
+This software includes third-party components:
+
 - libusb
 - Crypto++
 - LZ4
 
-See the LICENSE file for licensing details.
+Each component is distributed under its own license.
+See the LICENSE file and individual source directories for full license texts and attributions.
+
+This NOTICE file is provided to comply with the Apache License 2.0 requirements.
