@@ -29,11 +29,11 @@ auto is_hex_char(unsigned char c) -> bool {
 auto is_hex32(const std::string& s) -> bool {
     if (s.size() != 32) {
         return false;
-}
+    }
     for (unsigned char c : s) {
         if (!is_hex_char(c)) {
             return false;
-}
+        }
     }
     return true;
 }
@@ -46,7 +46,7 @@ auto to_lower_copy(std::string s) -> std::string {
 auto ends_with_case_insensitive(const std::string& s, const std::string& suffix) -> bool {
     if (s.size() < suffix.size()) {
         return false;
-}
+    }
     return to_lower_copy(s.substr(s.size() - suffix.size())) == to_lower_copy(suffix);
 }
 
@@ -54,11 +54,11 @@ auto tar_field_string(const char* field, size_t max_len) -> std::string {
     size_t n = 0;
     while (n < max_len && field[n] != '\0') {
         ++n;
-}
+    }
     std::string s(field, n);
     while (!s.empty() && (s.back() == ' ' || s.back() == '\t')) {
         s.pop_back();
-}
+    }
     return s;
 }
 
@@ -66,36 +66,36 @@ auto parse_octal_u64(const char* field, size_t len, uint64_t& out) -> bool {
     out = 0;
     if ((field == nullptr) || len == 0) {
         return true;
-}
+    }
 
     size_t i = 0;
     while (i < len && (field[i] == ' ' || field[i] == '\t')) {
         ++i;
-}
+    }
     if (i < len && field[i] == '\0') {
         return true;
-}
+    }
 
     bool any = false;
     for (; i < len; ++i) {
         const auto c = static_cast<unsigned char>(field[i]);
         if (c == '\0' || c == ' ' || c == '\t') {
             break;
-}
+        }
         if (c < '0' || c > '7') {
             return false;
-}
+        }
         const uint64_t prev = out;
         out = (out << 3) + static_cast<uint64_t>(c - '0');
         if ((out >> 3) != prev) {
             return false;
-}
+        }
         any = true;
     }
 
     if (!any) {
         out = 0;
-}
+    }
     return true;
 }
 
@@ -152,14 +152,14 @@ auto detect_tar_md5_info(const std::string& file_path, TarMd5Info& info) -> Exit
         }
         if (!ok) {
             continue;
-}
+        }
 
         const bool left_ok = (pos == 0) || !is_hex_char(static_cast<unsigned char>(tail[static_cast<size_t>(pos - 1)]));
         const bool right_ok = (static_cast<size_t>(pos + 32) >= tail.size()) ||
                               !is_hex_char(static_cast<unsigned char>(tail[static_cast<size_t>(pos + 32)]));
         if (!left_ok || !right_ok) {
             continue;
-}
+        }
 
         best_pos = pos;
         break;
@@ -206,7 +206,7 @@ auto detect_tar_md5_info(const std::string& file_path, TarMd5Info& info) -> Exit
 auto verify_tar_md5(const std::string& file_path, const TarMd5Info& info) -> ExitCode {
     if (!info.has_md5) {
         return ExitCode::Success;
-}
+    }
 
     if (info.content_end == 0) {
         log_error("Invalid MD5 content size (0): " + file_path);
@@ -258,7 +258,7 @@ auto is_all_zeros_block(const char* header) -> bool {
     for (int i = 0; i < 512; ++i) {
         if (header[i] != 0) {
             return false;
-}
+        }
     }
     return true;
 }
@@ -267,7 +267,7 @@ auto tar_header_checksum_valid(const char* header) -> bool {
     uint64_t expected = 0;
     if (!parse_octal_u64(header + 148, 8, expected)) {
         return false;
-}
+    }
 
     uint64_t sum_unsigned = 0;
     int64_t sum_signed = 0;
@@ -277,17 +277,17 @@ auto tar_header_checksum_valid(const char* header) -> bool {
             u = static_cast<unsigned char>(' ');
         } else {
             u = static_cast<unsigned char>(header[i]);
-}
+        }
         sum_unsigned += static_cast<uint64_t>(u);
         sum_signed += static_cast<int64_t>(static_cast<int8_t>(u));
     }
 
     if (expected == sum_unsigned) {
         return true;
-}
+    }
     if (sum_signed >= 0 && expected == static_cast<uint64_t>(sum_signed)) {
         return true;
-}
+    }
     return false;
 }
 
@@ -295,7 +295,7 @@ auto sanitize_tar_name(const std::string& s) -> std::string {
     std::string out = s;
     while (!out.empty() && (out.back() == '\0' || out.back() == '\n' || out.back() == '\r')) {
         out.pop_back();
-}
+    }
     return out;
 }
 
@@ -303,7 +303,7 @@ auto base_name_from_path(const std::string& p) -> std::string {
     const size_t pos = p.find_last_of("/\\");
     if (pos == std::string::npos) {
         return p;
-}
+    }
     return p.substr(pos + 1);
 }
 } // namespace
@@ -329,7 +329,7 @@ auto check_md5_signature(const std::string& file_path) -> bool {
     const ExitCode di = detect_tar_md5_info(file_path, info);
     if (di != ExitCode::Success) {
         return false;
-}
+    }
     const ExitCode vr = verify_tar_md5(file_path, info);
     return vr == ExitCode::Success;
 }
@@ -532,7 +532,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
     if (do_flash) {
         if (!usb_device.send_file_part_header(uncompressed_size)) {
             return false;
-}
+        }
     }
 
     // Reset the decompression context to ensure we can start decoding from the
@@ -600,7 +600,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
                 if (do_flash) {
                     if (!usb_device.send_file_part_chunk(out_buf.data(), dst_size, chunk_index++, large_partition)) {
                         return false;
-}
+                    }
                 }
                 total_uncompressed += dst_size;
                 if (show_progress && uncompressed_size > 0) {
@@ -617,11 +617,11 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
             src_size -= src_consumed;
             if (err == 0) {
                 break;
-}
+            }
         }
         if (err == 0) {
             break;
-}
+        }
     }
 
     file.clear();
@@ -652,18 +652,18 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 }
 
 auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const PitTable& pit_table, bool do_flash,
-                          bool allow_unknown) -> ExitCode {
+                      bool allow_unknown) -> ExitCode {
     log_info("Processing archive: " + tar_path);
 
     TarMd5Info md5_info;
     ExitCode ec = detect_tar_md5_info(tar_path, md5_info);
     if (ec != ExitCode::Success) {
         return ec;
-}
+    }
     ec = verify_tar_md5(tar_path, md5_info);
     if (ec != ExitCode::Success) {
         return ec;
-}
+    }
 
     std::ifstream file(tar_path, std::ios::binary);
     if (!file) {
@@ -690,11 +690,11 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
         size_t n = 0;
         while (n < max_len && field[n] != '\0') {
             ++n;
-}
+        }
         std::string s(field, n);
         while (!s.empty() && (s.back() == ' ' || s.back() == '\t')) {
             s.pop_back();
-}
+        }
         return s;
     };
 
@@ -713,7 +713,7 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
         const auto pos = static_cast<uint64_t>(hpos);
         if (pos + 512 > content_end) {
             break;
-}
+        }
 
         if (!read_exact(file, header, 512)) {
             log_error("Failed to read TAR header (truncated archive): " + tar_path);
@@ -752,7 +752,7 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
                     filename = prefix + "/" + name;
                 } else {
                     filename = name;
-}
+                }
             } else {
                 filename = name;
             }
@@ -804,7 +804,7 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
             const size_t nul = long_name.find('\0');
             if (nul != std::string::npos) {
                 long_name = long_name.substr(0, nul);
-}
+            }
             pending_gnu_long_name = sanitize_tar_name(long_name);
             const uint64_t padding = (512 - (data_size % 512)) % 512;
             file.seekg(static_cast<std::streamoff>(padding), std::ios::cur);
@@ -845,7 +845,7 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
                 }
                 if (nl == std::string::npos) {
                     break;
-}
+                }
                 off = nl + 1;
             }
             const uint64_t padding = (512 - (data_size % 512)) % 512;
@@ -862,7 +862,7 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
             ec = skip_entry_data(data_size);
             if (ec != ExitCode::Success) {
                 return ec;
-}
+            }
             continue;
         }
 
@@ -908,7 +908,7 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
                 ec = skip_entry_data(data_size);
                 if (ec != ExitCode::Success) {
                     return ec;
-}
+                }
                 continue;
             }
             log_error("Archive entry does not match any PIT partition: " + filename);

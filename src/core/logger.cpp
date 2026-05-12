@@ -51,7 +51,7 @@ auto level_tag(LogLevel lvl) -> const char* {
 auto should_emit(LogLevel lvl) -> bool {
     if (lvl == LogLevel::Error) {
         return true;
-}
+    }
     return static_cast<int>(lvl) <= static_cast<int>(g_level);
 }
 
@@ -63,7 +63,7 @@ void write_to_file(LogLevel lvl, const std::string& msg) {
     std::lock_guard<std::mutex> lock(g_log_mutex);
     if (!g_log_stream.is_open()) {
         return;
-}
+    }
     g_log_stream << timestamp_now() << " [" << level_tag(lvl) << "] " << msg << '\n';
     g_log_stream.flush();
 }
@@ -74,7 +74,7 @@ void log_impl(LogLevel lvl, const std::string& msg, bool to_stderr) {
             write_line(std::cerr, lvl, msg);
         } else {
             write_line(std::cout, lvl, msg);
-}
+        }
     }
     write_to_file(lvl, msg);
 }
@@ -92,7 +92,7 @@ void set_log_file(const std::string& path) {
     std::lock_guard<std::mutex> lock(g_log_mutex);
     if (g_log_stream.is_open()) {
         g_log_stream.close();
-}
+    }
     if (!path.empty()) {
         g_log_stream.open(path, std::ios::app);
         if (!g_log_stream) {
@@ -131,10 +131,10 @@ void log_debug(const std::string& msg) {
 void log_hexdump(const std::string& title, const void* data, size_t size) {
     if (get_log_level() != LogLevel::Debug) {
         return;
-}
+    }
     if ((data == nullptr) || size == 0) {
         return;
-}
+    }
 
     const auto* bytes = static_cast<const unsigned char*>(data);
 
@@ -155,5 +155,5 @@ void log_hexdump(const std::string& title, const void* data, size_t size) {
     }
     if (!line.str().empty()) {
         log_debug(line.str());
-}
+    }
 }

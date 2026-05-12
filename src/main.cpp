@@ -62,14 +62,14 @@ static auto parse_hex_u16(const std::string& s, uint16_t& out) -> bool {
     std::string v = s;
     if (v.rfind("0x", 0) == 0 || v.rfind("0X", 0) == 0) {
         v = v.substr(2);
-}
+    }
     if (v.empty() || v.size() > 4) {
         return false;
-}
+    }
     for (unsigned char c : v) {
         if (std::isxdigit(c) == 0) {
             return false;
-}
+        }
     }
     try {
         out = static_cast<uint16_t>(std::stoul(v, nullptr, 16));
@@ -85,7 +85,7 @@ static auto parse_int(const std::string& s, int& out) -> bool {
         int v = std::stoi(s, &idx, 10);
         if (idx != s.size()) {
             return false;
-}
+        }
         out = v;
         return true;
     } catch (...) {
@@ -154,7 +154,7 @@ auto main(int argc, char** argv) -> int {
         auto take_value = [&](std::string& out) -> bool {
             if (i + 1 >= argc) {
                 return false;
-}
+            }
             out = argv[++i];
             return true;
         };
@@ -162,14 +162,14 @@ auto main(int argc, char** argv) -> int {
         auto take_value_u16hex = [&](uint16_t& out) -> bool {
             if (i + 1 >= argc) {
                 return false;
-}
+            }
             return parse_hex_u16(argv[++i], out);
         };
 
         auto take_value_int = [&](int& out) -> bool {
             if (i + 1 >= argc) {
                 return false;
-}
+            }
             return parse_int(argv[++i], out);
         };
 
@@ -235,7 +235,7 @@ auto main(int argc, char** argv) -> int {
                 cfg.ums = value;
             } else if (arg == "-d") {
                 cfg.device_path = value;
-}
+            }
             continue;
         }
 

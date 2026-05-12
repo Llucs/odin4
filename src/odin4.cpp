@@ -41,7 +41,7 @@ void odin4_init(const OdinConfig& cfg) {
         set_log_level(LogLevel::Error);
     } else {
         set_log_level(LogLevel::Info);
-}
+    }
 
     set_log_file("odin4.log");
 }
@@ -61,28 +61,29 @@ static auto verify_firmware_compatibility(const OdinConfig& cfg, const std::stri
     }
 
     std::string dt = device_type;
-    dt.erase(std::remove_if(dt.begin(), dt.end(),
-                            [](unsigned char c) { return (std::isspace(c) != 0) || c == '\\' || c == '/' || c == '-'; }),
-             dt.end());
+    dt.erase(
+        std::remove_if(dt.begin(), dt.end(),
+                       [](unsigned char c) { return (std::isspace(c) != 0) || c == '\\' || c == '/' || c == '-'; }),
+        dt.end());
 
     std::transform(dt.begin(), dt.end(), dt.begin(),
                    [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
 
     if (dt.rfind("SM", 0) == 0) {
         dt = dt.substr(2);
-}
+    }
 
     auto file_matches = [&](const std::string& path) -> bool {
         if (path.empty()) {
             return true;
-}
+        }
         std::string fname = std::filesystem::path(path).filename().string();
         std::string f;
         f.reserve(fname.size());
         for (unsigned char c : fname) {
             if (std::isalnum(c) != 0) {
                 f.push_back(static_cast<char>(std::toupper(c)));
-}
+            }
         }
         return f.find(dt) != std::string::npos;
     };
@@ -90,7 +91,7 @@ static auto verify_firmware_compatibility(const OdinConfig& cfg, const std::stri
     for (const std::string& p : {cfg.bootloader, cfg.ap, cfg.cp, cfg.csc, cfg.ums}) {
         if (p.empty()) {
             continue;
-}
+        }
         if (!file_matches(p)) {
             log_error("Firmware file name does not appear to match device type: " +
                       std::filesystem::path(p).filename().string() + " vs " + device_type);
@@ -136,7 +137,7 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
     const std::string device_type = usb.get_device_type();
     if (!device_type.empty()) {
         log_info("Device type: " + device_type);
-}
+    }
 
     if (has_any_firmware_files(cfg)) {
         if (!verify_firmware_compatibility(cfg, device_type)) {
@@ -166,12 +167,12 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
             for (const auto& item : archives) {
                 if (item.second.empty()) {
                     continue;
-}
+                }
                 std::error_code ec;
                 auto sz = std::filesystem::file_size(item.second, ec);
                 if (!ec) {
                     total_bytes += sz;
-}
+                }
             }
             if (total_bytes > 0 && !usb.notify_total_bytes(total_bytes)) {
                 log_error("Failed to send total bytes to device.");
@@ -183,7 +184,7 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
         for (const auto& item : archives) {
             if (item.second.empty()) {
                 continue;
-}
+            }
             ExitCode rc = process_tar_file(item.second, usb, pit, !cfg.dry_run, cfg.allow_unknown);
             if (rc != ExitCode::Success) {
                 usb.end_session();
@@ -238,7 +239,7 @@ auto odin4_run(const OdinConfig& cfg) -> OdinExitCode {
             log_error("Multiple compatible devices detected in Download Mode. Use -d to select one device.");
             for (const auto& dev_path : devices) {
                 log_info("Detected device: " + dev_path);
-}
+            }
             return OdinExitCode::Usb;
         }
         OdinConfig one = cfg;
