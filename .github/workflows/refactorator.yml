@@ -37,6 +37,7 @@ jobs:
             cppcheck \
             cmake \
             ninja-build \
+            libusb-1.0-0-dev \
             git \
             jq \
             python3
