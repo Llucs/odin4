@@ -833,9 +833,9 @@ LZ4LIB_API int LZ4_uncompress_unknownOutputSize(const char* source, char* dest, 
  * achieved will therefore be no better than compressing each chunk
  * independently.
  */
-LZ4_DEPRECATED("Use LZ4_createStream() instead") LZ4LIB_API void* LZ4_create(char* inputBuffer);
+LZ4_DEPRECATED("Use LZ4_createStream() instead") LZ4LIB_API void* LZ4_create(const char* inputBuffer);
 LZ4_DEPRECATED("Use LZ4_createStream() instead") LZ4LIB_API int LZ4_sizeofStreamState(void);
-LZ4_DEPRECATED("Use LZ4_resetStream() instead") LZ4LIB_API int LZ4_resetStreamState(void* state, char* inputBuffer);
+LZ4_DEPRECATED("Use LZ4_resetStream() instead") LZ4LIB_API int LZ4_resetStreamState(void* state, const char* inputBuffer);
 LZ4_DEPRECATED("Use LZ4_saveDict() instead") LZ4LIB_API char* LZ4_slideInputBuffer(void* state);
 
 /*! Obsolete streaming decoding functions (since v1.7.0) */

@@ -231,10 +231,9 @@ static int XXH_isLittleEndian(void) {
 typedef enum { XXH_aligned, XXH_unaligned } XXH_alignment;
 
 FORCE_INLINE U32 XXH_readLE32_align(const void* ptr, XXH_endianness endian, XXH_alignment align) {
-    if (align == XXH_unaligned)
+    if (align == XXH_unaligned) {
         return endian == XXH_littleEndian ? XXH_read32(ptr) : XXH_swap32(XXH_read32(ptr));
-    else
-        return endian == XXH_littleEndian ? *(const U32*) ptr : XXH_swap32(*(const U32*) ptr);
+    }         return endian == XXH_littleEndian ? *(const U32*) ptr : XXH_swap32(*(const U32*) ptr);
 }
 
 FORCE_INLINE U32 XXH_readLE32(const void* ptr, XXH_endianness endian) {
@@ -411,17 +410,15 @@ XXH_PUBLIC_API unsigned int XXH32(const void* input, size_t len, unsigned int se
 
     if (XXH_FORCE_ALIGN_CHECK) {
         if ((((size_t) input) & 3) == 0) { /* Input is 4-bytes aligned, leverage the speed benefit */
-            if ((endian_detected == XXH_littleEndian) || XXH_FORCE_NATIVE_FORMAT)
+            if ((endian_detected == XXH_littleEndian) || XXH_FORCE_NATIVE_FORMAT) {
                 return XXH32_endian_align(input, len, seed, XXH_littleEndian, XXH_aligned);
-            else
-                return XXH32_endian_align(input, len, seed, XXH_bigEndian, XXH_aligned);
+            }                 return XXH32_endian_align(input, len, seed, XXH_bigEndian, XXH_aligned);
         }
     }
 
-    if ((endian_detected == XXH_littleEndian) || XXH_FORCE_NATIVE_FORMAT)
+    if ((endian_detected == XXH_littleEndian) || XXH_FORCE_NATIVE_FORMAT) {
         return XXH32_endian_align(input, len, seed, XXH_littleEndian, XXH_unaligned);
-    else
-        return XXH32_endian_align(input, len, seed, XXH_bigEndian, XXH_unaligned);
+    }         return XXH32_endian_align(input, len, seed, XXH_bigEndian, XXH_unaligned);
 #endif
 }
 
@@ -453,11 +450,12 @@ XXH_PUBLIC_API XXH_errorcode XXH32_reset(XXH32_state_t* statePtr, unsigned int s
 
 FORCE_INLINE XXH_errorcode XXH32_update_endian(XXH32_state_t* state, const void* input, size_t len,
                                                XXH_endianness endian) {
-    if (input == NULL)
+    if (input == NULL) {
 #if defined(XXH_ACCEPT_NULL_INPUT_POINTER) && (XXH_ACCEPT_NULL_INPUT_POINTER >= 1)
         return XXH_OK;
 #else
         return XXH_ERROR;
+}
 #endif
 
     {
@@ -525,10 +523,9 @@ FORCE_INLINE XXH_errorcode XXH32_update_endian(XXH32_state_t* state, const void*
 XXH_PUBLIC_API XXH_errorcode XXH32_update(XXH32_state_t* state_in, const void* input, size_t len) {
     XXH_endianness endian_detected = (XXH_endianness) XXH_CPU_LITTLE_ENDIAN;
 
-    if ((endian_detected == XXH_littleEndian) || XXH_FORCE_NATIVE_FORMAT)
+    if ((endian_detected == XXH_littleEndian) || XXH_FORCE_NATIVE_FORMAT) {
         return XXH32_update_endian(state_in, input, len, XXH_littleEndian);
-    else
-        return XXH32_update_endian(state_in, input, len, XXH_bigEndian);
+    }         return XXH32_update_endian(state_in, input, len, XXH_bigEndian);
 }
 
 FORCE_INLINE U32 XXH32_digest_endian(const XXH32_state_t* state, XXH_endianness endian) {
@@ -549,10 +546,9 @@ FORCE_INLINE U32 XXH32_digest_endian(const XXH32_state_t* state, XXH_endianness 
 XXH_PUBLIC_API unsigned int XXH32_digest(const XXH32_state_t* state_in) {
     XXH_endianness endian_detected = (XXH_endianness) XXH_CPU_LITTLE_ENDIAN;
 
-    if ((endian_detected == XXH_littleEndian) || XXH_FORCE_NATIVE_FORMAT)
+    if ((endian_detected == XXH_littleEndian) || XXH_FORCE_NATIVE_FORMAT) {
         return XXH32_digest_endian(state_in, XXH_littleEndian);
-    else
-        return XXH32_digest_endian(state_in, XXH_bigEndian);
+    }         return XXH32_digest_endian(state_in, XXH_bigEndian);
 }
 
 /*======   Canonical representation   ======*/
@@ -565,8 +561,9 @@ XXH_PUBLIC_API unsigned int XXH32_digest(const XXH32_state_t* state_in) {
 
 XXH_PUBLIC_API void XXH32_canonicalFromHash(XXH32_canonical_t* dst, XXH32_hash_t hash) {
     XXH_STATIC_ASSERT(sizeof(XXH32_canonical_t) == sizeof(XXH32_hash_t));
-    if (XXH_CPU_LITTLE_ENDIAN)
+    if (XXH_CPU_LITTLE_ENDIAN) {
         hash = XXH_swap32(hash);
+}
     memcpy(dst, &hash, sizeof(*dst));
 }
 
@@ -641,10 +638,9 @@ static U64 XXH_swap64(U64 x) {
 #endif
 
 FORCE_INLINE U64 XXH_readLE64_align(const void* ptr, XXH_endianness endian, XXH_alignment align) {
-    if (align == XXH_unaligned)
+    if (align == XXH_unaligned) {
         return endian == XXH_littleEndian ? XXH_read64(ptr) : XXH_swap64(XXH_read64(ptr));
-    else
-        return endian == XXH_littleEndian ? *(const U64*) ptr : XXH_swap64(*(const U64*) ptr);
+    }         return endian == XXH_littleEndian ? *(const U64*) ptr : XXH_swap64(*(const U64*) ptr);
 }
 
 FORCE_INLINE U64 XXH_readLE64(const void* ptr, XXH_endianness endian) {
@@ -885,17 +881,15 @@ XXH_PUBLIC_API unsigned long long XXH64(const void* input, size_t len, unsigned 
 
     if (XXH_FORCE_ALIGN_CHECK) {
         if ((((size_t) input) & 7) == 0) { /* Input is aligned, let's leverage the speed advantage */
-            if ((endian_detected == XXH_littleEndian) || XXH_FORCE_NATIVE_FORMAT)
+            if ((endian_detected == XXH_littleEndian) || XXH_FORCE_NATIVE_FORMAT) {
                 return XXH64_endian_align(input, len, seed, XXH_littleEndian, XXH_aligned);
-            else
-                return XXH64_endian_align(input, len, seed, XXH_bigEndian, XXH_aligned);
+            }                 return XXH64_endian_align(input, len, seed, XXH_bigEndian, XXH_aligned);
         }
     }
 
-    if ((endian_detected == XXH_littleEndian) || XXH_FORCE_NATIVE_FORMAT)
+    if ((endian_detected == XXH_littleEndian) || XXH_FORCE_NATIVE_FORMAT) {
         return XXH64_endian_align(input, len, seed, XXH_littleEndian, XXH_unaligned);
-    else
-        return XXH64_endian_align(input, len, seed, XXH_bigEndian, XXH_unaligned);
+    }         return XXH64_endian_align(input, len, seed, XXH_bigEndian, XXH_unaligned);
 #endif
 }
 
@@ -927,11 +921,12 @@ XXH_PUBLIC_API XXH_errorcode XXH64_reset(XXH64_state_t* statePtr, unsigned long 
 
 FORCE_INLINE XXH_errorcode XXH64_update_endian(XXH64_state_t* state, const void* input, size_t len,
                                                XXH_endianness endian) {
-    if (input == NULL)
+    if (input == NULL) {
 #if defined(XXH_ACCEPT_NULL_INPUT_POINTER) && (XXH_ACCEPT_NULL_INPUT_POINTER >= 1)
         return XXH_OK;
 #else
         return XXH_ERROR;
+}
 #endif
 
     {
@@ -992,10 +987,9 @@ FORCE_INLINE XXH_errorcode XXH64_update_endian(XXH64_state_t* state, const void*
 XXH_PUBLIC_API XXH_errorcode XXH64_update(XXH64_state_t* state_in, const void* input, size_t len) {
     XXH_endianness endian_detected = (XXH_endianness) XXH_CPU_LITTLE_ENDIAN;
 
-    if ((endian_detected == XXH_littleEndian) || XXH_FORCE_NATIVE_FORMAT)
+    if ((endian_detected == XXH_littleEndian) || XXH_FORCE_NATIVE_FORMAT) {
         return XXH64_update_endian(state_in, input, len, XXH_littleEndian);
-    else
-        return XXH64_update_endian(state_in, input, len, XXH_bigEndian);
+    }         return XXH64_update_endian(state_in, input, len, XXH_bigEndian);
 }
 
 FORCE_INLINE U64 XXH64_digest_endian(const XXH64_state_t* state, XXH_endianness endian) {
@@ -1024,18 +1018,18 @@ FORCE_INLINE U64 XXH64_digest_endian(const XXH64_state_t* state, XXH_endianness 
 XXH_PUBLIC_API unsigned long long XXH64_digest(const XXH64_state_t* state_in) {
     XXH_endianness endian_detected = (XXH_endianness) XXH_CPU_LITTLE_ENDIAN;
 
-    if ((endian_detected == XXH_littleEndian) || XXH_FORCE_NATIVE_FORMAT)
+    if ((endian_detected == XXH_littleEndian) || XXH_FORCE_NATIVE_FORMAT) {
         return XXH64_digest_endian(state_in, XXH_littleEndian);
-    else
-        return XXH64_digest_endian(state_in, XXH_bigEndian);
+    }         return XXH64_digest_endian(state_in, XXH_bigEndian);
 }
 
 /*====== Canonical representation   ======*/
 
 XXH_PUBLIC_API void XXH64_canonicalFromHash(XXH64_canonical_t* dst, XXH64_hash_t hash) {
     XXH_STATIC_ASSERT(sizeof(XXH64_canonical_t) == sizeof(XXH64_hash_t));
-    if (XXH_CPU_LITTLE_ENDIAN)
+    if (XXH_CPU_LITTLE_ENDIAN) {
         hash = XXH_swap64(hash);
+}
     memcpy(dst, &hash, sizeof(*dst));
 }
 

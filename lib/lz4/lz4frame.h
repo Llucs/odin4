@@ -693,7 +693,7 @@ LZ4FLIB_STATIC_API size_t LZ4F_getBlockSize(LZ4F_blockSizeID_t blockSizeID);
  */
 LZ4FLIB_STATIC_API size_t LZ4F_uncompressedUpdate(LZ4F_cctx* cctx, void* dstBuffer, size_t dstCapacity,
                                                   const void* srcBuffer, size_t srcSize,
-                                                  const LZ4F_compressOptions_t* cOptPtr);
+                                                  const LZ4F_compressOptions_t* compressOptionsPtr);
 
 /**********************************
  *  Custom memory allocation
@@ -721,7 +721,7 @@ static
 
 LZ4FLIB_STATIC_API LZ4F_cctx* LZ4F_createCompressionContext_advanced(LZ4F_CustomMem customMem, unsigned version);
 LZ4FLIB_STATIC_API LZ4F_dctx* LZ4F_createDecompressionContext_advanced(LZ4F_CustomMem customMem, unsigned version);
-LZ4FLIB_STATIC_API LZ4F_CDict* LZ4F_createCDict_advanced(LZ4F_CustomMem customMem, const void* dictBuffer,
+LZ4FLIB_STATIC_API LZ4F_CDict* LZ4F_createCDict_advanced(LZ4F_CustomMem cmem, const void* dictBuffer,
                                                          size_t dictSize);
 
 /*! Context size inspection : v1.10.1+
