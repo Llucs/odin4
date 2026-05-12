@@ -8,7 +8,7 @@ enum class LogLevel : int { Error = 0, Warn = 1, Info = 2, Verbose = 3, Debug = 
 
 // Configure the console/file verbosity. Errors are always printed.
 void set_log_level(LogLevel level);
-LogLevel get_log_level();
+auto get_log_level() -> LogLevel;
 
 // Configure an optional log file. If the path is empty no file logging will occur.
 void set_log_file(const std::string& path);

@@ -57,69 +57,69 @@ class UsbDevice {
     int odin_flash_sequence_count = 30;
     bool odin_supports_zlp = true;
 
-    bool odin_legacy_handshake();
-    bool odin_begin_session();
-    bool odin_end_session();
-    bool odin_reboot();
-    bool odin_set_total_bytes(uint64_t total_bytes);
-    bool odin_reset_flash_count();
-    bool odin_request_file_flash();
-    bool odin_request_sequence_flash(uint32_t aligned_size);
-    bool odin_send_file_part_and_ack(const unsigned char* data, size_t size, uint32_t expected_index);
-    bool odin_end_sequence_flash(const PitEntry& pit_entry, uint32_t real_size, uint32_t is_last);
+    auto odin_legacy_handshake() -> bool;
+    auto odin_begin_session() -> bool;
+    auto odin_end_session() -> bool;
+    auto odin_reboot() -> bool;
+    auto odin_set_total_bytes(uint64_t total_bytes) -> bool;
+    auto odin_reset_flash_count() -> bool;
+    auto odin_request_file_flash() -> bool;
+    auto odin_request_sequence_flash(uint32_t aligned_size) -> bool;
+    auto odin_send_file_part_and_ack(const unsigned char* data, size_t size, uint32_t expected_index) -> bool;
+    auto odin_end_sequence_flash(const PitEntry& pit_entry, uint32_t real_size, uint32_t is_last) -> bool;
 
-    bool odin_dump_pit(std::vector<unsigned char>& pit_out);
-    bool odin_command(uint32_t cmd, uint32_t subcmd, const void* payload, size_t payload_size,
-                      std::vector<unsigned char>& rsp, int timeout_ms);
-    static bool odin_fail_check(const std::vector<unsigned char>& rsp, const std::string& context, bool allow_progress);
+    auto odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool;
+    auto odin_command(uint32_t cmd, uint32_t subcmd, const void* payload, size_t payload_size,
+                      std::vector<unsigned char>& rsp, int timeout_ms) -> bool;
+    static auto odin_fail_check(const std::vector<unsigned char>& rsp, const std::string& context, bool allow_progress) -> bool;
 
-    bool bulk_write_all(const void* data, size_t size, int timeout_ms);
-    bool bulk_read_once(void* data, size_t size, int* actual_length, int timeout_ms);
-    bool send_zlp(int timeout_ms);
+    auto bulk_write_all(const void* data, size_t size, int timeout_ms) -> bool;
+    auto bulk_read_once(void* data, size_t size, int* actual_length, int timeout_ms) -> bool;
+    auto send_zlp(int timeout_ms) -> bool;
 
   public:
     UsbDevice() = default;
     ~UsbDevice();
 
-    bool open_device(const std::string& specific_path = "");
-    bool open_device(const std::string& specific_path, const UsbSelectionCriteria& criteria);
+    auto open_device(const std::string& specific_path = "") -> bool;
+    auto open_device(const std::string& specific_path, const UsbSelectionCriteria& criteria) -> bool;
 
-    UsbOpenError get_last_open_error() const {
+    [[nodiscard]] auto get_last_open_error() const -> UsbOpenError {
         return last_open_error;
     }
-    int get_last_open_libusb_error() const {
+    [[nodiscard]] auto get_last_open_libusb_error() const -> int {
         return last_open_libusb_err;
     }
-    bool send_packet(const void* data, size_t size, bool is_control = false);
-    bool receive_packet(void* data, size_t size, int* actual_length, bool is_control = false, size_t min_size = 0,
-                        int timeout_override_ms = 0);
-    bool handshake();
-    bool is_odin_legacy() const {
+    auto send_packet(const void* data, size_t size, bool is_control = false) -> bool;
+    auto receive_packet(void* data, size_t size, int* actual_length, bool is_control = false, size_t min_size = 0,
+                        int timeout_override_ms = 0) -> bool;
+    auto handshake() -> bool;
+    [[nodiscard]] auto is_odin_legacy() const -> bool {
         return protocol_mode == ProtocolMode::OdinLegacy;
     }
-    bool request_device_type();
-    bool begin_session();
-    bool end_session();
-    bool request_pit(PitTable& pit_table);
-    bool receive_pit_table(PitTable& pit_table);
-    bool flash_partition_stream(std::istream& stream, uint64_t size, const PitEntry& pit_entry, bool large_partition);
-    bool send_file_part_chunk(const void* data, size_t size, uint32_t chunk_index, bool large_partition = false);
-    bool send_file_part_header(uint64_t total_size);
-    bool end_file_transfer(uint32_t partition_id);
-    bool send_control(uint32_t control_type);
-    bool notify_total_bytes(uint64_t total);
+    auto request_device_type() -> bool;
+    auto begin_session() -> bool;
+    auto end_session() -> bool;
+    auto request_pit(PitTable& pit_table) -> bool;
+    auto receive_pit_table(PitTable& pit_table) -> bool;
+    auto flash_partition_stream(std::istream& stream, uint64_t size, const PitEntry& pit_entry, bool large_partition) -> bool;
+    auto send_file_part_chunk(const void* data, size_t size, uint32_t chunk_index, bool large_partition = false) -> bool;
+    auto send_file_part_header(uint64_t total_size) -> bool;
+    auto end_file_transfer(uint32_t partition_id) -> bool;
+    auto send_control(uint32_t control_type) -> bool;
+    auto notify_total_bytes(uint64_t total) -> bool;
 
     // Return the device type string obtained via request_device_type().
     // The returned reference remains valid for the lifetime of the UsbDevice instance.
-    const std::string& get_device_type() const {
+    [[nodiscard]] auto get_device_type() const -> const std::string& {
         return device_type_str;
     }
 
     // Enumerate all Samsung devices currently in download mode. The returned
     // vector contains the device path strings (e.g. "/dev/bus/usb/001/002").
     // This does not require opening any devices.
-    static std::vector<std::string> list_download_devices();
-    static std::vector<std::string> list_download_devices(const UsbSelectionCriteria& criteria);
+    static auto list_download_devices() -> std::vector<std::string>;
+    static auto list_download_devices(const UsbSelectionCriteria& criteria) -> std::vector<std::string>;
 };
 
 #endif // USB_DEVICE_H

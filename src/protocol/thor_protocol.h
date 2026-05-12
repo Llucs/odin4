@@ -140,22 +140,22 @@ struct ThorResponsePacket {
 #pragma pack(pop)
 
 // --- Endianness Helpers ---
-inline uint32_t le32_to_h(uint32_t val) {
+inline auto le32_to_h(uint32_t val) -> uint32_t {
     return le32toh(val);
 }
-inline uint32_t h_to_le32(uint32_t val) {
+inline auto h_to_le32(uint32_t val) -> uint32_t {
     return htole32(val);
 }
-inline uint16_t h_to_le16(uint16_t val) {
+inline auto h_to_le16(uint16_t val) -> uint16_t {
     return htole16(val);
 }
 
 // 64-bit conversion helpers. These wrappers complement the 16- and 32-bit
 // helpers above and forward to the underlying macros defined earlier.
-inline uint64_t le64_to_h(uint64_t val) {
+inline auto le64_to_h(uint64_t val) -> uint64_t {
     return le64toh(val);
 }
-inline uint64_t h_to_le64(uint64_t val) {
+inline auto h_to_le64(uint64_t val) -> uint64_t {
     return htole64(val);
 }
 
