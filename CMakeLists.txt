@@ -129,11 +129,8 @@ if(ODIN4_BUILD_TESTS)
     target_include_directories(odin4_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
     target_compile_options(odin4_tests PRIVATE -Wall -Wextra -Wno-cast-function-type)
     
-    # Register test - use binary dir for compatibility
-    add_custom_test(odin4_tests
-        COMMAND ${CMAKE_BINARY_DIR}/odin4_tests
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    )
+    # Register test - using simple add_test which requires CTest module
+    add_test(NAME odin4_tests COMMAND odin4_tests)
     list(APPEND ODIN4_ALL_TARGETS odin4_tests)
 endif()
 
