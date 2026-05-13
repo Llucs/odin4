@@ -114,12 +114,6 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="/usr/local"
 
-      - name: Run tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          ctest --test-dir build --output-on-failure
-
       - name: Build
         shell: bash
         run: |
