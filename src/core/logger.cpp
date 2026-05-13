@@ -86,15 +86,19 @@ void write_to_file(LogLevel lvl, const std::string& msg) {
 }
 
 void log_impl(LogLevel lvl, const std::string& msg, bool to_stderr) {
+    LogCallback cb = nullptr;
     if (should_emit(lvl)) {
         if (to_stderr) {
             write_line(std::cerr, lvl, msg);
         } else {
             write_line(std::cout, lvl, msg);
         }
-        std::lock_guard<std::mutex> lock(g_log_mutex);
-        if (g_callback) {
-            g_callback(lvl, msg);
+        {
+            std::lock_guard<std::mutex> lock(g_log_mutex);
+            cb = g_callback;
+        }
+        if (cb) {
+            cb(lvl, msg);
         }
     }
     write_to_file(lvl, msg);
