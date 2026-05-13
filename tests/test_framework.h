@@ -45,7 +45,8 @@ inline std::vector<TestSuite>& get_suites() {
     return suites;
 }
 
-inline void register_test(const std::string& suite_name, const std::string& test_name, std::function<void()> test_func) {
+inline void register_test(const std::string& suite_name, const std::string& test_name,
+                          std::function<void()> test_func) {
     auto& suites = get_suites();
     for (auto& s : suites) {
         if (s.name == suite_name) {
@@ -62,69 +63,74 @@ struct TestRegister {
     }
 };
 
-#define REGISTER_TEST(suite, name) \
-    static tests::TestRegister reg_##suite##_##name(#suite, #name, test_##suite##_##name)
+#define REGISTER_TEST(suite, name) static tests::TestRegister reg_##suite##_##name(#suite, #name, test_##suite##_##name)
 
-#define EXPECT_EQ(a, b) do { \
-    auto _a = (a); \
-    auto _b = (b); \
-    if (_a != _b) { \
-        throw std::runtime_error("Expected " + std::to_string(_a) + " == " + std::to_string(_b)); \
-    } \
-} while(0)
+#define EXPECT_EQ(a, b)                                                                                                \
+    do {                                                                                                               \
+        auto _a = (a);                                                                                                 \
+        auto _b = (b);                                                                                                 \
+        if (_a != _b) {                                                                                                \
+            throw std::runtime_error("Expected " + std::to_string(_a) + " == " + std::to_string(_b));                  \
+        }                                                                                                              \
+    } while (0)
 
-#define EXPECT_NE(a, b) do { \
-    auto _a = (a); \
-    auto _b = (b); \
-    if (_a == _b) { \
-        throw std::runtime_error("Expected " + std::to_string(_a) + " != " + std::to_string(_b)); \
-    } \
-} while(0)
+#define EXPECT_NE(a, b)                                                                                                \
+    do {                                                                                                               \
+        auto _a = (a);                                                                                                 \
+        auto _b = (b);                                                                                                 \
+        if (_a == _b) {                                                                                                \
+            throw std::runtime_error("Expected " + std::to_string(_a) + " != " + std::to_string(_b));                  \
+        }                                                                                                              \
+    } while (0)
 
-#define EXPECT_TRUE(cond) do { \
-    if (!(cond)) { \
-        throw std::runtime_error("Expected true but was false"); \
-    } \
-} while(0)
+#define EXPECT_TRUE(cond)                                                                                              \
+    do {                                                                                                               \
+        if (!(cond)) {                                                                                                 \
+            throw std::runtime_error("Expected true but was false");                                                   \
+        }                                                                                                              \
+    } while (0)
 
-#define EXPECT_FALSE(cond) do { \
-    if (cond) { \
-        throw std::runtime_error("Expected false but was true"); \
-    } \
-} while(0)
+#define EXPECT_FALSE(cond)                                                                                             \
+    do {                                                                                                               \
+        if (cond) {                                                                                                    \
+            throw std::runtime_error("Expected false but was true");                                                   \
+        }                                                                                                              \
+    } while (0)
 
-#define EXPECT_STREQ(a, b) do { \
-    std::string _a = (a); \
-    std::string _b = (b); \
-    if (_a != _b) { \
-        throw std::runtime_error("Expected \"" + _a + "\" == \"" + _b + "\""); \
-    } \
-} while(0)
+#define EXPECT_STREQ(a, b)                                                                                             \
+    do {                                                                                                               \
+        std::string _a = (a);                                                                                          \
+        std::string _b = (b);                                                                                          \
+        if (_a != _b) {                                                                                                \
+            throw std::runtime_error("Expected \"" + _a + "\" == \"" + _b + "\"");                                     \
+        }                                                                                                              \
+    } while (0)
 
-#define EXPECT_THROW(code) do { \
-    bool _thrown = false; \
-    try { \
-        code; \
-    } catch (...) { \
-        _thrown = true; \
-    } \
-    if (!_thrown) { \
-        throw std::runtime_error("Expected exception but none thrown"); \
-    } \
-} while(0)
+#define EXPECT_THROW(code)                                                                                             \
+    do {                                                                                                               \
+        bool _thrown = false;                                                                                          \
+        try {                                                                                                          \
+            code;                                                                                                      \
+        } catch (...) {                                                                                                \
+            _thrown = true;                                                                                            \
+        }                                                                                                              \
+        if (!_thrown) {                                                                                                \
+            throw std::runtime_error("Expected exception but none thrown");                                            \
+        }                                                                                                              \
+    } while (0)
 
 inline int run_suite(const std::string& suite_name) {
     auto& suites = get_suites();
     int total_passed = 0;
     int total_failed = 0;
-    
+
     for (auto& suite : suites) {
         if (!suite_name.empty() && suite.name != suite_name) {
             continue;
         }
-        
+
         std::cout << "\n=== " << suite.name << " ===\n";
-        
+
         for (auto& test : suite.tests) {
             try {
                 test.func();
@@ -142,7 +148,7 @@ inline int run_suite(const std::string& suite_name) {
             }
         }
     }
-    
+
     return total_failed;
 }
 
@@ -154,17 +160,17 @@ inline void print_summary() {
     auto& suites = get_suites();
     int total_passed = 0;
     int total_failed = 0;
-    
+
     for (auto& s : suites) {
         total_passed += s.passed;
         total_failed += s.failed;
     }
-    
+
     std::cout << "\n=== Summary ===\n";
     std::cout << "Passed: " << total_passed << "\n";
     std::cout << "Failed: " << total_failed << "\n";
 }
 
-}
+} // namespace tests
 
 #endif

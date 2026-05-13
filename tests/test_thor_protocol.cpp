@@ -36,7 +36,7 @@ inline uint64_t test_swap64(uint64_t v) {
     return (static_cast<uint64_t>(test_swap32(lo)) << 32) | test_swap32(hi);
 }
 
-}
+} // namespace
 
 #endif
 

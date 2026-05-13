@@ -26,8 +26,12 @@ LogLevel global_log_level = LogLevel::Info;
 }
 
 void set_log_callback(LogCallback) {}
-void set_log_level(LogLevel level) { global_log_level = level; }
-auto get_log_level() -> LogLevel { return global_log_level; }
+void set_log_level(LogLevel level) {
+    global_log_level = level;
+}
+auto get_log_level() -> LogLevel {
+    return global_log_level;
+}
 void set_log_file(const std::string&) {}
 void log_error(const std::string&, int) {}
 void log_warn(const std::string&) {}
@@ -48,16 +52,16 @@ REGISTER_TEST(Logger, LogLevel_Values);
 void test_Logger_SetLogLevel() {
     set_log_level(LogLevel::Error);
     EXPECT_EQ(static_cast<int>(get_log_level()), static_cast<int>(LogLevel::Error));
-    
+
     set_log_level(LogLevel::Warn);
     EXPECT_EQ(static_cast<int>(get_log_level()), static_cast<int>(LogLevel::Warn));
-    
+
     set_log_level(LogLevel::Info);
     EXPECT_EQ(static_cast<int>(get_log_level()), static_cast<int>(LogLevel::Info));
-    
+
     set_log_level(LogLevel::Verbose);
     EXPECT_EQ(static_cast<int>(get_log_level()), static_cast<int>(LogLevel::Verbose));
-    
+
     set_log_level(LogLevel::Debug);
     EXPECT_EQ(static_cast<int>(get_log_level()), static_cast<int>(LogLevel::Debug));
 }
