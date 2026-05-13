@@ -121,12 +121,19 @@ if(ODIN4_BUILD_TESTS)
     )
     
     add_executable(odin4_tests ${ODIN4_TEST_SOURCES})
-    set_target_properties(odin4_tests PROPERTIES OUTPUT_NAME "odin4_tests")
+    set_target_properties(odin4_tests PROPERTIES 
+        OUTPUT_NAME "odin4_tests"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    )
     target_include_directories(odin4_tests PRIVATE ${CMAKE_SOURCE_DIR}/include)
     target_include_directories(odin4_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
     target_compile_options(odin4_tests PRIVATE -Wall -Wextra -Wno-cast-function-type)
     
-    add_test(NAME odin4_tests COMMAND $<TARGET_FILE:odin4_tests>)
+    # Register test - use binary dir for compatibility
+    add_custom_test(odin4_tests
+        COMMAND ${CMAKE_BINARY_DIR}/odin4_tests
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
     list(APPEND ODIN4_ALL_TARGETS odin4_tests)
 endif()
 
