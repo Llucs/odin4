@@ -31,6 +31,16 @@ auto odin4_get_version() -> const char* {
     return ODIN4_VERSION;
 }
 
+void odin4_set_log_callback(OdinLogCallback callback) {
+    if (callback) {
+        set_log_callback([callback](LogLevel level, const std::string& message) {
+            callback(static_cast<int>(level), message.c_str());
+        });
+    } else {
+        set_log_callback(nullptr);
+    }
+}
+
 static auto criteria_from_config(const OdinConfig& cfg) -> UsbSelectionCriteria {
     UsbSelectionCriteria c;
     if (cfg.has_vid) {
