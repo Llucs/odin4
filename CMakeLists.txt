@@ -106,6 +106,30 @@ if(ODIN4_BUILD_GUI)
     list(APPEND ODIN4_ALL_TARGETS odin4-gui)
 endif()
 
+# Tests
+option(ODIN4_BUILD_TESTS "Build test suite" ON)
+
+if(ODIN4_BUILD_TESTS)
+    enable_testing()
+    
+    set(ODIN4_TEST_SOURCES
+        main.cpp
+        test_framework.h
+        test_thor_protocol.cpp
+        test_odin_types.cpp
+        test_logger.cpp
+    )
+    
+    add_executable(odin4_tests ${ODIN4_TEST_SOURCES})
+    set_target_properties(odin4_tests PROPERTIES OUTPUT_NAME "odin4_tests")
+    target_include_directories(odin4_tests PRIVATE ${CMAKE_SOURCE_DIR}/include)
+    target_include_directories(odin4_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_compile_options(odin4_tests PRIVATE -Wall -Wextra -Wno-cast-function-type)
+    
+    add_test(NAME odin4_tests COMMAND odin4_tests)
+    list(APPEND ODIN4_ALL_TARGETS odin4_tests)
+endif()
+
 foreach(target ${ODIN4_ALL_TARGETS})
     target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-cast-function-type)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
