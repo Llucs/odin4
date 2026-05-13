@@ -94,8 +94,16 @@ public:
         odin4_set_log_callback([](int level, const char* message) {
             QString msg = QString("[%1] %2").arg(level).arg(message);
             QMetaObject::invokeMethod(qApp, [msg]() {
-                auto *win = qobject_cast<OdinGui*>(qApp->activeWindow());
-                if (win) win->appendLog(msg);
+                for (auto *widget : qApp->topLevelWidgets()) {
+                    if (auto *win = qobject_cast<OdinGui*>(widget)) {
+                        win->appendLog(msg);
+                        return;
+                    }
+                }
+                // Fallback to active window if OdinGui instance not found in topLevelWidgets
+                if (auto *win = qobject_cast<OdinGui*>(qApp->activeWindow())) {
+                    win->appendLog(msg);
+                }
             }, Qt::QueuedConnection);
         });
 
