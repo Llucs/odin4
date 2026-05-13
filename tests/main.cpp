@@ -17,14 +17,14 @@
 #include "test_framework.h"
 
 int main(int argc, char** argv) {
-    (void)argc;
-    (void)argv;
-    
+    (void) argc;
+    (void) argv;
+
     std::cout << "Odin4 Test Suite\n";
     std::cout << "================\n";
-    
+
     int failed = tests::run_all();
     tests::print_summary();
-    
+
     return failed > 0 ? 1 : 0;
 }

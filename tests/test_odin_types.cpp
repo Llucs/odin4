@@ -45,7 +45,7 @@ void test_OdinTypes_PitEntry_Fields() {
     EXPECT_EQ(entry.block_count, 0u);
     EXPECT_EQ(entry.file_offset, 0u);
     EXPECT_EQ(entry.file_size, 0u);
-    
+
     for (int i = 0; i < 32; i++) {
         EXPECT_EQ(entry.partition_name[i], '\0');
         EXPECT_EQ(entry.file_name[i], '\0');
@@ -65,7 +65,7 @@ void test_OdinTypes_PitEntry_SetFields() {
     entry.block_count = 1000;
     entry.file_offset = 0;
     entry.file_size = 4096000;
-    
+
     EXPECT_EQ(entry.binary_type, 1u);
     EXPECT_EQ(entry.device_type, 2u);
     EXPECT_EQ(entry.identifier, 3u);
@@ -83,14 +83,14 @@ void test_OdinTypes_PitEntry_SetNames() {
     const char* part_name = "SYSTEM";
     const char* file_name = "system.img.lz4";
     const char* fota_name = "FOTA";
-    
+
     std::memcpy(entry.partition_name, part_name, 6);
     entry.partition_name[6] = '\0';
     std::memcpy(entry.file_name, file_name, 15);
     entry.file_name[15] = '\0';
     std::memcpy(entry.fota_name, fota_name, 4);
     entry.fota_name[4] = '\0';
-    
+
     EXPECT_STREQ(entry.partition_name, "SYSTEM");
     EXPECT_STREQ(entry.file_name, "system.img.lz4");
     EXPECT_STREQ(entry.fota_name, "FOTA");
@@ -116,9 +116,9 @@ void test_OdinTypes_PitTable_AddEntry() {
     PitEntry entry = PitEntry();
     entry.identifier = 1;
     entry.partition_name[0] = 'A';
-    
+
     table.entries.push_back(entry);
-    
+
     EXPECT_EQ(table.entries.size(), 1u);
     EXPECT_EQ(table.entries[0].identifier, 1u);
 }
@@ -136,7 +136,7 @@ void test_OdinTypes_PitTable_DefaultValues() {
     table.unknown6 = 6;
     table.unknown7 = 7;
     table.unknown8 = 8;
-    
+
     EXPECT_EQ(table.entry_count, 10u);
     EXPECT_EQ(table.header_size, 512u);
     EXPECT_EQ(table.unknown1, 1u);
@@ -152,15 +152,15 @@ REGISTER_TEST(OdinTypes, PitTable_DefaultValues);
 
 void test_OdinTypes_PitTable_MultipleEntries() {
     PitTable table = PitTable();
-    
+
     for (uint32_t i = 0; i < 5; i++) {
         PitEntry entry = PitEntry();
         entry.identifier = i;
         table.entries.push_back(entry);
     }
-    
+
     EXPECT_EQ(table.entries.size(), 5u);
-    
+
     for (uint32_t i = 0; i < 5; i++) {
         EXPECT_EQ(table.entries[i].identifier, i);
     }
