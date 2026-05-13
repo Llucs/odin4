@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
+
+# Force single-config to avoid Ninja multi-config issues
+set(CMAKE_CONFIGURATION_TYPES "Release" CACHE STRING "" FORCE)
+set(CMAKE_DEFAULT_BUILD_TYPE "Release" CACHE STRING "" FORCE)
+
 project(odin4 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 99)
@@ -121,16 +126,12 @@ if(ODIN4_BUILD_TESTS)
     )
     
     add_executable(odin4_tests ${ODIN4_TEST_SOURCES})
-    set_target_properties(odin4_tests PROPERTIES 
-        OUTPUT_NAME "odin4_tests"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    )
+    set_target_properties(odin4_tests PROPERTIES OUTPUT_NAME "odin4_tests")
     target_include_directories(odin4_tests PRIVATE ${CMAKE_SOURCE_DIR}/include)
     target_include_directories(odin4_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
     target_compile_options(odin4_tests PRIVATE -Wall -Wextra -Wno-cast-function-type)
     
-    # Register test - using simple add_test which requires CTest module
-    add_test(NAME odin4_tests COMMAND odin4_tests)
+    add_test(NAME odin4_tests COMMAND $<TARGET_FILE:odin4_tests>)
     list(APPEND ODIN4_ALL_TARGETS odin4_tests)
 endif()
 
