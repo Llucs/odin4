@@ -1,9 +1,4 @@
 cmake_minimum_required(VERSION 3.22)
-
-# Force single-config to avoid Ninja multi-config issues
-set(CMAKE_CONFIGURATION_TYPES "Release" CACHE STRING "" FORCE)
-set(CMAKE_DEFAULT_BUILD_TYPE "Release" CACHE STRING "" FORCE)
-
 project(odin4 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 99)
