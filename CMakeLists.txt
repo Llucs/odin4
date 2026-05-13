@@ -113,11 +113,11 @@ if(ODIN4_BUILD_TESTS)
     enable_testing()
     
     set(ODIN4_TEST_SOURCES
-        main.cpp
-        test_framework.h
-        test_thor_protocol.cpp
-        test_odin_types.cpp
-        test_logger.cpp
+        tests/main.cpp
+        tests/test_framework.h
+        tests/test_thor_protocol.cpp
+        tests/test_odin_types.cpp
+        tests/test_logger.cpp
     )
     
     add_executable(odin4_tests ${ODIN4_TEST_SOURCES})
