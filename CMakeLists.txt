@@ -126,7 +126,7 @@ if(ODIN4_BUILD_TESTS)
     target_include_directories(odin4_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
     target_compile_options(odin4_tests PRIVATE -Wall -Wextra -Wno-cast-function-type)
     
-    add_test(NAME odin4_tests COMMAND odin4_tests)
+    add_test(NAME odin4_tests COMMAND $<TARGET_FILE:odin4_tests>)
     list(APPEND ODIN4_ALL_TARGETS odin4_tests)
 endif()
 
