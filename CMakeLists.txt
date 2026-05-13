@@ -86,7 +86,17 @@ set_target_properties(odin4 PROPERTIES OUTPUT_NAME "odin4")
 target_include_directories(odin4 PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(odin4 PRIVATE odin4_static -static-libgcc -static-libstdc++)
 
-foreach(target odin4_static odin4_shared odin4)
+# GUI Target
+find_package(Qt6 COMPONENTS Widgets REQUIRED)
+add_executable(odin4-gui src-gui/main.cpp)
+set_target_properties(odin4-gui PROPERTIES 
+    OUTPUT_NAME "odin4-gui"
+    AUTOMOC ON
+)
+target_include_directories(odin4-gui PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(odin4-gui PRIVATE odin4_static Qt6::Widgets)
+
+foreach(target odin4_static odin4_shared odin4 odin4-gui)
     target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-cast-function-type)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         target_compile_options(${target} PRIVATE -fstack-protector-strong -D_FORTIFY_SOURCE=2)

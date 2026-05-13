@@ -53,7 +53,10 @@ jobs:
             g++ \
             git \
             libusb-1.0-0-dev \
-            libcrypto++-dev
+            libcrypto++-dev \
+            qt6-base-dev \
+            libqt6widgets6 \
+            libgl1-mesa-dev
 
       - name: Ensure Crypto++ static library is available
         shell: bash
@@ -93,7 +96,9 @@ jobs:
           echo "ODIN4_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "ODIN4_SUFFIX=$SUFFIX" >> "$GITHUB_ENV"
           echo "ODIN4_OUTNAME=odin4_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
+          echo "ODIN4_GUI_OUTNAME=odin4-gui_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
           echo "LIB_OUTNAME=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}.so" >> "$GITHUB_ENV"
+          echo "LIB_STATIC_OUTNAME=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}.a" >> "$GITHUB_ENV"
 
       - name: Clean build dir
         shell: bash
@@ -120,15 +125,15 @@ jobs:
         run: |
           set -euo pipefail
           BIN="build/odin4"
+          GUI="build/odin4-gui"
           LIB="build/libodin4.so"
-          if [ ! -f "$BIN" ]; then
-            echo "ERROR: build/odin4 not found." >&2
-            exit 1
-          fi
-          if [ ! -f "$LIB" ]; then
-            echo "ERROR: build/libodin4.so not found." >&2
-            exit 1
-          fi
+          LIB_STATIC="build/libodin4_static.a"
+          for f in "$BIN" "$GUI" "$LIB" "$LIB_STATIC"; do
+            if [ ! -f "$f" ]; then
+              echo "ERROR: $f not found." >&2
+              exit 1
+            fi
+          done
           # The CLI now depends on libodin4.so, but we want to ensure it doesn't depend on libcrypto++.so directly
           if ldd "$BIN" | grep -qiE 'libcrypto\+\+\.so'; then
             echo "ERROR: Binary still depends on libcrypto++.so." >&2
@@ -141,13 +146,17 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           cp build/odin4 "dist/${ODIN4_OUTNAME}"
+          cp build/odin4-gui "dist/${ODIN4_GUI_OUTNAME}"
           cp build/libodin4.so "dist/${LIB_OUTNAME}"
+          cp build/libodin4_static.a "dist/${LIB_STATIC_OUTNAME}"
           strip "dist/${ODIN4_OUTNAME}" || true
+          strip "dist/${ODIN4_GUI_OUTNAME}" || true
           strip "dist/${LIB_OUTNAME}" || true
+          # Note: don't strip static libs
           ZIP_NAME="odin4-linux-${{ matrix.arch }}-${ODIN4_VERSION}${ODIN4_SUFFIX}.zip"
           (
             cd dist
-            zip "../${ZIP_NAME}" "${ODIN4_OUTNAME}" "${LIB_OUTNAME}"
+            zip "../${ZIP_NAME}" "${ODIN4_OUTNAME}" "${ODIN4_GUI_OUTNAME}" "${LIB_OUTNAME}" "${LIB_STATIC_OUTNAME}"
           )
           echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
 
