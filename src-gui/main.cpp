@@ -11,14 +11,34 @@
 #include <QComboBox>
 #include <QMessageBox>
 #include <QTimer>
+#include <QThread>
+#include <QCloseEvent>
 #include <odin4/odin4.h>
-#include <thread>
 #include <mutex>
+
+class FlashWorker : public QObject {
+    Q_OBJECT
+public:
+    FlashWorker(const OdinConfig &cfg) : m_cfg(cfg) {}
+
+public slots:
+    void process() {
+        odin4_init(m_cfg);
+        OdinExitCode result = odin4_run(m_cfg);
+        emit finished(result);
+    }
+
+signals:
+    void finished(OdinExitCode result);
+
+private:
+    OdinConfig m_cfg;
+};
 
 class OdinGui : public QMainWindow {
     Q_OBJECT
 public:
-    OdinGui(QWidget *parent = nullptr) : QMainWindow(parent) {
+    OdinGui(QWidget *parent = nullptr) : QMainWindow(parent), flashThread(nullptr) {
         setWindowTitle("Odin4 GUI - Llucs");
         setMinimumSize(700, 500);
 
@@ -71,14 +91,12 @@ public:
 
         setCentralWidget(centralWidget);
         
-        // Setup log callback
         odin4_set_log_callback([](int level, const char* message) {
             QString msg = QString("[%1] %2").arg(level).arg(message);
-            // Post to UI thread
             QMetaObject::invokeMethod(qApp, [msg]() {
                 auto *win = qobject_cast<OdinGui*>(qApp->activeWindow());
                 if (win) win->appendLog(msg);
-            });
+            }, Qt::QueuedConnection);
         });
 
         refreshDevices();
@@ -86,6 +104,20 @@ public:
 
     void appendLog(const QString &msg) {
         logView->append(msg);
+    }
+
+protected:
+    void closeEvent(QCloseEvent *event) override {
+        if (flashThread && flashThread->isRunning()) {
+            auto ret = QMessageBox::question(this, "Exit", "A flash process is currently running. Are you sure you want to exit?", QMessageBox::Yes | QMessageBox::No);
+            if (ret == QMessageBox::No) {
+                event->ignore();
+                return;
+            }
+            flashThread->quit();
+            flashThread->wait();
+        }
+        event->accept();
     }
 
 private slots:
@@ -123,21 +155,30 @@ private slots:
         logView->append("--- Starting Flash Process ---");
         progressBar->setRange(0, 0);
 
-        std::thread([this, cfg]() {
-            odin4_init(cfg);
-            auto result = odin4_run(cfg);
-            QMetaObject::invokeMethod(this, [this, result]() {
-                btnStart->setEnabled(true);
-                progressBar->setRange(0, 100);
-                if (result == OdinExitCode::Success) {
-                    logView->append("<b>Flash successful!</b>");
-                    progressBar->setValue(100);
-                } else {
-                    logView->append(QString("<span style='color:red;'>Flash failed with code: %1</span>").arg(static_cast<int>(result)));
-                    progressBar->setValue(0);
-                }
-            });
-        }).detach();
+        flashThread = new QThread(this);
+        auto *worker = new FlashWorker(cfg);
+        worker->moveToThread(flashThread);
+
+        connect(flashThread, &QThread::started, worker, &FlashWorker::process);
+        connect(worker, &FlashWorker::finished, this, &OdinGui::onFlashFinished);
+        connect(worker, &FlashWorker::finished, flashThread, &QThread::quit);
+        connect(worker, &FlashWorker::finished, worker, &FlashWorker::deleteLater);
+        connect(flashThread, &QThread::finished, flashThread, &QThread::deleteLater);
+
+        flashThread->start();
+    }
+
+    void onFlashFinished(OdinExitCode result) {
+        btnStart->setEnabled(true);
+        progressBar->setRange(0, 100);
+        if (result == OdinExitCode::Success) {
+            logView->append("<b>Flash successful!</b>");
+            progressBar->setValue(100);
+        } else {
+            logView->append(QString("<span style='color:red;'>Flash failed with code: %1</span>").arg(static_cast<int>(result)));
+            progressBar->setValue(0);
+        }
+        flashThread = nullptr;
     }
 
 private:
@@ -146,6 +187,7 @@ private:
     QTextEdit *logView;
     QProgressBar *progressBar;
     QPushButton *btnStart;
+    QThread *flashThread;
 };
 
 int main(int argc, char *argv[]) {

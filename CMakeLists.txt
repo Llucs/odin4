@@ -96,6 +96,10 @@ set_target_properties(odin4-gui PROPERTIES
 target_include_directories(odin4-gui PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(odin4-gui PRIVATE odin4_static Qt6::Widgets)
 
+if(NOT MSVC)
+    target_link_options(odin4-gui PRIVATE "-static-libgcc" "-static-libstdc++")
+endif()
+
 foreach(target odin4_static odin4_shared odin4 odin4-gui)
     target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-cast-function-type)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
