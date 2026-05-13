@@ -87,7 +87,7 @@ jobs:
           fi
 
       - name: Cache CMake build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             build
