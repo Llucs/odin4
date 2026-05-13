@@ -88,6 +88,7 @@ target_link_libraries(odin4 PRIVATE odin4_static -static-libgcc -static-libstdc+
 
 # Optional GUI build
 option(ODIN4_BUILD_GUI "Build Qt6 GUI target" ON)
+option(ODIN4_BUILD_TESTS "Build tests" ON)
 set(ODIN4_ALL_TARGETS odin4_static odin4_shared odin4)
 
 # GUI Target
@@ -104,6 +105,15 @@ if(ODIN4_BUILD_GUI)
         target_link_options(odin4-gui PRIVATE "-static-libgcc" "-static-libstdc++")
     endif()
     list(APPEND ODIN4_ALL_TARGETS odin4-gui)
+endif()
+
+if(ODIN4_BUILD_TESTS)
+    enable_testing()
+    add_executable(odin4_tests tests/tests.cpp)
+    target_include_directories(odin4_tests PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(odin4_tests PRIVATE odin4_static)
+    add_test(NAME odin4_unit_tests COMMAND odin4_tests)
+    list(APPEND ODIN4_ALL_TARGETS odin4_tests)
 endif()
 
 foreach(target ${ODIN4_ALL_TARGETS})
