@@ -13,28 +13,29 @@
 #include <QTimer>
 #include <odin4/odin4.h>
 #include <thread>
+#include <mutex>
 
 class OdinGui : public QMainWindow {
     Q_OBJECT
 public:
     OdinGui(QWidget *parent = nullptr) : QMainWindow(parent) {
         setWindowTitle("Odin4 GUI - Llucs");
-        setMinimumSize(600, 450);
+        setMinimumSize(700, 500);
 
         auto *centralWidget = new QWidget(this);
         auto *layout = new QVBoxLayout(centralWidget);
 
         auto createBrowseRow = [&](const QString &label, QLineEdit *&edit) {
             auto *row = new QHBoxLayout();
-            row->addWidget(new QLabel(label + ":"));
+            row->addWidget(new QLabel(label + ":"), 0);
             edit = new QLineEdit();
-            row->addWidget(edit);
+            row->addWidget(edit, 1);
             auto *btn = new QPushButton("Browse");
             connect(btn, &QPushButton::clicked, [this, edit]() {
                 QString file = QFileDialog::getOpenFileName(this, "Select File", "", "Samsung Firmware (*.tar *.tar.md5 *.lz4 *.bin)");
                 if (!file.isEmpty()) edit->setText(file);
             });
-            row->addWidget(btn);
+            row->addWidget(btn, 0);
             layout->addLayout(row);
         };
 
@@ -55,19 +56,36 @@ public:
 
         logView = new QTextEdit();
         logView->setReadOnly(true);
+        logView->setStyleSheet("background-color: #1e1e1e; color: #d4d4d4; font-family: monospace;");
         layout->addWidget(logView);
 
         progressBar = new QProgressBar();
         layout->addWidget(progressBar);
 
         auto *btnRow = new QHBoxLayout();
-        btnStart = new QPushButton("Start");
+        btnStart = new QPushButton("Start Flash");
+        btnStart->setMinimumHeight(40);
         connect(btnStart, &QPushButton::clicked, this, &OdinGui::startFlash);
         btnRow->addWidget(btnStart);
         layout->addLayout(btnRow);
 
         setCentralWidget(centralWidget);
+        
+        // Setup log callback
+        odin4_set_log_callback([](int level, const char* message) {
+            QString msg = QString("[%1] %2").arg(level).arg(message);
+            // Post to UI thread
+            QMetaObject::invokeMethod(qApp, [msg]() {
+                auto *win = qobject_cast<OdinGui*>(qApp->activeWindow());
+                if (win) win->appendLog(msg);
+            });
+        });
+
         refreshDevices();
+    }
+
+    void appendLog(const QString &msg) {
+        logView->append(msg);
     }
 
 private slots:
@@ -95,8 +113,14 @@ private slots:
             return;
         }
 
+        if (cfg.device_path == "No device detected") {
+            QMessageBox::warning(this, "Error", "No device selected.");
+            return;
+        }
+
         btnStart->setEnabled(false);
-        logView->append("Starting flash process...");
+        logView->clear();
+        logView->append("--- Starting Flash Process ---");
         progressBar->setRange(0, 0);
 
         std::thread([this, cfg]() {
@@ -106,10 +130,10 @@ private slots:
                 btnStart->setEnabled(true);
                 progressBar->setRange(0, 100);
                 if (result == OdinExitCode::Success) {
-                    logView->append("Flash successful!");
+                    logView->append("<b>Flash successful!</b>");
                     progressBar->setValue(100);
                 } else {
-                    logView->append("Flash failed with code: " + QString::number(static_cast<int>(result)));
+                    logView->append(QString("<span style='color:red;'>Flash failed with code: %1</span>").arg(static_cast<int>(result)));
                     progressBar->setValue(0);
                 }
             });

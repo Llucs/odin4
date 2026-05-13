@@ -68,6 +68,13 @@ auto odin4_run(const OdinConfig& cfg) -> OdinExitCode;
  */
 auto odin4_get_version() -> const char*;
 
+/**
+ * @brief Set a callback function to receive log messages.
+ * @param callback The function to call for each log message.
+ */
+typedef void (*OdinLogCallback)(int level, const char* message);
+void odin4_set_log_callback(OdinLogCallback callback);
+
 #ifdef __cplusplus
 }
 #endif

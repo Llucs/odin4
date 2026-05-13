@@ -29,6 +29,7 @@ namespace {
 std::ofstream g_log_stream;
 std::mutex g_log_mutex;
 LogLevel g_level = LogLevel::Info;
+LogCallback g_callback = nullptr;
 
 auto timestamp_now() -> std::string {
     using namespace std::chrono;
@@ -91,10 +92,19 @@ void log_impl(LogLevel lvl, const std::string& msg, bool to_stderr) {
         } else {
             write_line(std::cout, lvl, msg);
         }
+        std::lock_guard<std::mutex> lock(g_log_mutex);
+        if (g_callback) {
+            g_callback(lvl, msg);
+        }
     }
     write_to_file(lvl, msg);
 }
 } // namespace
+
+void set_log_callback(LogCallback cb) {
+    std::lock_guard<std::mutex> lock(g_log_mutex);
+    g_callback = std::move(cb);
+}
 
 void set_log_level(LogLevel level) {
     g_level = level;
