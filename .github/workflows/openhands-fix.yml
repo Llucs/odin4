@@ -2,6 +2,11 @@ name: OpenHands Auto Fix
 
 on:
   workflow_dispatch:
+    inputs:
+      task:
+        description: "Custom OpenHands task prompt"
+        required: true
+        default: "Analyze the repository, detect real issues, apply minimal fixes, create a branch, commit changes, push them, and open a pull request."
 
 jobs:
   openhands:
@@ -16,23 +21,47 @@ jobs:
           OPENHANDS_API_KEY: ${{ secrets.OPENHANDS_API_KEY }}
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          TASK_PROMPT: ${{ github.event.inputs.task }}
         run: |
+          FINAL_PROMPT="You are an automated code analysis and repair agent.
+
+          Analyze the repository strictly using real evidence from the codebase.
+          Do not invent issues.
+          Do not fabricate examples or scenarios.
+          Apply minimal necessary fixes only.
+
+          After completing changes:
+          1. Create a new branch
+          2. Commit all fixes
+          3. Push the branch to GitHub
+          4. Open a pull request using the provided GitHub authentication
+
+          Do not simulate results.
+          Only act based on verifiable findings.
+
+          Additional task instructions:
+          $TASK_PROMPT"
+
           curl -X POST "https://app.all-hands.dev/api/v1/app-conversations" \
             -H "Authorization: Bearer $OPENHANDS_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"selected_repository\": \"$REPO\",
-              \"git_provider\": \"github\",
-              \"selected_branch\": \"main\",
-              \"secrets\": {
-                \"GITHUB_TOKEN\": \"$GH_TOKEN\"
-              },
-              \"initial_message\": {
-                \"content\": [
-                  {
-                    \"type\": \"text\",
-                    \"text\": \"You are an automated code analysis and repair agent. Analyze the repository strictly using real evidence from the codebase. Do not invent issues. Apply minimal necessary fixes only. After completing changes, commit them and open a pull request using the provided GitHub authentication. Do not simulate results.\"
-                  }
-                ]
-              }
-            }"
+            -d "$(jq -n \
+              --arg repo "$REPO" \
+              --arg prompt "$FINAL_PROMPT" \
+              --arg token "$GH_TOKEN" \
+              '{
+                selected_repository: $repo,
+                git_provider: "github",
+                selected_branch: "main",
+                secrets: {
+                  GITHUB_TOKEN: $token
+                },
+                initial_message: {
+                  content: [
+                    {
+                      type: "text",
+                      text: $prompt
+                    }
+                  ]
+                }
+              }')"
