@@ -84,7 +84,7 @@ function initCodeCopy() {
         if (code) {
             const copyButton = document.createElement('button');
             copyButton.className = 'copy-button';
-            copyButton.textContent = 'Copiar';
+            copyButton.textContent = 'Copy';
             copyButton.style.cssText = `
                 position: absolute;
                 top: 10px;
@@ -116,7 +116,7 @@ function initCodeCopy() {
                 const text = code.textContent;
                 navigator.clipboard.writeText(text).then(() => {
                     const originalText = copyButton.textContent;
-                    copyButton.textContent = 'Copiado!';
+                    copyButton.textContent = 'Copied!';
                     copyButton.style.background = 'var(--success-color)';
                     
                     setTimeout(() => {
@@ -124,7 +124,7 @@ function initCodeCopy() {
                         copyButton.style.background = 'var(--primary-light)';
                     }, 2000);
                 }).catch(err => {
-                    console.error('Erro ao copiar:', err);
+                    console.error('Error copying:', err);
                 });
             });
         }
