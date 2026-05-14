@@ -560,7 +560,8 @@ auto UsbDevice::request_device_type() -> bool {
     }
 
     if (le16toh(response.header.packet_type) != THOR_PACKET_DEVICE_TYPE) {
-        log_error(std::format("Device type request failed. Unexpected packet type: {}", le16toh(response.header.packet_type)));
+        log_error(std::format("Device type request failed. Unexpected packet type: {}",
+                              le16toh(response.header.packet_type)));
         return false;
     }
     // Copy the device type string from the response. The char array is
@@ -892,7 +893,8 @@ auto UsbDevice::receive_pit_table(PitTable& pit_table) -> bool {
     }
 
     if (le16toh(pit_size_pkt.header.packet_type) != THOR_PACKET_PIT_FILE) {
-        log_error(std::format("Unexpected packet type while reading PIT size: {}", le16toh(pit_size_pkt.header.packet_type)));
+        log_error(
+            std::format("Unexpected packet type while reading PIT size: {}", le16toh(pit_size_pkt.header.packet_type)));
         return false;
     }
 

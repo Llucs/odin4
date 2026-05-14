@@ -120,7 +120,7 @@ auto detect_tar_md5_info(const std::string& file_path, TarMd5Info& info) -> Exit
     info = TarMd5Info{};
 
     std::ifstream file(file_path, std::ios::binary | std::ios::ate);
-        if (!file) {
+    if (!file) {
         log_error(std::format("Could not open file: {}", file_path));
         return ExitCode::Firmware;
     }
@@ -651,7 +651,8 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
     }
 
     if (uncompressed_size != 0 && total_uncompressed != uncompressed_size) {
-        log_error(std::format("Decompressed size mismatch for {}: expected {}, got {}", filename, uncompressed_size, total_uncompressed));
+        log_error(std::format("Decompressed size mismatch for {}: expected {}, got {}", filename, uncompressed_size,
+                              total_uncompressed));
         return false;
     }
 
