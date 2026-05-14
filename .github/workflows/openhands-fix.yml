@@ -2,32 +2,33 @@ name: OpenHands Auto Fix
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   openhands:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Send task to OpenHands
         env:
           OPENHANDS_API_KEY: ${{ secrets.OPENHANDS_API_KEY }}
+          REPO: ${{ github.repository }}
         run: |
           curl -X POST "https://app.all-hands.dev/api/v1/app-conversations" \
             -H "Authorization: Bearer $OPENHANDS_API_KEY" \
             -H "Content-Type: application/json" \
-            -d '{
-              "initial_message": {
-                "content": [
+            -d "{
+              \"selected_repository\": \"$REPO\",
+              \"git_provider\": \"github\",
+              \"selected_branch\": \"main\",
+              \"initial_message\": {
+                \"content\": [
                   {
-                    "type": "text",
-                    "text": "Analise este repositório, encontre erros, corrija e crie um Pull Request com as mudanças. Explique o que foi corrigido."
+                    \"type\": \"text\",
+                    \"text\": \"You are an automated code analysis and repair agent. Analyze the repository, detect real issues based only on actual code evidence, and apply minimal necessary fixes. Do not invent problems. Do not provide examples. Do not add explanations unless strictly required to justify a change. Do not simulate outputs. After completing fixes, create a pull request with a clear and factual title describing what was changed. Only report verified findings.\"
                   }
                 ]
               }
-            }'
+            }"
