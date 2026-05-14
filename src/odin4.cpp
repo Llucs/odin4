@@ -89,9 +89,7 @@ static auto verify_firmware_compatibility(const OdinConfig& cfg, const std::stri
     }
 
     std::string dt = device_type;
-    std::erase_if(dt, [](unsigned char c) {
-        return (std::isspace(c) != 0) || c == '\\' || c == '/' || c == '-';
-    });
+    std::erase_if(dt, [](unsigned char c) { return (std::isspace(c) != 0) || c == '\\' || c == '/' || c == '-'; });
 
     std::ranges::transform(dt, dt.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
 
