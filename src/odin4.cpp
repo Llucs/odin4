@@ -24,6 +24,7 @@
 #include <iostream>
 #include <algorithm>
 #include <ranges>
+#include <format>
 #include <filesystem>
 
 #define ODIN4_VERSION "6.0.0-aefb1e5"
