@@ -15,7 +15,7 @@ jobs:
         env:
           OPENHANDS_API_KEY: ${{ secrets.OPENHANDS_API_KEY }}
           REPO: ${{ github.repository }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           curl -X POST "https://app.all-hands.dev/api/v1/app-conversations" \
             -H "Authorization: Bearer $OPENHANDS_API_KEY" \
@@ -25,13 +25,13 @@ jobs:
               \"git_provider\": \"github\",
               \"selected_branch\": \"main\",
               \"secrets\": {
-                \"GITHUB_TOKEN\": \"$GITHUB_TOKEN\"
+                \"GITHUB_TOKEN\": \"$GH_TOKEN\"
               },
               \"initial_message\": {
                 \"content\": [
                   {
                     \"type\": \"text\",
-                    \"text\": \"You are an automated code analysis and repair agent. Analyze the repository strictly using real evidence from the codebase. Do not invent issues. Do not fabricate examples or scenarios. Apply minimal necessary fixes only. After completing changes, commit them and create a pull request using the provided GitHub authentication. Do not simulate outputs. Only act based on verifiable findings.\"
+                    \"text\": \"You are an automated code analysis and repair agent. Analyze the repository strictly using real evidence from the codebase. Do not invent issues. Apply minimal necessary fixes only. After completing changes, commit them and open a pull request using the provided GitHub authentication. Do not simulate results.\"
                   }
                 ]
               }
