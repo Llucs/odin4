@@ -152,7 +152,7 @@ auto UsbDevice::bulk_read_once(void* data, size_t size, int* actual_length, int 
         if (err == LIBUSB_ERROR_PIPE) {
             (void) libusb_clear_halt(handle, endpoint_in);
         }
-        log_error(std::format("USB bulk read failed (error: {})", err));
+        log_error(std::format("USB bulk read failed (error: {})", static_cast<int>(err)));
         if (attempt < USB_RETRY_COUNT - 1) {
             std::this_thread::sleep_for(std::chrono::milliseconds(retry_backoff_ms(attempt)));
         }
@@ -273,7 +273,7 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
     if (!ensure_libusb_initialized()) {
         last_open_error = UsbOpenError::Other;
         last_open_libusb_err = LIBUSB_ERROR_OTHER;
-        log_error(std::format("Failed to enumerate USB devices (error: {})", LIBUSB_ERROR_OTHER));
+        log_error(std::format("Failed to enumerate USB devices (error: {})", static_cast<int>(LIBUSB_ERROR_OTHER)));
         return false;
     }
 
