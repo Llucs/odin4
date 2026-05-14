@@ -23,9 +23,11 @@
 #include <cstring>
 #include <vector>
 #include <algorithm>
+#include <ranges>
 #include <cctype>
 #include <unordered_set>
 #include <limits>
+#include <format>
 #include <mutex>
 #include <cstdlib>
 
@@ -150,7 +152,7 @@ auto UsbDevice::bulk_read_once(void* data, size_t size, int* actual_length, int 
         if (err == LIBUSB_ERROR_PIPE) {
             (void) libusb_clear_halt(handle, endpoint_in);
         }
-        log_error("USB bulk read failed", err);
+        log_error(std::format("USB bulk read failed (error: {})", err));
         if (attempt < USB_RETRY_COUNT - 1) {
             std::this_thread::sleep_for(std::chrono::milliseconds(retry_backoff_ms(attempt)));
         }
@@ -166,12 +168,7 @@ static auto usb_path_for_device(libusb_device* dev) -> std::string {
 }
 
 static auto is_known_download_pid(uint16_t pid) -> bool {
-    for (uint16_t known : SAMSUNG_DOWNLOAD_PIDS) {
-        if (pid == known) {
-            return true;
-        }
-    }
-    return false;
+    return std::ranges::any_of(SAMSUNG_DOWNLOAD_PIDS, [pid](uint16_t known) { return pid == known; });
 }
 
 struct InterfaceCandidate {
@@ -276,7 +273,7 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
     if (!ensure_libusb_initialized()) {
         last_open_error = UsbOpenError::Other;
         last_open_libusb_err = LIBUSB_ERROR_OTHER;
-        log_error("Failed to enumerate USB devices", LIBUSB_ERROR_OTHER);
+        log_error(std::format("Failed to enumerate USB devices (error: {})", LIBUSB_ERROR_OTHER));
         return false;
     }
 
@@ -284,7 +281,7 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
     if (cnt < 0) {
         last_open_error = UsbOpenError::Other;
         last_open_libusb_err = static_cast<int>(cnt);
-        log_error("Failed to enumerate USB devices", static_cast<int>(cnt));
+        log_error(std::format("Failed to enumerate USB devices (error: {})", static_cast<int>(cnt)));
         return false;
     }
 
@@ -529,12 +526,12 @@ auto UsbDevice::handshake() -> bool {
         return false;
     }
     if (le16toh(rsp.header.packet_type) != THOR_PACKET_RESPONSE) {
-        log_error("Handshake failed with unexpected packet type: " + std::to_string(le16toh(rsp.header.packet_type)));
+        log_error(std::format("Handshake failed with unexpected packet type: {}", le16toh(rsp.header.packet_type)));
         return false;
     }
     uint32_t code = le32_to_h(rsp.response_code);
     if (code != 0) {
-        log_error("Handshake failed with response code: " + std::to_string(code));
+        log_error(std::format("Handshake failed with response code: {}", code));
         return false;
     }
     return true;
@@ -563,8 +560,7 @@ auto UsbDevice::request_device_type() -> bool {
     }
 
     if (le16toh(response.header.packet_type) != THOR_PACKET_DEVICE_TYPE) {
-        log_error("Device type request failed. Unexpected packet type: " +
-                  std::to_string(le16toh(response.header.packet_type)));
+        log_error(std::format("Device type request failed. Unexpected packet type: {}", le16toh(response.header.packet_type)));
         return false;
     }
     // Copy the device type string from the response. The char array is
@@ -577,7 +573,7 @@ auto UsbDevice::request_device_type() -> bool {
         }
         device_type_str.push_back(c);
     }
-    log_info("Device type received: " + device_type_str);
+    log_info(std::format("Device type received: {}", device_type_str));
     return true;
 }
 
@@ -673,13 +669,13 @@ auto UsbDevice::begin_session() -> bool {
     }
 
     if (actual_length < static_cast<int>(sizeof(ThorResponsePacket))) {
-        log_error("Session begin failed: short response (" + std::to_string(actual_length) + " bytes)");
+        log_error(std::format("Session begin failed: short response ({} bytes)", actual_length));
         return false;
     }
 
     uint32_t code = le32_to_h(response.response_code);
     if (le16toh(response.header.packet_type) != THOR_PACKET_RESPONSE || code != 0) {
-        log_error("Session begin failed. Response code: " + std::to_string(code));
+        log_error(std::format("Session begin failed. Response code: {}", code));
         return false;
     }
     log_info("Session started successfully.");
@@ -708,13 +704,13 @@ auto UsbDevice::end_session() -> bool {
     }
 
     if (actual_length < static_cast<int>(sizeof(ThorResponsePacket))) {
-        log_error("Session end failed: short response (" + std::to_string(actual_length) + " bytes)");
+        log_error(std::format("Session end failed: short response ({} bytes)", actual_length));
         return false;
     }
 
     uint32_t code = le32_to_h(response.response_code);
     if (le16toh(response.header.packet_type) != THOR_PACKET_RESPONSE || code != 0) {
-        log_error("Session end failed. Response code: " + std::to_string(code));
+        log_error(std::format("Session end failed. Response code: {}", code));
         return false;
     }
     log_info("Session ended successfully.");
@@ -723,7 +719,7 @@ auto UsbDevice::end_session() -> bool {
 
 static auto parse_pit_bytes(PitTable& pit_table, const std::vector<unsigned char>& pit_data) -> bool {
     if (pit_data.size() < 28) {
-        log_error("PIT data too small: " + std::to_string(pit_data.size()));
+        log_error(std::format("PIT data too small: {}", pit_data.size()));
         return false;
     }
 
@@ -748,7 +744,7 @@ static auto parse_pit_bytes(PitTable& pit_table, const std::vector<unsigned char
 
     pit_table.entry_count = read_u32(4);
     if (pit_table.entry_count == 0 || pit_table.entry_count > 512) {
-        log_error("Invalid PIT entry count: " + std::to_string(pit_table.entry_count));
+        log_error(std::format("Invalid PIT entry count: {}", pit_table.entry_count));
         return false;
     }
 
@@ -765,7 +761,7 @@ static auto parse_pit_bytes(PitTable& pit_table, const std::vector<unsigned char
     const size_t entry_size = 132;
     const size_t required = pit_table.header_size + static_cast<size_t>(pit_table.entry_count) * entry_size;
     if (pit_data.size() < required) {
-        log_error("PIT truncated: expected at least " + std::to_string(required) + " bytes");
+        log_error(std::format("PIT truncated: expected at least {} bytes", required));
         return false;
     }
 
@@ -818,24 +814,24 @@ static auto parse_pit_bytes(PitTable& pit_table, const std::vector<unsigned char
         const std::string file_name = extract_field(e.file_name, 32);
 
         if (part_name.empty()) {
-            log_error("PIT entry " + std::to_string(i) + " has an empty partition name");
+            log_error(std::format("PIT entry {} has an empty partition name", i));
             return false;
         }
         if (!is_valid_pit_string(part_name)) {
-            log_error("PIT entry " + std::to_string(i) + " has an invalid partition name: '" + part_name + "'");
+            log_error(std::format("PIT entry {} has an invalid partition name: '{}'", i, part_name));
             return false;
         }
         if (!file_name.empty() && !is_valid_pit_string(file_name)) {
-            log_error("PIT entry " + std::to_string(i) + " has an invalid file name: '" + file_name + "'");
+            log_error(std::format("PIT entry {} has an invalid file name: '{}'", i, file_name));
             return false;
         }
 
         if (e.identifier == 0) {
-            log_error("PIT entry " + std::to_string(i) + " has an invalid identifier (0)");
+            log_error(std::format("PIT entry {} has an invalid identifier (0)", i));
             return false;
         }
         if (!seen_identifiers.insert(e.identifier).second) {
-            log_error("PIT contains duplicate partition identifier: " + std::to_string(e.identifier));
+            log_error(std::format("PIT contains duplicate partition identifier: {}", e.identifier));
             return false;
         }
 
@@ -844,7 +840,7 @@ static auto parse_pit_bytes(PitTable& pit_table, const std::vector<unsigned char
             const auto b = static_cast<uint64_t>(e.block_count);
             const uint64_t prod = a * b;
             if (a != 0 && prod / a != b) {
-                log_error("PIT entry " + std::to_string(i) + " has an overflow in block size/count");
+                log_error(std::format("PIT entry {} has an overflow in block size/count", i));
                 return false;
             }
         }
@@ -853,7 +849,7 @@ static auto parse_pit_bytes(PitTable& pit_table, const std::vector<unsigned char
         pit_table.entries.push_back(e);
     }
 
-    log_info("Received PIT entries: " + std::to_string(pit_table.entry_count));
+    log_info(std::format("Received PIT entries: {}", pit_table.entry_count));
     return true;
 }
 
@@ -891,19 +887,18 @@ auto UsbDevice::receive_pit_table(PitTable& pit_table) -> bool {
     }
 
     if (actual_length < static_cast<int>(sizeof(ThorPitFilePacket))) {
-        log_error("Short PIT size packet (" + std::to_string(actual_length) + " bytes)");
+        log_error(std::format("Short PIT size packet ({} bytes)", actual_length));
         return false;
     }
 
     if (le16toh(pit_size_pkt.header.packet_type) != THOR_PACKET_PIT_FILE) {
-        log_error("Unexpected packet type while reading PIT size: " +
-                  std::to_string(le16toh(pit_size_pkt.header.packet_type)));
+        log_error(std::format("Unexpected packet type while reading PIT size: {}", le16toh(pit_size_pkt.header.packet_type)));
         return false;
     }
 
     uint32_t pit_data_size = le32_to_h(pit_size_pkt.pit_file_size);
     if (pit_data_size < 28 || pit_data_size > 1048576) {
-        log_error("Invalid PIT size: " + std::to_string(pit_data_size));
+        log_error(std::format("Invalid PIT size: {}", pit_data_size));
         return false;
     }
 
@@ -936,7 +931,7 @@ auto UsbDevice::send_file_part_chunk(const void* data, size_t size, uint32_t chu
     }
 
     if (actual_length < static_cast<int>(sizeof(ThorResponsePacket))) {
-        log_error("File part control failed: short response (" + std::to_string(actual_length) + " bytes)");
+        log_error(std::format("File part control failed: short response ({} bytes)", actual_length));
         return false;
     }
     uint32_t code = le32toh(response.response_code);
@@ -959,12 +954,12 @@ auto UsbDevice::send_file_part_chunk(const void* data, size_t size, uint32_t chu
         return false;
     }
     if (post_len < static_cast<int>(sizeof(ThorResponsePacket))) {
-        log_error("Post-data ACK was short (" + std::to_string(post_len) + " bytes)");
+        log_error(std::format("Post-data ACK was short ({} bytes)", post_len));
         return false;
     }
     uint32_t post_code = le32toh(post.response_code);
     if (le16toh(post.header.packet_type) != THOR_PACKET_RESPONSE || post_code != 0) {
-        log_error("File part data ACK reported failure. Code: " + std::to_string(post_code));
+        log_error(std::format("File part data ACK reported failure. Code: {}", post_code));
         return false;
     }
 
@@ -1005,7 +1000,7 @@ auto UsbDevice::send_file_part_header(uint64_t total_size) -> bool {
     }
 
     if (le16toh(response.header.packet_type) != THOR_PACKET_RESPONSE || code != 0) {
-        log_error("Unexpected response sending file part size. Code: " + std::to_string(code));
+        log_error(std::format("Unexpected response sending file part size. Code: {}", code));
         return false;
     }
     return true;
@@ -1017,7 +1012,7 @@ auto UsbDevice::end_file_transfer(uint32_t partition_id) -> bool {
         // Keep this as a no-op to avoid sending THOR packets in legacy mode.
         return true;
     }
-    log_info("Finalizing file transfer for partition ID: " + std::to_string(partition_id));
+    log_info(std::format("Finalizing file transfer for partition ID: {}", partition_id));
     ThorEndFileTransferPacket pkt = {};
     pkt.header.packet_size = h_to_le32(sizeof(ThorEndFileTransferPacket));
     pkt.header.packet_type = h_to_le16(THOR_PACKET_END_FILE_TRANSFER);
@@ -1035,12 +1030,12 @@ auto UsbDevice::end_file_transfer(uint32_t partition_id) -> bool {
     }
 
     if (actual_length < static_cast<int>(sizeof(ThorResponsePacket))) {
-        log_error("File transfer finalization failed: short response (" + std::to_string(actual_length) + " bytes)");
+        log_error(std::format("File transfer finalization failed: short response ({} bytes)", actual_length));
         return false;
     }
     uint32_t code = le32_to_h(response.response_code);
     if (le16toh(response.header.packet_type) != THOR_PACKET_RESPONSE || code != 0) {
-        log_error("File transfer finalization failed. Code: " + std::to_string(code));
+        log_error(std::format("File transfer finalization failed. Code: {}", code));
         return false;
     }
     log_info("File transfer finalized.");
@@ -1058,7 +1053,7 @@ auto UsbDevice::send_control(uint32_t control_type) -> bool {
         return true;
     }
 
-    log_info("Sending control command: " + std::to_string(control_type));
+    log_info(std::format("Sending control command: {}", control_type));
     ThorControlPacket pkt = {};
     pkt.header.packet_size = h_to_le32(sizeof(ThorControlPacket));
     pkt.header.packet_type = h_to_le16(THOR_PACKET_CONTROL);
@@ -1081,7 +1076,7 @@ auto UsbDevice::send_control(uint32_t control_type) -> bool {
     }
 
     if (le16toh(response.header.packet_type) != THOR_PACKET_RESPONSE || code != 0) {
-        log_error("Control command failed. Code: " + std::to_string(code));
+        log_error(std::format("Control command failed. Code: {}", code));
         return false;
     }
     log_info("Control command successful.");
@@ -1112,7 +1107,7 @@ auto UsbDevice::odin_command(uint32_t cmd, uint32_t subcmd, const void* payload,
         return false;
     }
     if (read_len != 8) {
-        log_error("Odin response size mismatch: " + std::to_string(read_len));
+        log_error(std::format("Odin response size mismatch: {}", read_len));
         return false;
     }
     return true;
@@ -1161,12 +1156,12 @@ auto UsbDevice::odin_fail_check(const std::vector<unsigned char>& rsp, const std
         // Some bootloaders report intermediate/progress states using 0xFF + a negative code.
         // Treat those as non-fatal when explicitly allowed.
         if (code >= -7 && code <= -2) {
-            log_info(context + " progress code " + std::to_string(code) + suffix);
+            log_info(std::format("{} progress code {}{}", context, code, suffix));
             return true;
         }
     }
 
-    log_error(context + " failed with code " + std::to_string(code) + suffix);
+    log_error(std::format("{} failed with code {}{}", context, code, suffix));
     return false;
 }
 

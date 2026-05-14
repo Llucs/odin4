@@ -23,6 +23,8 @@
 
 #include <iostream>
 #include <algorithm>
+#include <ranges>
+#include <format>
 #include <filesystem>
 
 #define ODIN4_VERSION "6.0.0-aefb1e5"
@@ -87,15 +89,13 @@ static auto verify_firmware_compatibility(const OdinConfig& cfg, const std::stri
     }
 
     std::string dt = device_type;
-    dt.erase(
-        std::remove_if(dt.begin(), dt.end(),
-                       [](unsigned char c) { return (std::isspace(c) != 0) || c == '\\' || c == '/' || c == '-'; }),
-        dt.end());
+    std::erase_if(dt, [](unsigned char c) {
+        return (std::isspace(c) != 0) || c == '\\' || c == '/' || c == '-';
+    });
 
-    std::transform(dt.begin(), dt.end(), dt.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    std::ranges::transform(dt, dt.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
 
-    if (dt.rfind("SM", 0) == 0) {
+    if (dt.starts_with("SM")) {
         dt = dt.substr(2);
     }
 
@@ -119,8 +119,8 @@ static auto verify_firmware_compatibility(const OdinConfig& cfg, const std::stri
             continue;
         }
         if (!file_matches(p)) {
-            log_error("Firmware file name does not appear to match device type: " +
-                      std::filesystem::path(p).filename().string() + " vs " + device_type);
+            log_error(std::format("Firmware file name does not appear to match device type: {} vs {}",
+                                  std::filesystem::path(p).filename().string(), device_type));
             return false;
         }
     }
@@ -162,7 +162,7 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
 
     const std::string device_type = usb.get_device_type();
     if (!device_type.empty()) {
-        log_info("Device type: " + device_type);
+        log_info(std::format("Device type: {}", device_type));
     }
 
     if (has_any_firmware_files(cfg)) {
@@ -182,7 +182,7 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
         usb.end_session();
         return OdinExitCode::Pit;
     }
-    log_info("PIT received with " + std::to_string(pit.entries.size()) + " entries.");
+    log_info(std::format("PIT received with {} entries.", pit.entries.size()));
 
     if (has_any_firmware_files(cfg)) {
         const std::vector<std::pair<std::string, std::string>> archives = {
@@ -264,13 +264,13 @@ auto odin4_run(const OdinConfig& cfg) -> OdinExitCode {
         if (devices.size() > 1) {
             log_error("Multiple compatible devices detected in Download Mode. Use -d to select one device.");
             for (const auto& dev_path : devices) {
-                log_info("Detected device: " + dev_path);
+                log_info(std::format("Detected device: {}", dev_path));
             }
             return OdinExitCode::Usb;
         }
         OdinConfig one = cfg;
         one.device_path = devices.front();
-        log_info("Using device: " + one.device_path);
+        log_info(std::format("Using device: {}", one.device_path));
         return run_for_device(one);
     }
 
