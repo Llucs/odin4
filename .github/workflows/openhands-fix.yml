@@ -1,0 +1,33 @@
+name: OpenHands Auto Fix
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  openhands:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Send task to OpenHands
+        env:
+          OPENHANDS_API_KEY: ${{ secrets.OPENHANDS_API_KEY }}
+        run: |
+          curl -X POST "https://app.all-hands.dev/api/v1/app-conversations" \
+            -H "Authorization: Bearer $OPENHANDS_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "initial_message": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Analise este repositório, encontre erros, corrija e crie um Pull Request com as mudanças. Explique o que foi corrigido."
+                  }
+                ]
+              }
+            }'
