@@ -10,8 +10,9 @@ on:
 
 jobs:
   analyze:
-    name: Analyze (C++)
-    runs-on: ubuntu-latest
+    name: Analyze Odin4 (C++23)
+    runs-on: ubuntu-24.04
+
     permissions:
       actions: read
       contents: read
@@ -20,19 +21,60 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'cpp' ]
+        language: [ cpp ]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Install dependencies
+        run: |
+          sudo apt update
+
+          sudo apt install -y \
+            ninja-build \
+            clang-18 \
+            clang-tidy-18 \
+            lld-18 \
+            libc++-18-dev \
+            libc++abi-18-dev \
+            libusb-1.0-0-dev \
+            libcrypto++-dev \
+            qt6-base-dev \
+            libtbb-dev \
+            libegl-dev \
+            libgles-dev \
+            libglu1-mesa-dev \
+            libxkbcommon-dev \
+            glslc \
+            glslang-tools
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
+          queries: +security-and-quality
 
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v4
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang-18 \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_CXX_STANDARD=23 \
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON
+
+      - name: Build project
+        run: |
+          cmake --build build --parallel
+
+      - name: Run clang-tidy
+        run: |
+          find src -name '*.cpp' | \
+          xargs clang-tidy-18 \
+            -p build \
+            --warnings-as-errors='*' || true
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v4
