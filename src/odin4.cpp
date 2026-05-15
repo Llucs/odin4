@@ -23,6 +23,7 @@
 
 #include <iostream>
 #include <algorithm>
+#include <cctype>
 #include <ranges>
 #include <format>
 #include <filesystem>
