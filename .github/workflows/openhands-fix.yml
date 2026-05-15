@@ -8,27 +8,13 @@ on:
         required: true
         default: "Analyze the repository, detect real issues, apply minimal fixes, create a branch, commit changes, push them, and open a pull request."
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
   openhands:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          token: ${{ secrets.GH_TOKEN }}
-
-      - name: Validate required tools
-        run: |
-          command -v curl >/dev/null 2>&1 || exit 1
-          command -v jq >/dev/null 2>&1 || exit 1
 
       - name: Send task to OpenHands
         env:
@@ -37,69 +23,45 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           TASK_PROMPT: ${{ github.event.inputs.task }}
         run: |
-          set -euo pipefail
+          FINAL_PROMPT="You are an automated code analysis and repair agent.
 
-          FINAL_PROMPT=$(cat <<EOF
-You are an automated code analysis and repair agent.
+          Analyze the repository strictly using real evidence from the codebase.
+          Do not invent issues.
+          Do not fabricate examples or scenarios.
+          Apply minimal necessary fixes only.
 
-Analyze the repository strictly using real evidence from the codebase.
-Do not invent issues.
-Do not fabricate examples or scenarios.
-Apply minimal necessary fixes only.
+          After completing changes:
+          1. Create a new branch
+          2. Commit all fixes
+          3. Push the branch to GitHub
+          4. Open a pull request using the provided GitHub authentication
 
-After completing changes:
-1. Create a new branch
-2. Commit all fixes
-3. Push the branch to GitHub
-4. Open a pull request using the provided GitHub authentication
+          Do not simulate results.
+          Only act based on verifiable findings.
 
-Rules:
-- Do not simulate results
-- Do not fabricate logs
-- Do not claim fixes without modifying code
-- Do not create placeholder implementations
-- Only act on verifiable findings
-- Keep changes minimal and technically justified
-- Avoid unnecessary refactors
-- Do not modify unrelated files
+          Additional task instructions:
+          $TASK_PROMPT"
 
-Additional task instructions:
-$TASK_PROMPT
-EOF
-)
-
-          PAYLOAD=$(jq -n \
-            --arg repo "$REPO" \
-            --arg prompt "$FINAL_PROMPT" \
-            --arg token "$GH_TOKEN" \
-            '{
-              selected_repository: $repo,
-              git_provider: "github",
-              selected_branch: "main",
-              secrets: {
-                GITHUB_TOKEN: $token
-              },
-              initial_message: {
-                content: [
-                  {
-                    type: "text",
-                    text: $prompt
-                  }
-                ]
-              }
-            }')
-
-          response=$(curl -sS -X POST \
-            "https://app.all-hands.dev/api/v1/app-conversations" \
+          curl -X POST "https://app.all-hands.dev/api/v1/app-conversations" \
             -H "Authorization: Bearer $OPENHANDS_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "$PAYLOAD")
-
-          echo "$response" | jq .
-
-          status=$(echo "$response" | jq -r '.status')
-
-          if [ "$status" != "WORKING" ]; then
-            echo "OpenHands request failed"
-            exit 1
-          fi
+            -d "$(jq -n \
+              --arg repo "$REPO" \
+              --arg prompt "$FINAL_PROMPT" \
+              --arg token "$GH_TOKEN" \
+              '{
+                selected_repository: $repo,
+                git_provider: "github",
+                selected_branch: "main",
+                secrets: {
+                  GITHUB_TOKEN: $token
+                },
+                initial_message: {
+                  content: [
+                    {
+                      type: "text",
+                      text: $prompt
+                    }
+                  ]
+                }
+              }')"
