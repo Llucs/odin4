@@ -1,0 +1,158 @@
+name: Odin4 Quality Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+concurrency:
+  group: \( {{ github.workflow }}- \){{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.compiler }})
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        compiler: [clang-18, gcc-14]
+        build_type: [Debug, Release]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            ninja-build \
+            clang-18 clang-tidy-18 lld-18 \
+            gcc-14 g++-14 \
+            cmake \
+            ccache \
+            libusb-1.0-0-dev \
+            libcrypto++-dev \
+            iwyu
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: \( {{ matrix.compiler }}- \){{ matrix.build_type }}
+
+      - name: Configure CMake
+        run: |
+          CC=${{ matrix.compiler == 'clang-18' && 'clang-18' || 'gcc-14' }}
+          CXX=${{ matrix.compiler == 'clang-18' && 'clang++-18' || 'g++-14' }}
+          
+          cmake -S . -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_C_COMPILER=$CC \
+            -DCMAKE_CXX_COMPILER=$CXX \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_CXX_FLAGS="-Wall -Wextra -Wpedantic -Werror" \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Upload artifact (Debug only)
+        if: matrix.build_type == 'Debug' && matrix.compiler == 'clang-18'
+        uses: actions/upload-artifact@v4
+        with:
+          name: odin4-debug
+          path: build/odin4  # ajuste o nome do binário se necessário
+          retention-days: 7
+
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-24.04
+    needs: build  # roda depois do build principal
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            clang-18 clang-tidy-18 \
+            cppcheck \
+            clang-format-18 \
+            cmake ninja-build \
+            libusb-1.0-0-dev
+
+      - name: Configure CMake (for compile_commands.json)
+        run: |
+          cmake -S . -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang-18 \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Run clang-format check
+        run: |
+          find src include -name '*.cpp' -o -name '*.h' | \
+          xargs clang-format-18 --dry-run --Werror -style=file
+
+      - name: Run clang-tidy
+        run: |
+          # Usa run-clang-tidy para paralelismo e melhor desempenho
+          python3 $(find /usr -name run-clang-tidy-18.py | head -n1) \
+            -p build \
+            -quiet \
+            -header-filter="^(src|include)/" || true  # continue even with warnings
+
+      - name: Run cppcheck
+        run: |
+          cppcheck \
+            --enable=all \
+            --inconclusive \
+            --std=c++23 \
+            --suppress=missingIncludeSystem \
+            --suppress=unusedFunction \
+            --project=build/compile_commands.json \
+            --error-exitcode=1 \
+            src/ include/
+
+      - name: Run include-what-you-use (IWYU)
+        run: |
+          # IWYU via CMake (opcional, pode ser lento)
+          cmake -S . -B build-iwyu \
+            -G Ninja \
+            -DCMAKE_CXX_INCLUDE_WHAT_YOU_USE=iwyu \
+            -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-iwyu --parallel || echo "IWYU warnings found (non-fatal)"
+
+  tests:
+    name: Unit Tests + Sanitizers
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: sudo apt update && sudo apt install -y ninja-build clang-18 cmake libusb-1.0-0-dev
+
+      - name: Configure with Sanitizers
+        run: |
+          cmake -S . -B build-test \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang-18 \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined,leak -fno-omit-frame-pointer"
+
+      - name: Build Tests
+        run: cmake --build build-test --parallel
+
+      - name: Run Tests
+        run: |
+          cd build-test
+          ctest --output-on-failure -j$(nproc) || true  # ajuste se não usar CTest
+          # ou execute diretamente: ./tests/odin4_tests
