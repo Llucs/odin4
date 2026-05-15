@@ -20,10 +20,10 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <cctype>
+#include <cstring>
 #include <ranges>
 #include <span>
-#include <cstring>
-#include <cctype>
 #include <unordered_set>
 #include <sstream>
 #include <limits>
