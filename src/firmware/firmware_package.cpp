@@ -23,6 +23,7 @@
 #include <cctype>
 #include <cstring>
 #include <ranges>
+#include <span>
 #include <unordered_set>
 #include <sstream>
 #include <limits>
