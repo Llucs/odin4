@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>odin4 | Samsung Flash Tool for Linux</title>
-    <meta name="description" content="Ferramenta moderna e robusta para flash de firmware Samsung no Linux. Implementação nativa do protocolo Thor.">
+    <meta name="description" content="Modern and robust Samsung firmware flashing tool for Linux. Native Thor protocol implementation.">
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,10 +24,10 @@
                 <span></span>
             </div>
             <ul class="nav-menu" id="navMenu">
-                <li><a href="#overview" class="nav-link">Visão Geral</a></li>
-                <li><a href="#features" class="nav-link">Recursos</a></li>
-                <li><a href="#protocol" class="nav-link">Protocolo Thor</a></li>
-                <li><a href="#getting-started" class="nav-link">Começar</a></li>
+                <li><a href="#overview" class="nav-link">Overview</a></li>
+                <li><a href="#features" class="nav-link">Features</a></li>
+                <li><a href="#protocol" class="nav-link">Thor Protocol</a></li>
+                <li><a href="#getting-started" class="nav-link">Get Started</a></li>
                 <li><a href="#documentation" class="nav-link">Docs</a></li>
                 <li><a href="https://github.com/Llucs/odin4" target="_blank" class="nav-link github-link">GitHub</a></li>
             </ul>
@@ -37,12 +37,11 @@
     <header class="hero">
         <div class="container hero-grid">
             <div class="hero-content">
-                <div class="badge">Versão Estável</div>
-                <h1>Flash de Firmware Samsung <span class="gradient-text">Nativo para Linux</span></h1>
-                <p class="hero-description">Uma implementação limpa, correta e robusta do protocolo USB Thor. O odin4 oferece uma alternativa confiável para manutenção e desenvolvimento de dispositivos Samsung em ambientes Linux.</p>
+                <h1>Samsung Firmware Flashing <span class="gradient-text">Native for Linux</span></h1>
+                <p class="hero-description">A clean, correct, and robust implementation of the Thor USB protocol. odin4 provides a reliable alternative for Samsung device maintenance and development workflows on Linux environments.</p>
                 <div class="hero-buttons">
-                    <a href="#getting-started" class="btn btn-primary">Começar Agora</a>
-                    <a href="#protocol" class="btn btn-outline">Explorar Protocolo</a>
+                    <a href="#getting-started" class="btn btn-primary">Get Started</a>
+                    <a href="#protocol" class="btn btn-outline">Explore Protocol</a>
                 </div>
             </div>
             <div class="hero-visual">
@@ -57,29 +56,29 @@
     <section id="overview" class="section overview">
         <div class="container">
             <div class="section-header">
-                <h2 class="section-title">Por que odin4?</h2>
-                <p class="section-subtitle">Desenvolvido para ser a ferramenta definitiva de flash no Linux.</p>
+                <h2 class="section-title">Why odin4?</h2>
+                <p class="section-subtitle">Engineered to be the definitive flashing tool for Linux.</p>
             </div>
             <div class="grid grid-4">
                 <div class="card animate-up">
                     <div class="card-icon">🐧</div>
-                    <h3>Nativo Linux</h3>
-                    <p>Sem Wine, sem emuladores. Performance máxima e compatibilidade direta com o kernel.</p>
+                    <h3>Native Linux</h3>
+                    <p>No Wine, no emulators. Maximum performance and direct kernel compatibility.</p>
                 </div>
                 <div class="card animate-up">
                     <div class="card-icon">🛡️</div>
-                    <h3>Segurança</h3>
-                    <p>Validação rigorosa de partições e integridade para prevenir danos ao dispositivo.</p>
+                    <h3>Safety First</h3>
+                    <p>Strict partition and integrity validation to prevent device damage.</p>
                 </div>
                 <div class="card animate-up">
                     <div class="card-icon">⚡</div>
-                    <h3>Eficiência</h3>
-                    <p>Suporte nativo a compressão LZ4 e transferências otimizadas via libusb.</p>
+                    <h3>Efficiency</h3>
+                    <p>Native LZ4 compression support and optimized transfers via libusb.</p>
                 </div>
                 <div class="card animate-up">
                     <div class="card-icon">🔍</div>
-                    <h3>Transparência</h3>
-                    <p>Código aberto e auditável. Logs detalhados para depuração precisa.</p>
+                    <h3>Transparency</h3>
+                    <p>Open-source and auditable code. Detailed logs for precise debugging.</p>
                 </div>
             </div>
         </div>
@@ -88,38 +87,38 @@
     <section id="features" class="section features bg-alt">
         <div class="container">
             <div class="section-header">
-                <h2 class="section-title">Recursos Principais</h2>
+                <h2 class="section-title">Core Features</h2>
             </div>
             <div class="grid grid-3">
                 <div class="feature-card">
                     <div class="feature-icon">📡</div>
-                    <h4>Detecção Automática</h4>
-                    <p>Identifica instantaneamente dispositivos em Download Mode via libusb.</p>
+                    <h4>Auto Detection</h4>
+                    <p>Instantly identifies devices in Download Mode via libusb.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">📜</div>
-                    <h4>Gestão de PIT</h4>
-                    <p>Recuperação e análise automática da Partition Information Table (PIT).</p>
+                    <h4>PIT Management</h4>
+                    <p>Automatic retrieval and analysis of the Partition Information Table (PIT).</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">💎</div>
-                    <h4>Integridade MD5</h4>
-                    <p>Verificação criptográfica de arquivos .tar.md5 antes do flash.</p>
+                    <h4>MD5 Integrity</h4>
+                    <p>Cryptographic verification of .tar.md5 files before flashing.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">🧪</div>
-                    <h4>Modo Dry-run</h4>
-                    <p>Valide todo o processo sem realizar escritas reais no dispositivo.</p>
+                    <h4>Dry-run Mode</h4>
+                    <p>Validate the entire process without performing real writes to the device.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">📊</div>
-                    <h4>Progresso Real</h4>
-                    <p>Estatísticas de transferência e progresso detalhado por arquivo.</p>
+                    <h4>Real-time Progress</h4>
+                    <p>Transfer statistics and detailed per-file progress reporting.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">🔄</div>
-                    <h4>Multi-componente</h4>
-                    <p>Suporte total a BL, AP, CP, CSC e UMS de forma sequencial ou seletiva.</p>
+                    <h4>Multi-component</h4>
+                    <p>Full support for BL, AP, CP, CSC, and UMS components.</p>
                 </div>
             </div>
         </div>
@@ -128,78 +127,78 @@
     <section id="protocol" class="section protocol">
         <div class="container">
             <div class="section-header">
-                <h2 class="section-title">Protocolo Thor</h2>
-                <p class="section-subtitle">Entenda a engenharia por trás da comunicação com dispositivos Samsung.</p>
+                <h2 class="section-title">Thor Protocol</h2>
+                <p class="section-subtitle">Understand the engineering behind Samsung device communication.</p>
             </div>
             <div class="protocol-container">
                 <div class="protocol-sidebar">
-                    <button class="protocol-tab active" data-target="intro">Introdução</button>
+                    <button class="protocol-tab active" data-target="intro">Introduction</button>
                     <button class="protocol-tab" data-target="handshake">Handshake</button>
-                    <button class="protocol-tab" data-target="pit">Transferência PIT</button>
-                    <button class="protocol-tab" data-target="flash">Sequência de Flash</button>
-                    <button class="protocol-tab" data-target="info">Informações do Dispositivo</button>
+                    <button class="protocol-tab" data-target="pit">PIT Transfer</button>
+                    <button class="protocol-tab" data-target="flash">Flash Sequence</button>
+                    <button class="protocol-tab" data-target="info">Device Info</button>
                 </div>
                 <div class="protocol-content">
                     <div id="intro" class="tab-pane active">
-                        <h3>O que é o Protocolo Thor?</h3>
-                        <p>O protocolo Thor é a linguagem proprietária utilizada pela Samsung para comunicação entre o host (PC) e o dispositivo em Download Mode. Ele opera sobre USB e é responsável por tarefas críticas como envio de tabelas de partição e escrita de firmware.</p>
+                        <h3>What is the Thor Protocol?</h3>
+                        <p>The Thor protocol is the proprietary language used by Samsung for communication between the host (PC) and the device in Download Mode. It operates over USB and handles critical tasks like partition table delivery and firmware writing.</p>
                         <div class="info-box">
-                            <strong>Nota Técnica:</strong> O odin4 implementa este protocolo de forma nativa, garantindo que cada pacote enviado siga exatamente as especificações esperadas pelo bootloader do dispositivo.
+                            <strong>Technical Note:</strong> odin4 implements this protocol natively, ensuring every packet follows the exact specifications expected by the device bootloader.
                         </div>
                     </div>
                     <div id="handshake" class="tab-pane">
-                        <h3>Início da Sessão (Handshake)</h3>
-                        <p>Antes de qualquer operação, o host deve iniciar uma sessão. Isso é feito enviando um pacote de inicialização.</p>
+                        <h3>Session Start (Handshake)</h3>
+                        <p>Before any operation, the host must initiate a session. This is done by sending an initialization packet.</p>
                         <div class="table-wrapper">
                             <table>
                                 <thead>
                                     <tr>
-                                        <th>Valor</th>
-                                        <th>Tipo</th>
-                                        <th>Descrição</th>
+                                        <th>Value</th>
+                                        <th>Type</th>
+                                        <th>Description</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
                                         <td><code>0x4F44494E</code></td>
                                         <td>String ("ODIN")</td>
-                                        <td>Número Mágico de Identificação</td>
+                                        <td>Magic Identification Number</td>
                                     </tr>
                                     <tr>
                                         <td><code>0x0001</code></td>
-                                        <td>Inteiro 16-bit</td>
-                                        <td>Versão do Protocolo</td>
+                                        <td>16-bit Integer</td>
+                                        <td>Protocol Version</td>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
                     <div id="pit" class="tab-pane">
-                        <h3>Extração da Tabela PIT</h3>
-                        <p>A Partition Information Table (PIT) define o layout de armazenamento do dispositivo. O odin4 solicita esta tabela para validar se o firmware é compatível.</p>
-                        <div class="code-header">Comando de Requisição PIT (0x65)</div>
+                        <h3>PIT Table Extraction</h3>
+                        <p>The Partition Information Table (PIT) defines the device's storage layout. odin4 requests this table to validate firmware compatibility.</p>
+                        <div class="code-header">PIT Request Command (0x65)</div>
                         <div class="code-block">
-                            <code>Pacote: [0x65] [0x00] [0x00] [0x00] ...</code>
+                            <code>Packet: [0x65] [0x00] [0x00] [0x00] ...</code>
                         </div>
-                        <p>O dispositivo responde com o tamanho da PIT seguido pelos dados binários brutos.</p>
+                        <p>The device responds with the PIT size followed by the raw binary data.</p>
                     </div>
                     <div id="flash" class="tab-pane">
-                        <h3>Sequência de Flash</h3>
-                        <p>O flash ocorre em três fases principais para cada arquivo:</p>
+                        <h3>Flash Sequence</h3>
+                        <p>Flashing occurs in three main phases for each file:</p>
                         <ol class="protocol-list">
-                            <li><strong>Início (0x66):</strong> Notifica o dispositivo sobre o nome e tamanho do arquivo.</li>
-                            <li><strong>Dados (0x67):</strong> Envio de chunks de dados (geralmente 1MB ou 128KB).</li>
-                            <li><strong>Fim (0x66 + 0x03/0x07):</strong> Finaliza a escrita e solicita a verificação de checksum no dispositivo.</li>
+                            <li><strong>Start (0x66):</strong> Notifies the device about the file name and size.</li>
+                            <li><strong>Data (0x67):</strong> Sending data chunks (usually 1MB or 128KB).</li>
+                            <li><strong>End (0x66 + 0x03/0x07):</strong> Finalizes writing and requests checksum verification.</li>
                         </ol>
                     </div>
                     <div id="info" class="tab-pane">
-                        <h3>Metadados do Dispositivo (0x69)</h3>
-                        <p>Permite extrair informações vitais sem necessidade de flash.</p>
+                        <h3>Device Metadata (0x69)</h3>
+                        <p>Allows extracting vital information without the need for flashing.</p>
                         <ul class="protocol-list">
-                            <li><strong>0x00:</strong> Nome do Modelo (ex: SM-G991B)</li>
-                            <li><strong>0x01:</strong> Número de Série</li>
-                            <li><strong>0x02:</strong> Código da Região (CSC)</li>
-                            <li><strong>0x03:</strong> ID da Operadora</li>
+                            <li><strong>0x00:</strong> Model Name (e.g., SM-G991B)</li>
+                            <li><strong>0x01:</strong> Serial Number</li>
+                            <li><strong>0x02:</strong> Region Code (CSC)</li>
+                            <li><strong>0x03:</strong> Carrier ID</li>
                         </ul>
                     </div>
                 </div>
@@ -210,15 +209,15 @@
     <section id="getting-started" class="section getting-started bg-alt">
         <div class="container">
             <div class="section-header">
-                <h2 class="section-title">Começando</h2>
-                <p class="section-subtitle">Siga os passos abaixo para configurar o odin4 no seu sistema.</p>
+                <h2 class="section-title">Getting Started</h2>
+                <p class="section-subtitle">Follow the steps below to set up odin4 on your system.</p>
             </div>
             
             <div class="setup-grid">
                 <div class="setup-card">
                     <div class="setup-number">01</div>
-                    <h4>Dependências</h4>
-                    <p>Instale as bibliotecas necessárias via terminal:</p>
+                    <h4>Dependencies</h4>
+                    <p>Install the required libraries via terminal:</p>
                     <div class="code-block">
                         <code>sudo apt-get update
 sudo apt-get install -y cmake ninja-build zip make pkg-config g++ libusb-1.0-0-dev libcrypto++-dev</code>
@@ -227,8 +226,8 @@ sudo apt-get install -y cmake ninja-build zip make pkg-config g++ libusb-1.0-0-d
 
                 <div class="setup-card">
                     <div class="setup-number">02</div>
-                    <h4>Compilação</h4>
-                    <p>Clone e compile o projeto usando CMake:</p>
+                    <h4>Compilation</h4>
+                    <p>Clone and compile the project using CMake:</p>
                     <div class="code-block">
                         <code>git clone https://github.com/Llucs/odin4.git
 cd odin4
@@ -239,8 +238,8 @@ cmake --build build --parallel $(nproc)</code>
 
                 <div class="setup-card">
                     <div class="setup-number">03</div>
-                    <h4>Permissões USB</h4>
-                    <p>Configure as regras udev para acesso sem root:</p>
+                    <h4>USB Permissions</h4>
+                    <p>Configure udev rules for non-root access:</p>
                     <div class="code-block">
                         <code>sudo cp udev/60-odin4.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
@@ -254,7 +253,7 @@ sudo udevadm trigger</code>
     <section id="documentation" class="section documentation">
         <div class="container">
             <div class="section-header">
-                <h2 class="section-title">Documentação de Uso</h2>
+                <h2 class="section-title">Usage Documentation</h2>
             </div>
             
             <div class="doc-grid">
@@ -267,30 +266,30 @@ sudo udevadm trigger</code>
                             <span class="terminal-title">odin4 --help</span>
                         </div>
                         <div class="terminal-body">
-                            <pre><code>Uso: odin4 [opções]
-Ferramenta de flash Samsung para Linux.
+                            <pre><code>Usage: odin4 [options]
+Samsung flashing tool for Linux.
 
-Opções:
-  -l                  Listar dispositivos detectados
-  -b &lt;arquivo&gt;        Arquivo Bootloader (.tar.md5)
-  -a &lt;arquivo&gt;        Arquivo AP (.tar.md5)
-  -c &lt;arquivo&gt;        Arquivo CP (.tar.md5)
-  -s &lt;arquivo&gt;        Arquivo CSC (.tar.md5)
-  --check-only        Apenas validar arquivos
-  --reboot            Reiniciar após o flash
-  --verbose           Logs detalhados</code></pre>
+Options:
+  -l                  List detected devices
+  -b &lt;file&gt;           Bootloader file (.tar.md5)
+  -a &lt;file&gt;           AP file (.tar.md5)
+  -c &lt;file&gt;           CP file (.tar.md5)
+  -s &lt;file&gt;           CSC file (.tar.md5)
+  --check-only        Validate files only
+  --reboot            Reboot after flashing
+  --verbose           Detailed logs</code></pre>
                         </div>
                     </div>
                 </div>
                 <div class="doc-side">
                     <div class="example-box">
-                        <h5>Exemplo: Flash Completo</h5>
+                        <h5>Example: Full Flash</h5>
                         <div class="code-block">
                             <code>./odin4 -b BL.tar.md5 -a AP.tar.md5 -c CP.tar.md5 -s CSC.tar.md5 --reboot</code>
                         </div>
                     </div>
                     <div class="example-box">
-                        <h5>Exemplo: Apenas Verificação</h5>
+                        <h5>Example: Verification Only</h5>
                         <div class="code-block">
                             <code>./odin4 --check-only -a AP.tar.md5</code>
                         </div>
@@ -308,11 +307,11 @@ Opções:
                         <img src="logo.png" alt="odin4 logo" class="logo">
                         <span class="brand">odin4</span>
                     </div>
-                    <p>A ferramenta de flash Samsung definitiva para a comunidade Linux.</p>
+                    <p>The definitive Samsung flashing tool for the Linux community.</p>
                 </div>
                 <div class="footer-links">
                     <div class="link-group">
-                        <h6>Projeto</h6>
+                        <h6>Project</h6>
                         <ul>
                             <li><a href="https://github.com/Llucs/odin4" target="_blank">GitHub</a></li>
                             <li><a href="https://github.com/Llucs/odin4/issues" target="_blank">Issues</a></li>
@@ -320,18 +319,18 @@ Opções:
                         </ul>
                     </div>
                     <div class="link-group">
-                        <h6>Comunidade</h6>
+                        <h6>Community</h6>
                         <ul>
-                            <li><a href="https://github.com/Llucs/odin4/blob/main/CONTRIBUTING.md" target="_blank">Contribuir</a></li>
-                            <li><a href="https://github.com/Llucs/odin4/blob/main/LICENSE" target="_blank">Licença</a></li>
+                            <li><a href="https://github.com/Llucs/odin4/blob/main/CONTRIBUTING.md" target="_blank">Contribute</a></li>
+                            <li><a href="https://github.com/Llucs/odin4/blob/main/LICENSE" target="_blank">License</a></li>
                         </ul>
                     </div>
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2026 Llucs. Desenvolvido com foco em performance e segurança.</p>
+                <p>&copy; 2026 Llucs. Developed with focus on performance and safety.</p>
                 <div class="disclaimer-mini">
-                    O uso desta ferramenta é de sua inteira responsabilidade. Flashing de firmware envolve riscos.
+                    Use of this tool is at your own risk. Firmware flashing involves inherent risks.
                 </div>
             </div>
         </div>

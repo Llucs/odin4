@@ -72,14 +72,14 @@ function initCodeCopy() {
 
         const copyBtn = document.createElement('button');
         copyBtn.className = 'copy-btn';
-        copyBtn.textContent = 'Copiar';
+        copyBtn.textContent = 'Copy';
         block.appendChild(copyBtn);
 
         copyBtn.addEventListener('click', () => {
             const text = code.textContent;
             navigator.clipboard.writeText(text).then(() => {
                 const originalText = copyBtn.textContent;
-                copyBtn.textContent = 'Copiado!';
+                copyBtn.textContent = 'Copied!';
                 copyBtn.style.background = 'var(--success)';
                 copyBtn.style.color = 'white';
                 
@@ -89,7 +89,7 @@ function initCodeCopy() {
                     copyBtn.style.color = '';
                 }, 2000);
             }).catch(err => {
-                console.error('Erro ao copiar:', err);
+                console.error('Error copying:', err);
             });
         });
     });
