@@ -2,26 +2,29 @@ name: OpenSSF Scorecard
 
 on:
   branch_protection_rule:
-  schedule:
-    - cron: '30 1 * * 1'
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  schedule:
+    - cron: '30 1 * * 1'
 
 permissions:
-  security-events: write
-  id-token: write
   contents: read
-  actions: read
 
 jobs:
   analysis:
-    name: Scorecard Analysis
+    name: Scorecard analysis
     runs-on: ubuntu-latest
 
+    permissions:
+      security-events: write
+      id-token: write
+      actions: read
+      contents: read
+
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           persist-credentials: false
