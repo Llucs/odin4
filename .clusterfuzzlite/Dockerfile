@@ -13,4 +13,4 @@ RUN apt-get update && apt-get install -y \
 COPY . $SRC/odin4
 WORKDIR $SRC/odin4
 
-COPY .clusterfuzzlite/build.sh $SRC/odin4/build.sh
+COPY .clusterfuzzlite/build.sh /src/build.sh
