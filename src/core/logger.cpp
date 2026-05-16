@@ -24,6 +24,8 @@
 #include <sstream>
 #include <chrono>
 #include <print>
+#include <format>
+#include <cstdio>
 #include <libusb.h>
 
 namespace {
@@ -169,22 +171,25 @@ void log_hexdump(const std::string& title, const void* data, size_t size) {
 
     const auto* bytes = static_cast<const unsigned char*>(data);
 
-    std::ostringstream header;
-    header << title << " (" << size << " bytes)";
-    log_debug(header.str());
+    log_debug(std::format("{} ({} bytes)", title, size));
 
-    std::ostringstream line;
+    // Use a pre-allocated buffer for hex output instead of ostringstream
+    // This is significantly faster than stream operations in tight loops
+    char hex_buf[16 * 4 + 1] = {};  // 16 bytes * 4 chars each + null
+    char byte_buf[4];
+
     for (size_t i = 0; i < size; ++i) {
-        if ((i % 16) == 0) {
-            if (i != 0) {
-                log_debug(line.str());
-                line.str(std::string());
-                line.clear();
-            }
+        if ((i % 16) == 0 && i != 0) {
+            log_debug(hex_buf);
+            hex_buf[0] = '\0';
         }
-        line << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned int>(bytes[i]) << " ";
+        snprintf(byte_buf, sizeof(byte_buf), "%02x ", bytes[i]);
+        size_t pos = (i % 16) * 3;
+        hex_buf[pos] = byte_buf[0];
+        hex_buf[pos + 1] = byte_buf[1];
+        hex_buf[pos + 2] = byte_buf[2];
     }
-    if (!line.str().empty()) {
-        log_debug(line.str());
+    if (hex_buf[0] != '\0') {
+        log_debug(hex_buf);
     }
 }
