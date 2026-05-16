@@ -17,16 +17,29 @@
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
-#include <vector>
-#include "core/odin_types.h"
-#include "odin4/fuzz_utils.h"
+#include <lz4frame.h>
+#include "lz4/lz4.h"
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     try {
-        std::vector<unsigned char> pit_data(size);
-        std::memcpy(pit_data.data(), data, size);
-        PitTable pit_table;
-        fuzz_parse_pit_bytes(pit_table, pit_data);
+        // Test LZ4 frame parsing
+        if (size > 0) {
+            fuzz_lz4_decompress(data, size);
+        }
+        
+        // Test raw LZ4 compression decompression (non-frame)
+        if (size > 0 && size < (1 << 20)) {
+            char decompressed[4096];
+            const int decompressed_size = LZ4_decompress_safe(
+                reinterpret_cast<const char*>(data),
+                decompressed,
+                static_cast<int>(size),
+                4096
+            );
+            if (decompressed_size > 0) {
+                (void)decompressed_size;
+            }
+        }
     } catch (...) {
     }
     return 0;

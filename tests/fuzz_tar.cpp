@@ -16,17 +16,27 @@
 
 #include <cstdint>
 #include <cstddef>
-#include <cstring>
-#include <vector>
-#include "core/odin_types.h"
-#include "odin4/fuzz_utils.h"
+#include "protocol/thor_protocol.h"
+#include "firmware/firmware_package.h"
+#include "odin4/fuzz_helpers.h"
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     try {
-        std::vector<unsigned char> pit_data(size);
-        std::memcpy(pit_data.data(), data, size);
-        PitTable pit_table;
-        fuzz_parse_pit_bytes(pit_table, pit_data);
+        // Test TAR header parsing - 512 byte blocks
+        if (size >= 512) {
+            // Test first block as TAR header
+            fuzz_parse_tar_header(data, 512);
+            
+            // For larger inputs, test consecutive blocks
+            for (size_t i = 0; i + 512 <= size; i += 512) {
+                fuzz_parse_tar_header(data + i, 512);
+            }
+        }
+        
+        // Test MD5 trailer detection
+        if (size > 32) {
+            fuzz_detect_md5_trailer(data, size);
+        }
     } catch (...) {
     }
     return 0;
