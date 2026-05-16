@@ -55,8 +55,8 @@ jobs:
             qt6-base-dev \
             libqt6widgets6 \
             libgl1-mesa-dev \
-            gcc-13 \
-            g++-13
+            gcc-14 \
+            g++-14
 
       - name: Ensure Crypto++ static library is available
         shell: bash
@@ -83,10 +83,10 @@ jobs:
           fi
           echo "ODIN4_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "ODIN4_SUFFIX=$SUFFIX" >> "$GITHUB_ENV"
-          echo "ODIN4_OUTNAME=odin4_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
-          echo "ODIN4_GUI_OUTNAME=odin4-gui_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
-          echo "LIB_OUTNAME=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}.so" >> "$GITHUB_ENV"
-          echo "LIB_STATIC_OUTNAME=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}.a" >> "$GITHUB_ENV"
+          echo "ODIN4_OUTNAME=odin4_\( {{ matrix.arch }}_ \){VERSION}${SUFFIX}" >> "$GITHUB_ENV"
+          echo "ODIN4_GUI_OUTNAME=odin4-gui_\( {{ matrix.arch }}_ \){VERSION}${SUFFIX}" >> "$GITHUB_ENV"
+          echo "LIB_OUTNAME=libodin4_\( {{ matrix.arch }}_ \){VERSION}${SUFFIX}.so" >> "$GITHUB_ENV"
+          echo "LIB_STATIC_OUTNAME=libodin4_\( {{ matrix.arch }}_ \){VERSION}${SUFFIX}.a" >> "$GITHUB_ENV"
 
       - name: Clean build
         shell: bash
@@ -98,8 +98,8 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=gcc-13 \
-            -DCMAKE_CXX_COMPILER=g++-13
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14
 
       - name: Build
         shell: bash
@@ -131,14 +131,14 @@ jobs:
           strip "dist/${ODIN4_OUTNAME}" || true
           strip "dist/${ODIN4_GUI_OUTNAME}" || true
           strip "dist/${LIB_OUTNAME}" || true
-          ZIP_NAME="odin4-linux-${{ matrix.arch }}-${ODIN4_VERSION}${ODIN4_SUFFIX}.zip"
+          ZIP_NAME="odin4-linux-\( {{ matrix.arch }}- \){ODIN4_VERSION}${ODIN4_SUFFIX}.zip"
           cd dist
           zip "../${ZIP_NAME}" *
           echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: odin4-linux-${{ matrix.arch }}-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}
+          name: odin4-linux-\( {{ matrix.arch }}- \){{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}
           path: ${{ env.ZIP_NAME }}
           if-no-files-found: error
           retention-days: 14
@@ -162,7 +162,7 @@ jobs:
           find artifacts -type f -name "*.zip" -exec cp {} bundle/ \;
           SAMPLE="$(find bundle -type f -name '*.zip' | head -n 1)"
           BASE="$(basename "$SAMPLE")"
-          VERSUFFIX="$(echo "$BASE" | sed -E 's/^odin4-linux-[^-]+-(.+)\.zip$/\1/')"
+          VERSUFFIX="$(echo "\( BASE" | sed -E 's/^odin4-linux-[^-]+-(.+)\.zip \)/\1/')"
           OUT="odin4-linux-all-${VERSUFFIX}.zip"
           cd bundle
           zip "../${OUT}" ./*
