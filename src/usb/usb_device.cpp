@@ -1398,19 +1398,29 @@ auto UsbDevice::odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool {
 
 auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, const PitEntry& pit_entry,
                                        bool large_partition) -> bool {
+    // Flash a partition from an input stream using the active device protocol.
+    // High-level flow: initialize protocol transfer state, send data in protocol-defined
+    // packet/sequence units, validate acknowledgements, then finalize the flash operation.
     (void) large_partition;
 
+    // Odin legacy mode uses a request/sequence-based transfer model.
+    // We first request file flash mode, then derive how many transfer sequences are needed
+    // from the negotiated packet size and packets-per-sequence values.
     if (protocol_mode == ProtocolMode::OdinLegacy) {
         if (!odin_request_file_flash()) {
             return false;
         }
 
+        // Bytes transferred per sequence = packet_size * packet_count.
+        // A zero value would indicate invalid negotiation/configuration and would lead
+        // to division by zero below, so fail fast.
         const uint64_t sequence_bytes =
             static_cast<uint64_t>(odin_flash_packet_size) * static_cast<uint64_t>(odin_flash_sequence_count);
         if (sequence_bytes == 0) {
             return false;
         }
 
+        // Round up to include the final partial sequence when size is not aligned.
         const uint64_t sequences64 = (size + sequence_bytes - 1) / sequence_bytes;
         if (sequences64 == 0 || sequences64 > 0xFFFFFFFFULL) {
             log_error("Too many legacy sequences for size: " + std::to_string(size));
