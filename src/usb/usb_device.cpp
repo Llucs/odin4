@@ -718,12 +718,25 @@ auto UsbDevice::end_session() -> bool {
     return true;
 }
 
+/**
+ * Parse raw PIT bytes into a PitTable structure.
+ *
+ * The PIT payload is expected to be a little-endian binary structure with a fixed
+ * header and one or more entry records. This function validates the file identifier
+ * and structural constraints before populating `pit_table`.
+ *
+ * Returns true only when the full payload is structurally valid and all required
+ * fields are parsed successfully. Any malformed/truncated input is logged and
+ * results in false.
+ */
 static auto parse_pit_bytes(PitTable& pit_table, const std::vector<unsigned char>& pit_data) -> bool {
+    // Minimum PIT header size check before any offset-based reads.
     if (pit_data.size() < 28) {
         log_error(std::format("PIT data too small: {}", pit_data.size()));
         return false;
     }
 
+    // Helpers for little-endian primitive reads from byte offsets.
     auto read_u32 = [&](size_t off) -> uint32_t {
         uint32_t v = 0;
         std::memcpy(&v, pit_data.data() + off, sizeof(v));
@@ -735,6 +748,7 @@ static auto parse_pit_bytes(PitTable& pit_table, const std::vector<unsigned char
         return static_cast<uint16_t>(le16toh(v));
     };
 
+    // Validate PIT magic/file identifier.
     const uint32_t file_id = read_u32(0);
     if (file_id != 0x12349876) {
         std::ostringstream oss;
