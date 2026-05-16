@@ -341,14 +341,24 @@ auto check_md5_signature(const std::string& file_path) -> bool {
     return vr == ExitCode::Success;
 }
 
+// Streams a single LZ4-compressed payload from the current archive/file position.
+// High-level flow:
+//  1) Validate stream position and initialize LZ4 frame decompression context.
+//  2) Read compressed input in chunks, decompress incrementally, and emit output blocks.
+//  3) If do_flash is true, write decompressed output to the target USB partition;
+//     otherwise consume/validate the stream without flashing.
+//  4) Stop at LZ4 frame end and ensure we do not read beyond compressed_size.
+// Returns true only when the frame is processed successfully and all required writes succeed.
 auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDevice& usb_device,
                            const std::string& filename, bool large_partition, bool do_flash) -> bool {
+    // Record the beginning of this compressed entry so size accounting can be bounded.
     const std::streampos entry_start = file.tellg();
     if (entry_start < 0) {
         log_error("Unexpected end of file during LZ4 streaming.");
         return false;
     }
 
+    // Initialize decompression context once; it is reused for the full frame stream.
     LZ4F_decompressionContext_t dctx;
     LZ4F_errorCode_t err = LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
     if (LZ4F_isError(err) != 0U) {
@@ -356,6 +366,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
         return false;
     }
 
+    // Ensure decompression context is always released on every return path.
     struct DctxCleanup {
         LZ4F_decompressionContext_t ctx;
         explicit DctxCleanup(LZ4F_decompressionContext_t c) : ctx(c) {}
