@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 #include <filesystem>
+#include <cctype>
 #include "odin4/odin4.h"
 
 static void print_usage() {
