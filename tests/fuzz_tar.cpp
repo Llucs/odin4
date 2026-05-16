@@ -26,13 +26,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
         if (size >= 512) {
             // Test first block as TAR header
             fuzz_parse_tar_header(data, 512);
-            
+
             // For larger inputs, test consecutive blocks
             for (size_t i = 0; i + 512 <= size; i += 512) {
                 fuzz_parse_tar_header(data + i, 512);
             }
         }
-        
+
         // Test MD5 trailer detection
         if (size > 32) {
             fuzz_detect_md5_trailer(data, size);
