@@ -1,0 +1,40 @@
+name: ClusterFuzzLite
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+  schedule:
+    - cron: '0 0 * * 0'
+
+permissions:
+  contents: read
+
+jobs:
+  pr-fuzzing:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Build Fuzzers
+        uses: google/clusterfuzzlite/actions/build_fuzzers@v1
+
+      - name: Run Fuzzers
+        uses: google/clusterfuzzlite/actions/run_fuzzers@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fuzz-seconds: 60
+
+  batch-fuzzing:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Build Fuzzers
+        uses: google/clusterfuzzlite/actions/build_fuzzers@v1
+
+      - name: Run Fuzzers
+        uses: google/clusterfuzzlite/actions/run_fuzzers@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fuzz-seconds: 300
