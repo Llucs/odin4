@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-#ifndef ODIN4_TESTS_THOR_PROTOCOL_TEST_H
-#define ODIN4_TESTS_THOR_PROTOCOL_TEST_H
-
 #include <cstdint>
 #include <cstring>
 
@@ -37,8 +34,6 @@ inline uint64_t test_swap64(uint64_t v) {
 }
 
 } // namespace
-
-#endif
 
 #include "test_framework.h"
 #include "../src/protocol/thor_protocol.h"
