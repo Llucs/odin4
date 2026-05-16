@@ -5,11 +5,10 @@ RUN apt-get update && apt-get install -y \
     ninja-build \
     clang \
     pkg-config \
-    libusb-1.0-dev \
+    libusb-1.0-0-dev \
     libcrypto++-dev \
-    qt6-base-dev \
-    qt6-widgets-dev \
-    libarchive-dev
+    libarchive-dev \
+    zlib1g-dev
 
 COPY . $SRC/odin4
 WORKDIR $SRC/odin4
