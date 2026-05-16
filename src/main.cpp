@@ -115,12 +115,22 @@ static auto has_any_firmware_files(const OdinConfig& cfg) -> bool {
     return !cfg.bootloader.empty() || !cfg.ap.empty() || !cfg.cp.empty() || !cfg.csc.empty() || !cfg.ums.empty();
 }
 
+// Entry point for the odin4 CLI.
+//
+// High-level flow:
+// 1) Parse command-line options into an OdinConfig instance.
+// 2) Handle informational options that terminate early (-h/-v/-w/-l).
+// 3) Validate option combinations and required arguments.
+// 4) Execute the requested device interaction / flashing workflow.
+// 5) Return a process exit code indicating success or failure.
 auto main(int argc, char** argv) -> int {
     OdinConfig cfg;
 
+    // Phase 1: parse CLI arguments and apply them to cfg.
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
 
+        // Informational flags: print and exit immediately.
         if (arg == "-h") {
             print_usage();
             return 0;
