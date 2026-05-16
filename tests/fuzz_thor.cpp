@@ -23,22 +23,22 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     try {
         // Test Thor protocol packet parsing
         fuzz_parse_thor_packet(data, size);
-        
+
         // Also test specific packet types
         if (size >= sizeof(ThorHandshakePacket)) {
             auto* pkt = reinterpret_cast<const ThorHandshakePacket*>(data);
-            (void)pkt->magic;
-            (void)pkt->version;
+            (void) pkt->magic;
+            (void) pkt->version;
         }
-        
+
         if (size >= sizeof(ThorPitFilePacket)) {
             auto* pkt = reinterpret_cast<const ThorPitFilePacket*>(data);
-            (void)pkt->pit_file_size;
+            (void) pkt->pit_file_size;
         }
-        
+
         if (size >= sizeof(ThorResponsePacket)) {
             auto* pkt = reinterpret_cast<const ThorResponsePacket*>(data);
-            (void)pkt->response_code;
+            (void) pkt->response_code;
         }
     } catch (...) {
     }

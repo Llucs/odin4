@@ -26,18 +26,14 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
         if (size > 0) {
             fuzz_lz4_decompress(data, size);
         }
-        
+
         // Test raw LZ4 compression decompression (non-frame)
         if (size > 0 && size < (1 << 20)) {
             char decompressed[4096];
-            const int decompressed_size = LZ4_decompress_safe(
-                reinterpret_cast<const char*>(data),
-                decompressed,
-                static_cast<int>(size),
-                4096
-            );
+            const int decompressed_size =
+                LZ4_decompress_safe(reinterpret_cast<const char*>(data), decompressed, static_cast<int>(size), 4096);
             if (decompressed_size > 0) {
-                (void)decompressed_size;
+                (void) decompressed_size;
             }
         }
     } catch (...) {
