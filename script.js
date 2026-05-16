@@ -23,8 +23,7 @@ function initNavbar() {
         let current = '';
         sections.forEach(section => {
             const sectionTop = section.offsetTop;
-            const sectionHeight = section.clientHeight;
-            if (pageYOffset >= sectionTop - 150) {
+            if (window.pageYOffset >= sectionTop - 150) {
                 current = section.getAttribute('id');
             }
         });
