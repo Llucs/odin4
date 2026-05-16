@@ -13,8 +13,8 @@
     <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=for-the-badge&logo=opensourceinitiative&logoColor=white">
   </a>
 
-  <a href="https://bestpractices.dev/pt-BR/projects/12856/passing">
-    <img src="https://img.shields.io/badge/OpenSSF-Passing-brightgreen?style=for-the-badge&logo=opensourceinitiative&logoColor=white">
+  <a href="https://securityscorecards.dev/viewer/?uri=github.com/Llucs/odin4">
+    <img src="https://img.shields.io/endpoint?url=https://api.securityscorecards.dev/projects/github.com/Llucs/odin4/badge&style=for-the-badge">
   </a>
 
   <a href="https://github.com/Llucs/odin4/actions/workflows/build.yml">
