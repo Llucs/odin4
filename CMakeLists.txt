@@ -130,6 +130,22 @@ if(ODIN4_BUILD_TESTS)
     list(APPEND ODIN4_ALL_TARGETS odin4_tests)
 endif()
 
+# Fuzz targets are built in .clusterfuzzlite/build.sh
+# The odin4_fuzz library provides PIT parsing for fuzzing
+
+set(ODIN4_FUZZ_SOURCES
+    src/fuzz_utils.cpp
+    lib/lz4/lz4.c
+    lib/lz4/lz4hc.c
+    lib/lz4/lz4frame.c
+    lib/lz4/xxhash.c
+)
+
+add_library(odin4_fuzz STATIC ${ODIN4_FUZZ_SOURCES})
+target_include_directories(odin4_fuzz PUBLIC ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(odin4_fuzz PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(odin4_fuzz PUBLIC ${CMAKE_SOURCE_DIR}/lib)
+
 foreach(target ${ODIN4_ALL_TARGETS})
     target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-cast-function-type)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
