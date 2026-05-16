@@ -16,6 +16,8 @@ mkdir -p build
 cd build
 
 cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    -DODIN4_BUILD_GUI=OFF \
+    -DODIN4_BUILD_TESTS=OFF \
     -DCMAKE_C_FLAGS="-O1 -g" \
     -DCMAKE_CXX_FLAGS="-O1 -g"
 
