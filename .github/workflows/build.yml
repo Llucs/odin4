@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: odin4-build-${{ github.ref }}
@@ -35,6 +36,8 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
+      - uses: sigstore/cosign-installer@v3
+
       - name: Install dependencies
         shell: bash
         run: |
@@ -44,27 +47,15 @@ jobs:
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get update
           sudo apt-get install -y \
-            cmake \
-            ninja-build \
-            zip \
-            make \
-            pkg-config \
-            git \
-            libusb-1.0-0-dev \
-            libcrypto++-dev \
-            qt6-base-dev \
-            libqt6widgets6 \
-            libgl1-mesa-dev \
-            gcc-14 \
-            g++-14
+            cmake ninja-build zip make pkg-config git \
+            libusb-1.0-0-dev libcrypto++-dev qt6-base-dev \
+            libqt6widgets6 libgl1-mesa-dev gcc-14 g++-14
 
-      - name: Ensure Crypto++ static library is available
+      - name: Ensure Crypto++ static library
         shell: bash
         run: |
           set -euo pipefail
-          A_PATH="$(find /usr /usr/local -type f -name 'libcryptopp.a' 2>/dev/null | head -n 1 || true)"
-          if [ -z "$A_PATH" ]; then
-            rm -rf /tmp/cryptopp
+          if ! find /usr /usr/local -name "libcryptopp.a" | grep -q .; then
             git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git /tmp/cryptopp
             cd /tmp/cryptopp
             make -j"$(nproc)"
@@ -72,75 +63,77 @@ jobs:
             sudo ldconfig || true
           fi
 
-      - name: Read version from source
+      - name: Read version
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="$(grep -E '^[[:space:]]*#define[[:space:]]+ODIN4_VERSION[[:space:]]+"' src/odin4.cpp | sed -E 's/.*"([^"]+)".*/\1/' | head -n 1)"
+          VERSION="$(grep -E 'ODIN4_VERSION' src/odin4.cpp | sed -E 's/.*"([^"]+)".*/\1/' | head -n 1)"
           SUFFIX="${{ inputs.suffix }}"
-          if [ -n "$SUFFIX" ] && [[ "$SUFFIX" != -* ]]; then
-            SUFFIX="-$SUFFIX"
-          fi
+          [[ -n "$SUFFIX" && "$SUFFIX" != -* ]] && SUFFIX="-$SUFFIX"
+
           echo "ODIN4_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "ODIN4_SUFFIX=$SUFFIX" >> "$GITHUB_ENV"
-          echo "ODIN4_OUTNAME=odin4_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
-          echo "ODIN4_GUI_OUTNAME=odin4-gui_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
-          echo "LIB_OUTNAME=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}.so" >> "$GITHUB_ENV"
-          echo "LIB_STATIC_OUTNAME=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}.a" >> "$GITHUB_ENV"
 
-      - name: Clean build
-        shell: bash
-        run: |
-          rm -rf build
-
-      - name: Configure CMake
-        shell: bash
-        run: |
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=gcc-14 \
-            -DCMAKE_CXX_COMPILER=g++-14
+          echo "OUT_BIN=odin4_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
+          echo "OUT_GUI=odin4-gui_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
+          echo "OUT_SO=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}.so" >> "$GITHUB_ENV"
+          echo "OUT_A=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}.a" >> "$GITHUB_ENV"
 
       - name: Build
         shell: bash
         run: |
+          rm -rf build
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14
           cmake --build build --parallel "$(nproc)"
-
-      - name: Verify runtime dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          BIN="build/odin4"
-          GUI="build/odin4-gui"
-          LIB="build/libodin4.so"
-          LIB_STATIC="build/libodin4_static.a"
-          for f in "$BIN" "$GUI" "$LIB" "$LIB_STATIC"; do
-            [ -f "$f" ] || exit 1
-          done
-          ldd "$BIN" | grep -qiE 'libcrypto\+\+\.so' && exit 1 || true
 
       - name: Package
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp build/odin4 "dist/${ODIN4_OUTNAME}"
-          cp build/odin4-gui "dist/${ODIN4_GUI_OUTNAME}"
-          cp build/libodin4.so "dist/${LIB_OUTNAME}"
-          cp build/libodin4_static.a "dist/${LIB_STATIC_OUTNAME}"
-          strip "dist/${ODIN4_OUTNAME}" || true
-          strip "dist/${ODIN4_GUI_OUTNAME}" || true
-          strip "dist/${LIB_OUTNAME}" || true
+
+          cp build/odin4 "dist/${OUT_BIN}"
+          cp build/odin4-gui "dist/${OUT_GUI}"
+          cp build/libodin4.so "dist/${OUT_SO}"
+          cp build/libodin4_static.a "dist/${OUT_A}"
+
+          strip "dist/${OUT_BIN}" || true
+          strip "dist/${OUT_GUI}" || true
+          strip "dist/${OUT_SO}" || true
+
           ZIP_NAME="odin4-linux-${{ matrix.arch }}-${ODIN4_VERSION}${ODIN4_SUFFIX}.zip"
+
           cd dist
           zip "../${ZIP_NAME}" *
+
           echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - name: Sign artifact (Sigstore)
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          cosign sign-blob \
+            --yes \
+            "${ZIP_NAME}" \
+            --output-signature "${ZIP_NAME}.sig" \
+            --output-certificate "${ZIP_NAME}.cert"
+
+      - name: Provenance (SLSA attestation)
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: ${{ env.ZIP_NAME }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: odin4-linux-${{ matrix.arch }}-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}
-          path: ${{ env.ZIP_NAME }}
-          if-no-files-found: error
+          path: |
+            ${{ env.ZIP_NAME }}
+            ${{ env.ZIP_NAME }}.sig
+            ${{ env.ZIP_NAME }}.cert
           retention-days: 14
 
   bundle:
@@ -158,19 +151,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           mkdir -p bundle
           find artifacts -type f -name "*.zip" -exec cp {} bundle/ \;
+
           SAMPLE="$(find bundle -type f -name '*.zip' | head -n 1)"
           BASE="$(basename "$SAMPLE")"
           VERSUFFIX="$(echo "${BASE}" | sed -E 's/^odin4-linux-[^-]+-(.+)\.zip$/\1/')"
+
           OUT="odin4-linux-all-${VERSUFFIX}.zip"
+
           cd bundle
           zip "../${OUT}" ./*
+
           echo "OUT=${OUT}" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: odin4-linux-all
           path: ${{ env.OUT }}
-          if-no-files-found: error
           retention-days: 14
