@@ -9,10 +9,7 @@ RUN apt-get update && apt-get install -y \
     libcrypto++-dev \
     libarchive-dev \
     zlib1g-dev \
-    qt6-base-dev \
-    qt6-base-dev-tools \
-    qt6-qpa-plugins
-
+   
 COPY . $SRC/odin4
 WORKDIR $SRC/odin4
 
