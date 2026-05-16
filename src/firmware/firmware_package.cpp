@@ -468,7 +468,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
                         return false;
                     }
 
-                    if (src_offset != 0 && src_size > 0) {
+                    if (src_offset != 0) {
                         if (src_offset + src_size > in_buf_size) {
                             log_error("LZ4 scan buffer overflow for " + filename);
                             LZ4F_freeDecompressionContext(scan_ctx);
