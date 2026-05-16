@@ -134,10 +134,23 @@ static void print_access_hint() {
 }
 
 static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
+    /*
+     * Execute one complete flashing session for a single target device.
+     *
+     * Flow:
+     *  1) Select and open a compatible USB device (or report actionable open failures).
+     *  2) Establish protocol readiness (USB handshake and device-type query).
+     *  3) Continue with firmware validation/transfer steps and return a mapped exit code.
+     *
+     * This function intentionally centralizes user-facing diagnostics so callers only need
+     * to handle the returned OdinExitCode.
+     */
     UsbDevice usb;
     const UsbSelectionCriteria criteria = criteria_from_config(cfg);
 
+    // Phase 1: locate and open a Download Mode target using explicit selection criteria.
     if (!usb.open_device(cfg.device_path, criteria)) {
+        // Keep open failures user-actionable by specializing common causes.
         if (usb.get_last_open_error() == UsbOpenError::AccessDenied) {
             print_access_hint();
         } else if (usb.get_last_open_error() == UsbOpenError::NotDownloadMode) {
@@ -148,12 +161,14 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
         return OdinExitCode::Usb;
     }
 
+    // Phase 2: establish transport/protocol baseline before any device operations.
     if (!usb.handshake()) {
         log_error("USB handshake failed.");
         return OdinExitCode::Protocol;
     }
     log_info("Handshake successful.");
 
+    // Phase 3: query identity/capability information used by later compatibility checks.
     if (!usb.request_device_type()) {
         log_error("Failed to query device type.");
         return OdinExitCode::Protocol;
