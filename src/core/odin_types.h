@@ -23,12 +23,12 @@
 
 // Exit codes are part of the CLI contract.
 // 0: success
-// 2: argument/usage error
-// 3: USB/device error
-// 4: firmware/archive/MD5 error
-// 5: PIT/compatibility error
-// 6: flashing/protocol error
-enum class ExitCode : int { Success = 0, Usage = 2, Usb = 3, Firmware = 4, Pit = 5, Protocol = 6 };
+// 1: argument/usage error
+// 2: USB/device error
+// 3: flashing/protocol error
+// 4: PIT/compatibility error
+// 5: firmware/archive/MD5 error
+enum class ExitCode : int { Success = 0, Usage = 1, Usb = 2, Protocol = 3, Pit = 4, Firmware = 5 };
 
 // ============================================================================
 // PARTITION INFORMATION TABLE (PIT)
