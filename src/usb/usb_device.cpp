@@ -1386,7 +1386,7 @@ auto UsbDevice::odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool {
         }
 
         size_t off = static_cast<size_t>(i) * block;
-        size_t copy = std::min(static_cast<size_t>(got), pit_out.size() - off);
+        size_t copy = (static_cast<size_t>(got) < (pit_out.size() - off)) ? static_cast<size_t>(got) : (pit_out.size() - off);
         std::memcpy(pit_out.data() + off, data.data(), copy);
     }
 
@@ -1463,7 +1463,7 @@ auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
                 if (total_sent < size) {
                     remaining_file_bytes = size - total_sent;
                 }
-                const size_t to_read = static_cast<size_t>(std::min<uint64_t>(remaining_file_bytes, part.size()));
+                const size_t to_read = static_cast<size_t>((remaining_file_bytes < part.size()) ? remaining_file_bytes : part.size());
 
                 if (to_read > 0) {
                     stream.read(reinterpret_cast<char*>(part.data()), static_cast<std::streamsize>(to_read));
@@ -1499,7 +1499,7 @@ auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
     int last_pct = -1;
 
     while (remaining > 0) {
-        size_t to_read = static_cast<size_t>(std::min<uint64_t>(buf.size(), remaining));
+        size_t to_read = static_cast<size_t>((static_cast<uint64_t>(buf.size()) < remaining) ? static_cast<uint64_t>(buf.size()) : remaining);
         stream.read(reinterpret_cast<char*>(buf.data()), to_read);
         if (static_cast<size_t>(stream.gcount()) != to_read) {
             log_error("Failed to read partition data stream");
