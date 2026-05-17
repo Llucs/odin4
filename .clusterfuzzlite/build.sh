@@ -4,6 +4,9 @@ set -euxo pipefail
 export CC=clang
 export CXX=clang++
 
+export CXXFLAGS="$CXXFLAGS -pthread"
+export CFLAGS="$CFLAGS -pthread"
+
 export CXXFLAGS="-O1 -g -std=c++23 -stdlib=libc++"
 export CFLAGS="-O1 -g"
 
