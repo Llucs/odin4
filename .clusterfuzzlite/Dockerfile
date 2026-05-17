@@ -4,6 +4,8 @@ RUN apt-get update && apt-get install -y \
     cmake \
     ninja-build \
     clang \
+    libc++-dev \
+    libc++abi-dev \
     pkg-config \
     libusb-1.0-0-dev \
     libcrypto++-dev \
