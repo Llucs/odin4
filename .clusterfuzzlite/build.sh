@@ -4,7 +4,6 @@ set -euxo pipefail
 export CC=clang
 export CXX=clang++
 
-# Flags corretas (pthread já incluído aqui)
 export CXXFLAGS="-O1 -g -std=c++23 -stdlib=libc++ -pthread"
 export CFLAGS="-O1 -g -pthread"
 
