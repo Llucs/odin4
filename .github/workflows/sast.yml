@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [ "main" ]
   schedule:
-    - cron: "0 3 * * 1" # toda segunda-feira
+    - cron: "0 3 * * 1"
 
 jobs:
   analyze:
@@ -32,11 +32,18 @@ jobs:
         with:
           languages: ${{ matrix.language }}
 
-      - name: Build project
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libusb-1.0-0-dev
 
+      - name: Build project
+        run: |
           cmake -B build -G Ninja
           cmake --build build
 
