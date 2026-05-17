@@ -267,17 +267,33 @@ sudo udevadm trigger</code>
                         </div>
                         <div class="terminal-body">
                             <pre><code>Usage: odin4 [options]
-Samsung flashing tool for Linux.
+Samsung firmware flashing tool for Linux. Version: x.x.x
 
 Options:
-  -l                  List detected devices
-  -b &lt;file&gt;           Bootloader file (.tar.md5)
-  -a &lt;file&gt;           AP file (.tar.md5)
-  -c &lt;file&gt;           CP file (.tar.md5)
-  -s &lt;file&gt;           CSC file (.tar.md5)
-  --check-only        Validate files only
-  --reboot            Reboot after flashing
-  --verbose           Detailed logs</code></pre>
+  -h                  Show this help message
+  -v                  Show version
+  -w                  Show license
+  -l                  List detected Download Mode devices
+  -d &lt;path&gt;            Select a specific USB device path
+  -b &lt;file&gt;           Bootloader archive (.tar or .tar.md5)
+  -a &lt;file&gt;           AP archive (.tar or .tar.md5)
+  -c &lt;file&gt;           CP archive (.tar or .tar.md5)
+  -s &lt;file&gt;           CSC archive (.tar or .tar.md5)
+  -u &lt;file&gt;           UMS archive (.tar or .tar.md5)
+  --check-only         Validate PIT + archives and exit without flashing
+  --allow-unknown      Allow archive entries without a PIT match
+  --reboot             Reboot device after flashing
+  --redownload         Reboot into download mode if supported
+
+Logging:
+  --quiet              Only print errors
+  --verbose            More detailed logs
+  --debug              Debug logs (includes USB packet hexdumps)
+
+USB selection overrides:
+  --vid &lt;hex&gt;          Override USB vendor ID
+  --pid &lt;hex&gt;          Override USB product ID
+  --usb-interface &lt;n&gt;  Force a specific USB interface number</code></pre>
                         </div>
                     </div>
                 </div>
@@ -285,13 +301,19 @@ Options:
                     <div class="example-box">
                         <h5>Example: Full Flash</h5>
                         <div class="code-block">
-                            <code>./odin4 -b BL.tar.md5 -a AP.tar.md5 -c CP.tar.md5 -s CSC.tar.md5 --reboot</code>
+                            <code>./odin4 -b BL.tar.md5 -a AP.tar.md5 -c CP.tar.md5 -s CSC.tar.md5 -u UMS.tar.md5 --reboot</code>
                         </div>
                     </div>
                     <div class="example-box">
-                        <h5>Example: Verification Only</h5>
+                        <h5>Example: Specific Device</h5>
                         <div class="code-block">
-                            <code>./odin4 --check-only -a AP.tar.md5</code>
+                            <code>./odin4 -d /dev/bus/usb/001/002 -a AP.tar.md5 --check-only</code>
+                        </div>
+                    </div>
+                    <div class="example-box">
+                        <h5>Example: Redownload Mode</h5>
+                        <div class="code-block">
+                            <code>./odin4 -a AP.tar.md5 --reboot --redownload</code>
                         </div>
                     </div>
                 </div>
