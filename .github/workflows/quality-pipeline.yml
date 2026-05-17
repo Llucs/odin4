@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231 # v6
 
       - name: Install dependencies
         run: |
@@ -40,7 +40,7 @@ jobs:
             iwyu
 
       - name: Setup ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@13c5b28e4a76834446e40f66722377da0514d5a0 # v1.2
         with:
           key: \( {{ matrix.compiler }}- \){{ matrix.build_type }}
 
@@ -64,7 +64,7 @@ jobs:
 
       - name: Upload artifact (Release Clang)
         if: matrix.build_type == 'Release' && matrix.compiler == 'clang-18'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: odin4-linux-release
           path: build/odin4
@@ -76,7 +76,7 @@ jobs:
     needs: build
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231 # v6
 
       - name: Install dependencies
         run: |
@@ -124,7 +124,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231 # v6
 
       - name: Install dependencies
         run: |
