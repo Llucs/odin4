@@ -253,9 +253,14 @@ auto UsbDevice::open_device(const std::string& specific_path) -> bool {
 }
 
 auto UsbDevice::open_device(const std::string& specific_path, const UsbSelectionCriteria& criteria) -> bool {
+    // Reset open-status fields for this attempt. Any early return below must
+    // leave these members describing the current failure (if any).
     last_open_error = UsbOpenError::None;
     last_open_libusb_err = 0;
 
+    // Tear down any previously opened handle/interface so this call starts from
+    // a clean state. If we detached a kernel driver earlier, attempt to restore
+    // it before closing the handle.
     if (handle != nullptr) {
         libusb_release_interface(handle, interface_number);
         if (kernel_driver_detached) {
@@ -265,11 +270,14 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
         libusb_close(handle);
         handle = nullptr;
     }
+
+    // Free any stale enumeration results from a prior open attempt.
     if (device_list != nullptr) {
         libusb_free_device_list(device_list, 1);
         device_list = nullptr;
     }
 
+    // Ensure the process-wide libusb context exists before enumeration.
     if (!ensure_libusb_initialized()) {
         last_open_error = UsbOpenError::Other;
         last_open_libusb_err = LIBUSB_ERROR_OTHER;
@@ -277,6 +285,8 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
         return false;
     }
 
+    // Enumerate all currently visible USB devices. The resulting device list is
+    // consumed by the matching/selection logic in the remainder of this method.
     ssize_t cnt = libusb_get_device_list(g_libusb_ctx, &device_list);
     if (cnt < 0) {
         last_open_error = UsbOpenError::Other;
