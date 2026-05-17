@@ -14,8 +14,8 @@
   </a>
 
   <a href="https://securityscorecards.dev/viewer/?uri=github.com/Llucs/odin4">
-    <img src="https://img.shields.io/endpoint?url=https://api.securityscorecards.dev/projects/github.com/Llucs/odin4/badge&style=for-the-badge">
-  </a>
+  <img src="https://img.shields.io/badge/Security%20Scorecard-View%20Report-blue?style=for-the-badge">
+</a>
 
   <a href="https://github.com/Llucs/odin4/actions/workflows/build.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/build.yml?style=for-the-badge&logo=githubactions&logoColor=white">
