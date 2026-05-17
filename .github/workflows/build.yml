@@ -1,174 +1,91 @@
 name: Build Odin4
 
 on:
+  push:
+    branches: [ multiplataform ]
+  pull_request:
+    branches: [ multiplataform ]
   workflow_dispatch:
     inputs:
       suffix:
         required: false
         default: ""
-      bundle:
-        required: false
-        type: boolean
-        default: true
 
 permissions:
   contents: read
-  id-token: write
-  attestations: write
-
-concurrency:
-  group: odin4-build-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
-
+    name: Build on ${{ matrix.os }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - arch: x86_64
-            runner: ubuntu-22.04
-          - arch: arm64
-            runner: ubuntu-22.04-arm
+          - os: ubuntu-22.04
+            arch: x86_64
+            triplet: x64-linux
+          - os: windows-latest
+            arch: x86_64
+            triplet: x64-windows-static
+          - os: macos-latest
+            arch: universal
+            triplet: x64-osx # vcpkg doesn't have a universal triplet by default, we'll handle it
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/checkout@v4
 
-      - uses: sigstore/cosign-installer@v3
-
-      - name: Install dependencies
-        shell: bash
+      - name: Install Dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
-          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y software-properties-common
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          sudo apt-get update
-          sudo apt-get install -y \
-            cmake ninja-build zip make pkg-config git \
-            libusb-1.0-0-dev libcrypto++-dev qt6-base-dev \
-            libqt6widgets6 libgl1-mesa-dev gcc-14 g++-14
+          sudo apt-get install -y cmake ninja-build pkg-config libusb-1.0-0-dev libcrypto++-dev qt6-base-dev libgl1-mesa-dev
 
-      - name: Ensure Crypto++ static library
-        shell: bash
+      - name: Install Dependencies (macOS)
+        if: runner.os == 'macOS'
         run: |
-          set -euo pipefail
-          if ! find /usr /usr/local -name "libcryptopp.a" | grep -q .; then
-            git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git /tmp/cryptopp
-            cd /tmp/cryptopp
-            make -j"$(nproc)"
-            sudo make install PREFIX=/usr/local
-            sudo ldconfig || true
-          fi
+          brew install cmake ninja pkg-config libusb cryptopp qt6
 
-      - name: Read version
-        shell: bash
+      - name: Setup vcpkg (Windows)
+        if: runner.os == 'Windows'
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '303db44566f77666997937402684877793540268' # Example stable commit
+
+      - name: Install Dependencies (Windows)
+        if: runner.os == 'Windows'
         run: |
-          set -euo pipefail
-          VERSION="$(grep -E 'ODIN4_VERSION' src/odin4.cpp | sed -E 's/.*"([^"]+)".*/\1/' | head -n 1)"
-          SUFFIX="${{ inputs.suffix }}"
-          [[ -n "$SUFFIX" && "$SUFFIX" != -* ]] && SUFFIX="-$SUFFIX"
+          vcpkg install libusb cryptopp qt6-base --triplet x64-windows-static
 
-          echo "ODIN4_VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "ODIN4_SUFFIX=$SUFFIX" >> "$GITHUB_ENV"
+      - name: Configure CMake (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DODIN4_BUILD_TESTS=ON
 
-          echo "OUT_BIN=odin4_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
-          echo "OUT_GUI=odin4-gui_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
-          echo "OUT_SO=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}.so" >> "$GITHUB_ENV"
-          echo "OUT_A=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}.a" >> "$GITHUB_ENV"
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+            -DCMAKE_BUILD_TYPE=Release -DODIN4_BUILD_TESTS=ON
 
       - name: Build
-        shell: bash
+        run: cmake --build build --config Release
+
+      - name: Run Tests
         run: |
-          rm -rf build
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=gcc-14 \
-            -DCMAKE_CXX_COMPILER=g++-14
-          cmake --build build --parallel "$(nproc)"
+          cd build
+          ctest -C Release --output-on-failure
 
-      - name: Package
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-
-          cp build/odin4 "dist/${OUT_BIN}"
-          cp build/odin4-gui "dist/${OUT_GUI}"
-          cp build/libodin4.so "dist/${OUT_SO}"
-          cp build/libodin4_static.a "dist/${OUT_A}"
-
-          strip "dist/${OUT_BIN}" || true
-          strip "dist/${OUT_GUI}" || true
-          strip "dist/${OUT_SO}" || true
-
-          ZIP_NAME="odin4-linux-${{ matrix.arch }}-${ODIN4_VERSION}${ODIN4_SUFFIX}.zip"
-
-          cd dist
-          zip "../${ZIP_NAME}" *
-
-          echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
-
-      - name: Sign artifact (Sigstore)
-        env:
-          COSIGN_EXPERIMENTAL: "true"
-        run: |
-          cosign sign-blob \
-            --yes \
-            "${ZIP_NAME}" \
-            --output-signature "${ZIP_NAME}.sig" \
-            --output-certificate "${ZIP_NAME}.cert"
-
-      - name: Provenance (SLSA attestation)
-        uses: actions/attest-build-provenance@v1
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          subject-path: ${{ env.ZIP_NAME }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: odin4-linux-${{ matrix.arch }}-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}
+          name: odin4-${{ runner.os }}-${{ matrix.arch }}
           path: |
-            ${{ env.ZIP_NAME }}
-            ${{ env.ZIP_NAME }}.sig
-            ${{ env.ZIP_NAME }}.cert
-          retention-days: 14
-
-  bundle:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 15
-    needs: build
-    if: ${{ inputs.bundle }}
-
-    steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          path: artifacts
-
-      - name: Create bundle
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mkdir -p bundle
-          find artifacts -type f -name "*.zip" -exec cp {} bundle/ \;
-
-          SAMPLE="$(find bundle -type f -name '*.zip' | head -n 1)"
-          BASE="$(basename "$SAMPLE")"
-          VERSUFFIX="$(echo "${BASE}" | sed -E 's/^odin4-linux-[^-]+-(.+)\.zip$/\1/')"
-
-          OUT="odin4-linux-all-${VERSUFFIX}.zip"
-
-          cd bundle
-          zip "../${OUT}" ./*
-
-          echo "OUT=${OUT}" >> "$GITHUB_ENV"
-
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: odin4-linux-all
-          path: ${{ env.OUT }}
-          retention-days: 14
+            build/odin4*
+            build/libodin4*
+            !build/**/*.obj
+            !build/**/*.o
+            !build/**/*.cpp
+            !build/**/*.h

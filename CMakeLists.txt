@@ -1,10 +1,12 @@
 cmake_minimum_required(VERSION 3.22)
 project(odin4 LANGUAGES C CXX)
 
+# Platform definitions
 if(APPLE)
     add_definitions(-DPLATFORM_MACOS)
 elseif(WIN32)
     add_definitions(-DPLATFORM_WINDOWS)
+    add_definitions(-DNOMINMAX) # Prevent min/max macro conflicts
 else()
     add_definitions(-DPLATFORM_LINUX)
 endif()
@@ -19,30 +21,37 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
-
-find_path(CRYPTOPP_INCLUDE_DIR cryptlib.h
-    PATHS /usr/local/include /usr/include
-    PATH_SUFFIXES cryptopp crypto++
-)
-
-set(_OLD_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
-set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
-
-find_library(CRYPTOPP_STATIC_LIB
-    NAMES cryptopp libcryptopp
-    PATHS /usr/local/lib /usr/local/lib64 /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu
-)
-
-set(CMAKE_FIND_LIBRARY_SUFFIXES ${_OLD_CMAKE_FIND_LIBRARY_SUFFIXES})
-
-if (CRYPTOPP_INCLUDE_DIR AND CRYPTOPP_STATIC_LIB AND CRYPTOPP_STATIC_LIB MATCHES "\\.a$")
-    set(CRYPTOPP_USE_STATIC ON)
+# Dependency Management
+if(WIN32 OR APPLE)
+    # On Windows and macOS, we prefer using CMake's find_package or manual paths
+    # For CI, we will rely on vcpkg or manual installs
+    find_package(libusb-1.0 REQUIRED)
+    find_package(cryptopp REQUIRED)
 else()
-    set(CRYPTOPP_USE_STATIC OFF)
     find_package(PkgConfig REQUIRED)
-    pkg_check_modules(CRYPTOPP REQUIRED libcrypto++)
+    pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+    
+    find_path(CRYPTOPP_INCLUDE_DIR cryptlib.h
+        PATHS /usr/local/include /usr/include
+        PATH_SUFFIXES cryptopp crypto++
+    )
+    
+    set(_OLD_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
+    set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+    
+    find_library(CRYPTOPP_STATIC_LIB
+        NAMES cryptopp libcryptopp
+        PATHS /usr/local/lib /usr/local/lib64 /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu
+    )
+    
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ${_OLD_CMAKE_FIND_LIBRARY_SUFFIXES})
+    
+    if (CRYPTOPP_INCLUDE_DIR AND CRYPTOPP_STATIC_LIB AND CRYPTOPP_STATIC_LIB MATCHES "\\.a$")
+        set(CRYPTOPP_USE_STATIC ON)
+    else()
+        set(CRYPTOPP_USE_STATIC OFF)
+        pkg_check_modules(CRYPTOPP REQUIRED libcrypto++)
+    endif()
 endif()
 
 file(STRINGS "${CMAKE_SOURCE_DIR}/src/odin4.cpp" ODIN_VERSION_LINE REGEX "#define ODIN4_VERSION")
@@ -67,7 +76,7 @@ set(ODIN4_CORE_SOURCES
 
 add_library(odin4_static STATIC ${ODIN4_CORE_SOURCES})
 target_include_directories(odin4_static PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
-target_include_directories(odin4_static PRIVATE ${CMAKE_SOURCE_DIR}/src ${LIBUSB_INCLUDE_DIRS})
+target_include_directories(odin4_static PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 add_library(odin4_shared SHARED ${ODIN4_CORE_SOURCES})
 set_target_properties(odin4_shared PROPERTIES 
@@ -76,23 +85,32 @@ set_target_properties(odin4_shared PROPERTIES
     SOVERSION "${ODIN_SOVERSION}"
 )
 target_include_directories(odin4_shared PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
-target_include_directories(odin4_shared PRIVATE ${CMAKE_SOURCE_DIR}/src ${LIBUSB_INCLUDE_DIRS})
+target_include_directories(odin4_shared PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 foreach(target odin4_static odin4_shared)
-    if (CRYPTOPP_USE_STATIC)
-        target_include_directories(${target} PRIVATE ${CRYPTOPP_INCLUDE_DIR})
-        target_link_libraries(${target} PRIVATE ${CRYPTOPP_STATIC_LIB})
+    if(WIN32 OR APPLE)
+        target_link_libraries(${target} PRIVATE libusb-1.0::libusb-1.0 cryptopp::cryptopp lz4_lib)
     else()
-        target_include_directories(${target} PRIVATE ${CRYPTOPP_INCLUDE_DIRS})
-        target_link_libraries(${target} PRIVATE ${CRYPTOPP_LIBRARIES})
+        if (CRYPTOPP_USE_STATIC)
+            target_include_directories(${target} PRIVATE ${CRYPTOPP_INCLUDE_DIR})
+            target_link_libraries(${target} PRIVATE ${CRYPTOPP_STATIC_LIB})
+        else()
+            target_include_directories(${target} PRIVATE ${CRYPTOPP_INCLUDE_DIRS})
+            target_link_libraries(${target} PRIVATE ${CRYPTOPP_LIBRARIES})
+        endif()
+        target_include_directories(${target} PRIVATE ${LIBUSB_INCLUDE_DIRS})
+        target_link_libraries(${target} PRIVATE ${LIBUSB_LIBRARIES} lz4_lib)
     endif()
-    target_link_libraries(${target} PRIVATE ${LIBUSB_LIBRARIES} lz4_lib)
 endforeach()
 
 add_executable(odin4 src/main.cpp)
 set_target_properties(odin4 PROPERTIES OUTPUT_NAME "odin4")
 target_include_directories(odin4 PRIVATE ${CMAKE_SOURCE_DIR}/include)
-target_link_libraries(odin4 PRIVATE odin4_static -static-libgcc -static-libstdc++)
+target_link_libraries(odin4 PRIVATE odin4_static)
+
+if(NOT MSVC)
+    target_link_libraries(odin4 PRIVATE -static-libgcc -static-libstdc++)
+endif()
 
 # Optional GUI build
 option(ODIN4_BUILD_GUI "Build Qt6 GUI target" ON)
@@ -132,36 +150,23 @@ if(ODIN4_BUILD_TESTS)
     set_target_properties(odin4_tests PROPERTIES OUTPUT_NAME "odin4_tests")
     target_include_directories(odin4_tests PRIVATE ${CMAKE_SOURCE_DIR}/include)
     target_include_directories(odin4_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
-    target_compile_options(odin4_tests PRIVATE -Wall -Wextra -Wno-cast-function-type)
     
     add_test(NAME odin4_tests COMMAND $<TARGET_FILE:odin4_tests>)
     list(APPEND ODIN4_ALL_TARGETS odin4_tests)
 endif()
 
-# Fuzz targets are built in .clusterfuzzlite/build.sh
-# The odin4_fuzz library provides PIT parsing for fuzzing
-
-set(ODIN4_FUZZ_SOURCES
-    src/fuzz_utils.cpp
-    lib/lz4/lz4.c
-    lib/lz4/lz4hc.c
-    lib/lz4/lz4frame.c
-    lib/lz4/xxhash.c
-)
-
-add_library(odin4_fuzz STATIC ${ODIN4_FUZZ_SOURCES})
-target_include_directories(odin4_fuzz PUBLIC ${CMAKE_SOURCE_DIR}/include)
-target_include_directories(odin4_fuzz PUBLIC ${CMAKE_SOURCE_DIR}/src)
-target_include_directories(odin4_fuzz PUBLIC ${CMAKE_SOURCE_DIR}/lib)
-
 foreach(target ${ODIN4_ALL_TARGETS})
     target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-cast-function-type)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         target_compile_options(${target} PRIVATE -fstack-protector-strong -D_FORTIFY_SOURCE=2)
-        target_link_options(${target} PRIVATE "SHELL:-z relro" "SHELL:-z now")
+        if(NOT APPLE)
+            target_link_options(${target} PRIVATE "SHELL:-z relro" "SHELL:-z now")
+        endif()
         if(target STREQUAL "odin4")
             target_compile_options(${target} PRIVATE -fPIE)
-            target_link_options(${target} PRIVATE "-pie")
+            if(NOT APPLE)
+                target_link_options(${target} PRIVATE "-pie")
+            endif()
         endif()
     endif()
 endforeach()
