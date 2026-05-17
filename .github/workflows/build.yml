@@ -39,11 +39,19 @@ jobs:
 
       - uses: sigstore/cosign-installer@v3
 
-      - name: Install dependencies
+      - name: Add GCC 14 PPA
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
+          sudo apt-get install -y software-properties-common
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
           sudo apt-get install -y \
             cmake ninja-build zip make pkg-config git \
             libusb-1.0-0-dev libcrypto++-dev qt6-base-dev \
