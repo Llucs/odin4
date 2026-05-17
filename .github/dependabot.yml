@@ -16,4 +16,4 @@ updates:
     commit-message:
       prefix: "deps"
 
-    rebase-strategy: "auto"
+    rebase-strategy: "auto" 
