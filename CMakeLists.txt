@@ -1,6 +1,14 @@
 cmake_minimum_required(VERSION 3.22)
 project(odin4 LANGUAGES C CXX)
 
+if(APPLE)
+    add_definitions(-DPLATFORM_MACOS)
+elseif(WIN32)
+    add_definitions(-DPLATFORM_WINDOWS)
+else()
+    add_definitions(-DPLATFORM_LINUX)
+endif()
+
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
