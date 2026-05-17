@@ -40,7 +40,7 @@ jobs:
             iwyu
 
       - name: Setup ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@13c5b28e4a76834446e40f66722377da0514d5a0 # v1.2
         with:
           key: \( {{ matrix.compiler }}- \){{ matrix.build_type }}
 
