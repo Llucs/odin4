@@ -137,7 +137,7 @@ jobs:
             --output-signature "${OUT_GUI}.sig"
 
       - name: Provenance
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ env.ZIP_NAME }}
 
