@@ -28,7 +28,7 @@
 #include <sstream>
 #include <limits>
 #include <format>
-#include <print>
+#include <iostream>
 #include <lz4frame.h>
 
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
@@ -625,7 +625,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
                     const int percent = static_cast<int>(
                         (static_cast<double>(total_uncompressed) / static_cast<double>(uncompressed_size)) * 100.0);
                     if (percent != last_percent) {
-                        std::print("\r[Flash] {}: {}%", filename, percent);
+                        std::cout << "\r[Flash] " << filename << ": " << percent << "%" << std::flush;
                         std::cout.flush();
                         last_percent = percent;
                     }
@@ -656,9 +656,9 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
     }
 
     if (show_progress && uncompressed_size > 0) {
-        std::println("\r[Flash] {}: 100%", filename);
+        std::cout << "\r[Flash] " << filename << ": 100%" << std::endl;
     } else if (show_progress) {
-        std::println("");
+        std::cout << std::endl;
     }
 
     if (uncompressed_size != 0 && total_uncompressed != uncompressed_size) {

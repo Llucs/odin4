@@ -50,12 +50,12 @@ jobs:
         if: runner.os == 'Windows'
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgGitCommitId: '303db44566f77666997937402684877793540268' # Example stable commit
+          vcpkgGitCommitId: '303db44566f77666997937402684877793540268'
 
       - name: Install Dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
-          vcpkg install libusb cryptopp qt6-base --triplet x64-windows-static
+          vcpkg install libusb cryptopp qt6-base --triplet x64-windows-static-md
 
       - name: Configure CMake (Linux/macOS)
         if: runner.os != 'Windows'

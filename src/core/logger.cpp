@@ -23,7 +23,7 @@
 #include <iomanip>
 #include <sstream>
 #include <chrono>
-#include <print>
+#include <iostream>
 #include <libusb.h>
 
 namespace {
@@ -74,7 +74,7 @@ auto should_emit(LogLevel lvl) -> bool {
 }
 
 void write_line(std::ostream& os, LogLevel lvl, const std::string& msg) {
-    std::println(os, "{} [{}] {}", timestamp_now(), level_tag(lvl), msg);
+    os << timestamp_now() << " [" << level_tag(lvl) << "] " << msg << std::endl;
 }
 
 void write_to_file(LogLevel lvl, const std::string& msg) {
@@ -127,7 +127,7 @@ void set_log_file(const std::string& path) {
     if (!path.empty()) {
         g_log_stream.open(path, std::ios::app);
         if (!g_log_stream) {
-            std::println(std::cerr, "{} [ERROR] Unable to open log file: {}", timestamp_now(), path);
+            std::cerr << timestamp_now() << " [ERROR] Unable to open log file: " << path << std::endl;
         }
     }
 }
