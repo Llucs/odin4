@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(grep -E '^[[:space:]]*#define[[:space:]]+ODIN4_VERSION[[:space:]]+"' src/odin4.cpp \
+            | sed -E 's/.*"([^"]+)".*/\1/' | head -n 1)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION"
+
+      - name: Set up build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build pkg-config g++ libusb-1.0-0-dev libcrypto++-dev
+
+      - name: Build odin4
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel $(nproc)
+
+      - name: Build odin4-gui
+        run: |
+          cmake -S . -B build-gui -G Ninja -DCMAKE_BUILD_TYPE=Release -DODIN4_BUILD_GUI=ON
+          cmake --build build-gui --parallel $(nproc)
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: odin4 ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            build/odin4
+            build-gui/odin4-gui

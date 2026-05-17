@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./logo.png" width="170" alt="odin4 logo">
+  <img src="docs/assets/logo.png" width="170" alt="odin4 logo">
 </p>
 
 <h1 align="center">odin4</h1>
@@ -29,7 +29,8 @@
   <img src="https://img.shields.io/badge/platform-linux-blue.svg">
   <img src="https://img.shields.io/badge/language-C%2FC%2B%2B-blue.svg">
 
-  <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Llucs/odin4/main/version.json">
+  <img src="https://img.shields.io/github/v/release/Llucs/odin4?display_name=tag&include_prereleases&sort=semver&style=flat">
+  <img src="https://img.shields.io/github/release-date/Llucs/odin4">
 
   <img src="https://img.shields.io/github/stars/Llucs/odin4">
   <img src="https://img.shields.io/github/downloads/Llucs/odin4/total">

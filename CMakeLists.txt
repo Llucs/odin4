@@ -50,12 +50,7 @@ add_library(lz4_lib STATIC
 )
 target_include_directories(lz4_lib PUBLIC lib/lz4)
 
-set(ODIN4_CORE_SOURCES
-    src/odin4.cpp
-    src/core/logger.cpp
-    src/usb/usb_device.cpp
-    src/firmware/firmware_package.cpp
-)
+add_subdirectory(src)
 
 add_library(odin4_static STATIC ${ODIN4_CORE_SOURCES})
 target_include_directories(odin4_static PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
@@ -81,7 +76,7 @@ foreach(target odin4_static odin4_shared)
     target_link_libraries(${target} PRIVATE ${LIBUSB_LIBRARIES} lz4_lib)
 endforeach()
 
-add_executable(odin4 src/main.cpp)
+add_executable(odin4 src/cli/main.cpp)
 set_target_properties(odin4 PROPERTIES OUTPUT_NAME "odin4")
 target_include_directories(odin4 PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(odin4 PRIVATE odin4_static -static-libgcc -static-libstdc++)
@@ -93,7 +88,7 @@ set(ODIN4_ALL_TARGETS odin4_static odin4_shared odin4)
 # GUI Target
 if(ODIN4_BUILD_GUI)
     find_package(Qt6 COMPONENTS Widgets REQUIRED)
-    add_executable(odin4-gui src-gui/main.cpp)
+    add_executable(odin4-gui src/gui/main.cpp)
     set_target_properties(odin4-gui PROPERTIES
         OUTPUT_NAME "odin4-gui"
         AUTOMOC ON
