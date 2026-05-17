@@ -1,0 +1,5 @@
+{
+  "extends": ["config:base"],
+  "enabledManagers": ["github-actions"],
+  "pinDigests": true
+}
