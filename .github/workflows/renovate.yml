@@ -1,7 +1,9 @@
-name: Renovate (Manual Run)
+name: Renovate
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 */12 * * *"
 
 jobs:
   renovate:
@@ -12,3 +14,4 @@ jobs:
         uses: renovatebot/github-action@v41.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          autodiscover: true
