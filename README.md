@@ -11,33 +11,31 @@
 <p align="center">
 
   <a href="https://github.com/Llucs/odin4/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/License-Apache_2.0-blue?style=for-the-badge&logo=opensourceinitiative&logoColor=white">
+    <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg">
   </a>
 
   <a href="https://securityscorecards.dev/viewer/?uri=github.com/Llucs/odin4">
-    <img src="https://img.shields.io/badge/Security%20Scorecard-View%20Report-2ea44f?style=for-the-badge&logo=github&logoColor=white">
+    <img src="https://api.securityscorecards.dev/projects/github.com/Llucs/odin4/badge">
   </a>
 
   <a href="https://github.com/Llucs/odin4/actions/workflows/build.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/build.yml?style=for-the-badge&label=build&logo=githubactions&logoColor=white">
+    <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/build.yml?label=build">
   </a>
 
   <a href="https://github.com/Llucs/odin4/actions/workflows/codeql.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/codeql.yml?style=for-the-badge&label=codeql&logo=github&logoColor=white">
+    <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/codeql.yml?label=codeql">
   </a>
 
-  <img src="https://img.shields.io/badge/Platform-Linux-blue?style=for-the-badge&logo=linux&logoColor=white">
+  <img src="https://img.shields.io/badge/platform-linux-blue.svg">
+  <img src="https://img.shields.io/badge/language-C%2FC%2B%2B-blue.svg">
 
-  <img src="https://img.shields.io/badge/Language-C%2FC%2B%2B-blue?style=for-the-badge&logo=cplusplus&logoColor=white">
+  <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Llucs/odin4/main/version.json">
 
-  <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Llucs/odin4/main/version.json&style=for-the-badge&logo=git&logoColor=white">
-
-  <img src="https://img.shields.io/github/stars/Llucs/odin4?style=for-the-badge&color=E3B341">
-
-  <img src="https://img.shields.io/github/downloads/Llucs/odin4/total?style=for-the-badge&label=downloads&logo=github">
+  <img src="https://img.shields.io/github/stars/Llucs/odin4">
+  <img src="https://img.shields.io/github/downloads/Llucs/odin4/total">
 
   <a href="https://t.me/odin4updates">
-    <img src="https://img.shields.io/badge/Telegram-Updates-26A5E4?style=for-the-badge&logo=telegram&logoColor=white">
+    <img src="https://img.shields.io/badge/telegram-updates-blue.svg">
   </a>
 
 </p>
