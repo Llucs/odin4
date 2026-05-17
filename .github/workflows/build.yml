@@ -159,7 +159,7 @@ jobs:
     if: ${{ inputs.bundle }}
 
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317 # v8
         with:
           path: artifacts
 
