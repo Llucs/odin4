@@ -35,14 +35,16 @@ cmake --build . --parallel
 
 mkdir -p "$OUT"
 
-$CXX $CXXFLAGS -fsanitize=fuzzer,address,undefined \
-    -I../include ../tests/fuzz_pit.cpp -o $OUT/fuzz_pit
+INCLUDES="-I../include -I../src"
 
 $CXX $CXXFLAGS -fsanitize=fuzzer,address,undefined \
-    -I../include ../tests/fuzz_thor.cpp -o $OUT/fuzz_thor
+    $INCLUDES ../tests/fuzz_pit.cpp -o $OUT/fuzz_pit
 
 $CXX $CXXFLAGS -fsanitize=fuzzer,address,undefined \
-    -I../include ../tests/fuzz_lz4.cpp -o $OUT/fuzz_lz4
+    $INCLUDES ../tests/fuzz_thor.cpp -o $OUT/fuzz_thor
 
 $CXX $CXXFLAGS -fsanitize=fuzzer,address,undefined \
-    -I../include ../tests/fuzz_tar.cpp -o $OUT/fuzz_tar
+    $INCLUDES ../tests/fuzz_lz4.cpp -o $OUT/fuzz_lz4
+
+$CXX $CXXFLAGS -fsanitize=fuzzer,address,undefined \
+    $INCLUDES ../tests/fuzz_tar.cpp -o $OUT/fuzz_tar
