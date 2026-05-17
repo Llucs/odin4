@@ -144,7 +144,7 @@ auto detect_tar_md5_info(const std::string& file_path, TarMd5Info& info) -> Exit
         return ExitCode::Firmware;
     }
 
-    const uint64_t tail_len = std::min<uint64_t>(file_size, 65536);
+    const uint64_t tail_len = (file_size < 65536) ? file_size : 65536;
     file.seekg(static_cast<std::streamoff>(file_size - tail_len));
 
     std::vector<char> tail(static_cast<size_t>(tail_len));
@@ -239,7 +239,7 @@ auto verify_tar_md5(const std::string& file_path, const TarMd5Info& info) -> Exi
 
     uint64_t remaining = info.content_end;
     while (remaining > 0) {
-        const size_t to_read = static_cast<size_t>(std::min<uint64_t>(remaining, buf.size()));
+        const size_t to_read = static_cast<size_t>((remaining < buf.size()) ? remaining : buf.size());
         if (!read_exact(file, buf.data(), to_read)) {
             log_error(std::format("Short read during MD5 verification: {}", file_path));
             return ExitCode::Firmware;
@@ -394,7 +394,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 
     // Read some bytes for frame info.
     std::streampos start_pos = entry_start;
-    const size_t header_read_size = static_cast<size_t>(std::min<uint64_t>(1024, compressed_size));
+    const size_t header_read_size = static_cast<size_t>((1024 < compressed_size) ? 1024 : compressed_size);
     std::vector<unsigned char> header_buf(header_read_size);
     file.read(reinterpret_cast<char*>(header_buf.data()), static_cast<std::streamsize>(header_read_size));
     if (static_cast<size_t>(file.gcount()) != header_read_size) {
@@ -436,7 +436,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 
         while (!frame_ended && (scan_remaining > 0 || src_size > 0)) {
             if (src_size == 0 && scan_remaining > 0) {
-                const auto to_read = static_cast<size_t>(std::min<uint64_t>(in_buf_size, scan_remaining));
+                const auto to_read = static_cast<size_t>((in_buf_size < scan_remaining) ? in_buf_size : scan_remaining);
                 file.read(reinterpret_cast<char*>(in_buf.data()), static_cast<std::streamsize>(to_read));
                 const auto read = static_cast<size_t>(file.gcount());
                 if (read == 0) {
@@ -489,7 +489,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
                         src_offset = 0;
                     }
                     const size_t space = in_buf_size - src_size;
-                    const auto to_read = static_cast<size_t>(std::min<uint64_t>(space, scan_remaining));
+                    const auto to_read = static_cast<size_t>((space < scan_remaining) ? space : scan_remaining);
                     if (to_read == 0) {
                         log_error("LZ4 scan decompression error for " + filename + ": " +
                                   std::string(LZ4F_getErrorName(scan_err)));
@@ -562,7 +562,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 
     while (remaining_compressed > 0 || src_size > 0) {
         if (src_size == 0 && remaining_compressed > 0) {
-            const auto to_read = static_cast<size_t>(std::min<uint64_t>(in_buf_size, remaining_compressed));
+            const auto to_read = static_cast<size_t>((in_buf_size < remaining_compressed) ? in_buf_size : remaining_compressed);
             file.read(reinterpret_cast<char*>(in_buf.data()), static_cast<std::streamsize>(to_read));
             src_size = static_cast<size_t>(file.gcount());
             if (src_size == 0) {
@@ -597,7 +597,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
                 }
 
                 const size_t space = in_buf_size - src_size;
-                const auto to_read = static_cast<size_t>(std::min<uint64_t>(space, remaining_compressed));
+                const auto to_read = static_cast<size_t>((space < remaining_compressed) ? space : remaining_compressed);
                 if (to_read == 0) {
                     log_error(std::format("LZ4 decompression made no progress for {}", filename));
                     return false;
