@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [ "main" ]
   schedule:
-    - cron: "0 3 * * 1" 
+    - cron: "0 3 * * 1"
 
 jobs:
   analyze:
@@ -41,7 +41,8 @@ jobs:
             ninja-build \
             pkg-config \
             libusb-1.0-0-dev \
-            libcrypto++-dev
+            libcrypto++-dev \
+            qt6-base-dev
 
       - name: Build project
         run: |
