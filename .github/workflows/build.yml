@@ -41,6 +41,9 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      # =========================
+      # LINUX (GCC 14)
+      # =========================
       - name: Setup GCC 14 (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -48,15 +51,26 @@ jobs:
           sudo apt-get install -y software-properties-common
           sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
           sudo apt-get update
-          sudo apt-get install -y gcc-14 g++-14 cmake ninja-build pkg-config libusb-1.0-0-dev libcrypto++-dev qt6-base-dev libgl1-mesa-dev
+          sudo apt-get install -y \
+            gcc-14 g++-14 cmake ninja-build pkg-config \
+            libusb-1.0-0-dev libcrypto++-dev \
+            qt6-base-dev libgl1-mesa-dev
+
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
 
-      - name: Install Dependencies (macOS)
+      # =========================
+      # macOS
+      # =========================
+      - name: Setup macOS dependencies
         if: runner.os == 'macOS'
         run: |
           brew install cmake ninja pkg-config libusb cryptopp qt
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix libusb)/lib/cmake" >> $GITHUB_ENV
 
+      # =========================
+      # WINDOWS (vcpkg)
+      # =========================
       - name: Setup vcpkg (Windows)
         if: runner.os == 'Windows'
         uses: lukka/run-vcpkg@v11
@@ -70,6 +84,9 @@ jobs:
         run: |
           vcpkg install libusb cryptopp qtbase --triplet x64-windows-static-md
 
+      # =========================
+      # CONFIGURE (Linux/macOS)
+      # =========================
       - name: Configure CMake (Linux/macOS)
         if: runner.os != 'Windows'
         env:
@@ -80,6 +97,9 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DODIN4_BUILD_TESTS=ON
 
+      # =========================
+      # CONFIGURE (Windows)
+      # =========================
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
         run: |
@@ -88,14 +108,23 @@ jobs:
             -DVCPKG_TARGET_TRIPLET=x64-windows-static-md `
             -DODIN4_BUILD_TESTS=ON
 
+      # =========================
+      # BUILD
+      # =========================
       - name: Build
         run: cmake --build build --config Release
 
+      # =========================
+      # TESTS
+      # =========================
       - name: Run Tests
         run: |
           cd build
           ctest -C Release --output-on-failure
 
+      # =========================
+      # ARTIFACTS
+      # =========================
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
