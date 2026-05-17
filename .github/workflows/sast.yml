@@ -1,0 +1,44 @@
+name: SAST (CodeQL)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: "0 3 * * 1" # toda segunda-feira
+
+jobs:
+  analyze:
+    name: CodeQL Analysis (C/C++)
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ "cpp" ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Build project
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build
+
+          cmake -B build -G Ninja
+          cmake --build build
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
