@@ -29,8 +29,8 @@
   <img src="https://img.shields.io/badge/platform-linux-blue.svg">
   <img src="https://img.shields.io/badge/language-C%2FC%2B%2B-blue.svg">
 
-  <img src="https://img.shields.io/github/v/release/Llucs/odin4?display_name=tag&include_prereleases&sort=semver&style=flat">
-  <img src="https://img.shields.io/github/release-date/Llucs/odin4">
+  <img src="https://img.shields.io/github/v/release/Llucs/odin4?display_name=tag&include_prereleases&sort=semver&style=flat" alt="GitHub release (tag)">
+  <img src="https://img.shields.io/github/release-date/Llucs/odin4" alt="GitHub release date">
 
   <img src="https://img.shields.io/github/stars/Llucs/odin4">
   <img src="https://img.shields.io/github/downloads/Llucs/odin4/total">
