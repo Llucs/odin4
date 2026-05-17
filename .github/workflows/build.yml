@@ -42,52 +42,35 @@ jobs:
           fetch-depth: 0
 
       # =========================
-      # LINUX (GCC 14)
+      # Setup Linux toolchain
       # =========================
       - name: Setup GCC 14 (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y software-properties-common
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
-          sudo apt-get update
-          sudo apt-get install -y \
-            gcc-14 g++-14 cmake ninja-build pkg-config \
-            libusb-1.0-0-dev libcrypto++-dev \
-            qt6-base-dev libgl1-mesa-dev
-
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+          sudo apt-get install -y gcc-14 g++-14 cmake ninja-build
 
       # =========================
-      # macOS
+      # Setup vcpkg (ALL OS)
       # =========================
-      - name: Setup macOS dependencies
-        if: runner.os == 'macOS'
-        run: |
-          brew install cmake ninja pkg-config libusb cryptopp qt
-          echo "CMAKE_PREFIX_PATH=$(brew --prefix libusb)/lib/cmake" >> $GITHUB_ENV
-
-      # =========================
-      # WINDOWS (vcpkg)
-      # =========================
-      - name: Setup vcpkg (Windows)
-        if: runner.os == 'Windows'
+      - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgGitCommitId: '2b65c20fc66eda893aa15a15a453c3cf09500b19'
           doNotUpdateVcpkg: false
-          doNotCache: true
+          doNotCache: false
 
-      - name: Install Dependencies (Windows via vcpkg)
-        if: runner.os == 'Windows'
+      # =========================
+      # Install deps via vcpkg
+      # =========================
+      - name: Install dependencies (vcpkg)
         run: |
-          vcpkg install libusb cryptopp qtbase --triplet x64-windows-static-md
+          vcpkg install libusb cryptopp qtbase --triplet ${{ matrix.triplet }}
 
       # =========================
-      # CONFIGURE (Linux/macOS)
+      # Configure (Linux/macOS)
       # =========================
-      - name: Configure CMake (Linux/macOS)
+      - name: Configure (Unix)
         if: runner.os != 'Windows'
         env:
           CC: gcc
@@ -95,27 +78,29 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
             -DODIN4_BUILD_TESTS=ON
 
       # =========================
-      # CONFIGURE (Windows)
+      # Configure (Windows)
       # =========================
-      - name: Configure CMake (Windows)
+      - name: Configure (Windows)
         if: runner.os == 'Windows'
         run: |
           cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=x64-windows-static-md `
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} `
             -DODIN4_BUILD_TESTS=ON
 
       # =========================
-      # BUILD
+      # Build
       # =========================
       - name: Build
         run: cmake --build build --config Release
 
       # =========================
-      # TESTS
+      # Tests
       # =========================
       - name: Run Tests
         run: |
@@ -123,7 +108,7 @@ jobs:
           ctest -C Release --output-on-failure
 
       # =========================
-      # ARTIFACTS
+      # Artifacts
       # =========================
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -132,7 +117,3 @@ jobs:
           path: |
             build/odin4*
             build/libodin4*
-            !build/**/*.obj
-            !build/**/*.o
-            !build/**/*.cpp
-            !build/**/*.h
