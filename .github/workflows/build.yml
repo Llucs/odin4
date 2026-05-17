@@ -142,7 +142,7 @@ jobs:
           subject-path: ${{ env.ZIP_NAME }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: odin4-linux-${{ matrix.arch }}-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}
           path: |
@@ -182,7 +182,7 @@ jobs:
 
           echo "OUT=${OUT}" >> "$GITHUB_ENV"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: odin4-linux-all
           path: ${{ env.OUT }}

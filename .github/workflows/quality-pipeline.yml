@@ -64,7 +64,7 @@ jobs:
 
       - name: Upload artifact (Release Clang)
         if: matrix.build_type == 'Release' && matrix.compiler == 'clang-18'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: odin4-linux-release
           path: build/odin4
