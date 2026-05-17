@@ -37,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231 # v6
 
-      - uses: sigstore/cosign-installer@v3
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v3
 
       - name: Add GCC 14 PPA
         shell: bash
