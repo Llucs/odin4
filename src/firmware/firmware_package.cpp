@@ -672,8 +672,15 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 
 auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const PitTable& pit_table, bool do_flash,
                       bool allow_unknown) -> ExitCode {
+    // End-to-end TAR processing entry point:
+    //  1) validate archive integrity (TAR/MD5),
+    //  2) enumerate and validate package entries against PIT/partition policy,
+    //  3) optionally stream payloads to device when flashing is enabled.
+    // Any failure in these phases returns a non-success ExitCode immediately.
     log_info(std::format("Processing archive: {}", tar_path));
 
+    // Preflight integrity checks: detect trailing md5 metadata (if present)
+    // and verify archive checksum before parsing any content.
     TarMd5Info md5_info;
     ExitCode ec = detect_tar_md5_info(tar_path, md5_info);
     if (ec != ExitCode::Success) {
@@ -684,6 +691,8 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
         return ec;
     }
 
+    // Open archive stream and determine total readable size used by the
+    // subsequent TAR entry traversal logic.
     std::ifstream file(tar_path, std::ios::binary);
     if (!file) {
         log_error(std::format("Could not open archive: {}", tar_path));
@@ -988,4 +997,6 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
     }
 
     return ExitCode::Success;
+    // Reaching this point means all selected entries were processed successfully
+    // (and flashed when requested) and archive-level checks passed.
 }
