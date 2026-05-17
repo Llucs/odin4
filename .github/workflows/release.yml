@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(grep -E '^[[:space:]]*#define[[:space:]]+ODIN4_VERSION[[:space:]]+"' src/odin4.cpp \
+            | sed -E 's/.*"([^"]+)".*/\1/' | head -n 1)
+          TAG_NAME="${GITHUB_REF_NAME#v}"
+          
+          if [ -z "$VERSION" ]; then
+            echo "ERROR: Could not extract VERSION from src/odin4.cpp"
+            exit 1
+          fi
+          
+          if [ "$VERSION" != "$TAG_NAME" ]; then
+            echo "ERROR: VERSION ($VERSION) does not match tag ($TAG_NAME)"
+            exit 1
+          fi
+          
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION"
+
+      - name: Set up build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build pkg-config g++ libusb-1.0-0-dev libcrypto++-dev
+
+      - name: Build odin4
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel $(nproc)
+
+      - name: Build odin4-gui
+        run: |
+          cmake -S . -B build-gui -G Ninja -DCMAKE_BUILD_TYPE=Release -DODIN4_BUILD_GUI=ON
+          cmake --build build-gui --parallel $(nproc)
+
+      - name: Create release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: odin4 ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            build/odin4
+            build-gui/odin4-gui

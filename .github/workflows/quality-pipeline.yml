@@ -101,7 +101,7 @@ jobs:
 
       - name: clang-format check
         run: |
-          find src include src-gui -name '*.cpp' -o -name '*.h' | \
+          find src include src/gui -name '*.cpp' -o -name '*.h' | \
           xargs clang-format-18 --dry-run --Werror -style=file
 
       - name: clang-tidy
@@ -117,7 +117,7 @@ jobs:
             --suppress=missingIncludeSystem \
             --project=build/compile_commands.json \
             --error-exitcode=1 \
-            src/ include/ src-gui/
+            src/ include/ src/gui/
 
   tests:
     name: Tests + Sanitizers
