@@ -18,6 +18,7 @@ jobs:
   build:
     name: Build on ${{ matrix.os }} (${{ matrix.arch }})
     runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -25,59 +26,95 @@ jobs:
           - os: ubuntu-22.04
             arch: x86_64
             triplet: x64-linux
+
           - os: windows-latest
             arch: x86_64
-            triplet: x64-windows-static
+            triplet: x64-windows-static-md
+
           - os: macos-latest
             arch: universal
-            triplet: x64-osx # vcpkg doesn't have a universal triplet by default, we'll handle it
+            triplet: x64-osx
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
 
+      # =========================
+      # LINUX
+      # =========================
       - name: Install Dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build pkg-config libusb-1.0-0-dev libcrypto++-dev qt6-base-dev libgl1-mesa-dev
+          sudo apt-get install -y \
+            cmake ninja-build pkg-config \
+            libusb-1.0-0-dev libcrypto++-dev \
+            qt6-base-dev libgl1-mesa-dev
 
+      # =========================
+      # macOS
+      # =========================
       - name: Install Dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install cmake ninja pkg-config libusb cryptopp qt6
+          brew install cmake ninja pkg-config libusb cryptopp qt
 
+      # =========================
+      # WINDOWS (vcpkg)
+      # =========================
       - name: Setup vcpkg (Windows)
         if: runner.os == 'Windows'
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgGitCommitId: '2b65c20fc66eda893aa15a15a453c3cf09500b19'
+          runVcpkgInstall: true
+          vcpkgTriplet: x64-windows-static-md
 
-      - name: Install Dependencies (Windows)
+      - name: Install Dependencies (Windows via vcpkg)
         if: runner.os == 'Windows'
         run: |
-          vcpkg install libusb cryptopp qt6-base --triplet x64-windows-static-md
+          vcpkg install libusb cryptopp qtbase --triplet x64-windows-static-md
 
+      # =========================
+      # CMAKE CONFIG (Linux/macOS)
+      # =========================
       - name: Configure CMake (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DODIN4_BUILD_TESTS=ON
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DODIN4_BUILD_TESTS=ON
 
+      # =========================
+      # CMAKE CONFIG (Windows)
+      # =========================
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
         run: |
           cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
-            -DCMAKE_BUILD_TYPE=Release -DODIN4_BUILD_TESTS=ON
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static-md `
+            -DODIN4_BUILD_TESTS=ON
 
+      # =========================
+      # BUILD
+      # =========================
       - name: Build
         run: cmake --build build --config Release
 
+      # =========================
+      # TESTS
+      # =========================
       - name: Run Tests
         run: |
           cd build
           ctest -C Release --output-on-failure
 
+      # =========================
+      # ARTIFACTS
+      # =========================
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
