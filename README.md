@@ -22,8 +22,8 @@
     <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/build.yml?label=build">
   </a>
 
-  <a href="https://github.com/Llucs/odin4/actions/workflows/codeql.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/codeql.yml?label=codeql">
+  <a href="https://github.com/Llucs/odin4/actions/workflows/sast.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/sast.yml?label=codeql">
   </a>
 
   <img src="https://img.shields.io/badge/platform-linux-blue.svg">
