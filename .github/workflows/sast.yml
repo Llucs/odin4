@@ -27,15 +27,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: ${{ matrix.language }}
-
-      - name: Install dependencies
+      - name: Install toolchain and dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            gcc-14 g++-14 \
             build-essential \
             cmake \
             ninja-build \
@@ -44,9 +40,20 @@ jobs:
             libcrypto++-dev \
             qt6-base-dev
 
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Configure CMake (GCC 14)
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_CXX_STANDARD=23
+
       - name: Build project
         run: |
-          cmake -B build -G Ninja
           cmake --build build
 
       - name: Perform CodeQL Analysis
