@@ -8,9 +8,15 @@ RUN apt-get update && apt-get install -y \
     libc++abi-dev \
     pkg-config \
     libusb-1.0-0-dev \
-    libcrypto++-dev \
     libarchive-dev \
-    zlib1g-dev
+    zlib1g-dev \
+    git
+
+RUN git clone --depth=1 https://github.com/weidai11/cryptopp.git /tmp/cryptopp && \
+    cd /tmp/cryptopp && \
+    make -j"$(nproc)" && \
+    make install && \
+    ldconfig
 
 COPY . $SRC/odin4
 WORKDIR $SRC/odin4
