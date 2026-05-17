@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   build:
-    name: Build on ${{ matrix.os }} (${{ matrix.arch }})
+    name: Build on ${{ matrix.os }}-${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -31,8 +31,12 @@ jobs:
             arch: x86_64
             triplet: x64-windows-static-md
 
-          - os: macos-latest
-            arch: universal
+          - os: macos-14
+            arch: arm64
+            triplet: arm64-osx
+
+          - os: macos-14
+            arch: x86_64
             triplet: x64-osx
 
     steps:
@@ -44,11 +48,11 @@ jobs:
       # =========================
       # Setup Linux toolchain
       # =========================
-      - name: Setup GCC 14 (Linux)
+      - name: Setup GCC (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-14 g++-14 cmake ninja-build
+          sudo apt-get install -y gcc g++ cmake ninja-build
 
       # =========================
       # Setup vcpkg (ALL OS)
@@ -68,13 +72,10 @@ jobs:
           vcpkg install libusb cryptopp qtbase --triplet ${{ matrix.triplet }}
 
       # =========================
-      # Configure (Linux/macOS)
+      # Configure (Unix)
       # =========================
       - name: Configure (Unix)
         if: runner.os != 'Windows'
-        env:
-          CC: gcc
-          CXX: g++
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \

@@ -24,7 +24,7 @@
 
 static void print_usage() {
     std::println("Usage: odin4 [options]");
-    std::println("Samsung firmware flashing tool for Linux. Version: {}", odin4_get_version());
+    std::println("Samsung firmware flashing tool. Version: {}", odin4_get_version());
     std::println("");
     std::println("Options:");
     std::println("  -h                  Show this help message");
@@ -52,9 +52,18 @@ static void print_usage() {
     std::println("  --pid <hex>          Override USB product ID (hex)");
     std::println("  --usb-interface <n>  Force a specific USB interface number");
     std::println("");
+#if defined(_WIN32)
+    std::println("Windows permissions:");
+    std::println("  Run as Administrator if you get LIBUSB_ERROR_ACCESS");
+#elif defined(__APPLE__)
+    std::println("macOS permissions:");
+    std::println("  If you get LIBUSB_ERROR_ACCESS, you may need to approve in System Preferences");
+    std::println("    System Settings -> Privacy & Security -> Security & Privacy -> Accessories");
+#else
     std::println("Linux permissions:");
     std::println("  If you get LIBUSB_ERROR_ACCESS, install the provided udev rule:");
     std::println("    udev/60-odin4.rules -> /etc/udev/rules.d/60-odin4.rules");
+#endif
 }
 
 static void print_version() {
