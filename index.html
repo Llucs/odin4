@@ -4,7 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>odin4 | Samsung Flash Tool for Linux</title>
-    <meta name="description" content="Modern and robust Samsung firmware flashing tool for Linux. Native Thor protocol implementation.">
+    <meta name="description" content="odin4 is a modern Samsung firmware flashing tool for Linux with native Thor protocol implementation, providing safe and efficient device flashing.">
+    <meta name="keywords" content="odin4, samsung firmware, flash tool, linux, thor protocol, download mode, samsung flashing">
+    <meta name="author" content="Llucs">
+    <meta name="robots" content="index, follow">
+    <meta property="og:title" content="odin4 - Samsung Flash Tool for Linux">
+    <meta property="og:description" content="Modern Samsung firmware flashing tool for Linux">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://github.com/Llucs/odin4">
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,18 +19,18 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
 <body>
-    <nav class="navbar">
+    <nav class="navbar" role="navigation" aria-label="Main navigation">
         <div class="container nav-container">
-            <a href="#" class="logo-section">
-                <img src="logo.png" alt="odin4 logo" class="logo">
+            <a href="#" class="logo-section" aria-label="odin4 home">
+                <img src="logo.png" alt="odin4 logo" class="logo" width="36" height="36">
                 <span class="brand">odin4</span>
             </a>
-            <div class="nav-toggle" id="navToggle">
+            <div class="nav-toggle" id="navToggle" role="button" aria-label="Toggle navigation" aria-expanded="false" tabindex="0">
                 <span></span>
                 <span></span>
                 <span></span>
             </div>
-            <ul class="nav-menu" id="navMenu">
+            <ul class="nav-menu" id="navMenu" role="menubar">
                 <li><a href="#overview" class="nav-link">Overview</a></li>
                 <li><a href="#features" class="nav-link">Features</a></li>
                 <li><a href="#protocol" class="nav-link">Thor Protocol</a></li>
@@ -103,22 +110,37 @@
                 <div class="feature-card">
                     <div class="feature-icon">💎</div>
                     <h4>MD5 Integrity</h4>
-                    <p>Cryptographic verification of .tar.md5 files before flashing.</p>
+                    <p>Cryptographic verification of .tar.md5 files using Crypto++ before flashing.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">🧪</div>
                     <h4>Dry-run Mode</h4>
-                    <p>Validate the entire process without performing real writes to the device.</p>
+                    <p>Validate PIT and archives without performing any writes using --check-only.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">📊</div>
                     <h4>Real-time Progress</h4>
-                    <p>Transfer statistics and detailed per-file progress reporting.</p>
+                    <p>Transfer statistics, speed metrics, and per-file progress reporting.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">🔄</div>
                     <h4>Multi-component</h4>
-                    <p>Full support for BL, AP, CP, CSC, and UMS components.</p>
+                    <p>Full support for BL, AP, CP, CSC, and UMS firmware components.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h4>LZ4 Streaming</h4>
+                    <p>Native LZ4 compression support for faster firmware transfers.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📝</div>
+                    <h4>Logging</h4>
+                    <p>Persistent odin4.log file for post-operation debugging and analysis.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔗</div>
+                    <h4>Multi-device</h4>
+                    <p>Sequential flashing support for multiple connected devices.</p>
                 </div>
             </div>
         </div>
@@ -137,6 +159,7 @@
                     <button class="protocol-tab" data-target="pit">PIT Transfer</button>
                     <button class="protocol-tab" data-target="flash">Flash Sequence</button>
                     <button class="protocol-tab" data-target="info">Device Info</button>
+                    <button class="protocol-tab" data-target="control">Control</button>
                 </div>
                 <div class="protocol-content">
                     <div id="intro" class="tab-pane active">
@@ -148,26 +171,47 @@
                     </div>
                     <div id="handshake" class="tab-pane">
                         <h3>Session Start (Handshake)</h3>
-                        <p>Before any operation, the host must initiate a session. This is done by sending an initialization packet.</p>
+                        <p>Before any operation, the host must initiate a session by sending a handshake packet with the magic identifier and protocol version.</p>
                         <div class="table-wrapper">
                             <table>
                                 <thead>
                                     <tr>
-                                        <th>Value</th>
-                                        <th>Type</th>
+                                        <th>Offset</th>
+                                        <th>Size</th>
+                                        <th>Field</th>
                                         <th>Description</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td><code>0x4F44494E</code></td>
-                                        <td>String ("ODIN")</td>
-                                        <td>Magic Identification Number</td>
+                                        <td><code>0x00</code></td>
+                                        <td>4 bytes</td>
+                                        <td>packet_size</td>
+                                        <td>Total packet size (0x000C)</td>
                                     </tr>
                                     <tr>
-                                        <td><code>0x0001</code></td>
-                                        <td>16-bit Integer</td>
-                                        <td>Protocol Version</td>
+                                        <td><code>0x04</code></td>
+                                        <td>2 bytes</td>
+                                        <td>packet_type</td>
+                                        <td>0x0001 = HANDSHAKE</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>0x06</code></td>
+                                        <td>2 bytes</td>
+                                        <td>packet_flags</td>
+                                        <td>Flags word</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>0x08</code></td>
+                                        <td>4 bytes</td>
+                                        <td>magic</td>
+                                        <td>0x4F44494E ("ODIN")</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>0x0C</code></td>
+                                        <td>4 bytes</td>
+                                        <td>version</td>
+                                        <td>Protocol version</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -176,30 +220,111 @@
                     <div id="pit" class="tab-pane">
                         <h3>PIT Table Extraction</h3>
                         <p>The Partition Information Table (PIT) defines the device's storage layout. odin4 requests this table to validate firmware compatibility.</p>
-                        <div class="code-header">PIT Request Command (0x65)</div>
+                        <div class="code-header">Request PIT (Packet Type 0x0007)</div>
                         <div class="code-block">
-                            <code>Packet: [0x65] [0x00] [0x00] [0x00] ...</code>
+                            <code>ThorPitFilePacket:
+  packet_size = 0x0C
+  packet_type = 0x0007 (THOR_PACKET_PIT_FILE)
+  pit_file_size = 0x00000000</code>
                         </div>
-                        <p>The device responds with the PIT size followed by the raw binary data.</p>
+                        <p>The device responds with PIT data using the same packet type.</p>
                     </div>
                     <div id="flash" class="tab-pane">
                         <h3>Flash Sequence</h3>
-                        <p>Flashing occurs in three main phases for each file:</p>
-                        <ol class="protocol-list">
-                            <li><strong>Start (0x66):</strong> Notifies the device about the file name and size.</li>
-                            <li><strong>Data (0x67):</strong> Sending data chunks (usually 1MB or 128KB).</li>
-                            <li><strong>End (0x66 + 0x03/0x07):</strong> Finalizes writing and requests checksum verification.</li>
-                        </ol>
+                        <p>Flashing occurs in three main phases for each file using these packet types:</p>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Phase</th>
+                                        <th>Packet Type</th>
+                                        <th>Name</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Begin</td>
+                                        <td><code>0x0008</code></td>
+                                        <td>BEGIN_SESSION</td>
+                                        <td>Start file transfer session</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Begin</td>
+                                        <td><code>0x0009</code></td>
+                                        <td>FILE_PART_SIZE</td>
+                                        <td>Notify file size</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Data</td>
+                                        <td><code>0x0003</code></td>
+                                        <td>FILE_PART</td>
+                                        <td>Sending data chunks</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Data</td>
+                                        <td><code>0x000A</code></td>
+                                        <td>RECEIVE_FILE_PART</td>
+                                        <td>Continue data transfer</td>
+                                    </tr>
+                                    <tr>
+                                        <td>End</td>
+                                        <td><code>0x0004</code></td>
+                                        <td>END_FILE_TRANSFER</td>
+                                        <td>Finalize and verify</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                     <div id="info" class="tab-pane">
-                        <h3>Device Metadata (0x69)</h3>
-                        <p>Allows extracting vital information without the need for flashing.</p>
-                        <ul class="protocol-list">
-                            <li><strong>0x00:</strong> Model Name (e.g., SM-G991B)</li>
-                            <li><strong>0x01:</strong> Serial Number</li>
-                            <li><strong>0x02:</strong> Region Code (CSC)</li>
-                            <li><strong>0x03:</strong> Carrier ID</li>
-                        </ul>
+                        <h3>Device Information</h3>
+                        <p>Query device metadata using packet type 0x0002 (DEVICE_TYPE) for device information retrieval.</p>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Field</th>
+                                        <th>Size</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>device_type</code></td>
+                                        <td>128 bytes</td>
+                                        <td>Null-terminated string (e.g., "SM-G991B")</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div id="control" class="tab-pane">
+                        <h3>Control Operations</h3>
+                        <p>Device control using packet type 0x000B (CONTROL):</p>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Control Type</th>
+                                        <th>Value</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>REBOOT</td>
+                                        <td><code>0x0001</code></td>
+                                        <td>Reboot device normally</td>
+                                    </tr>
+                                    <tr>
+                                        <td>REDOWNLOAD</td>
+                                        <td><code>0x0002</code></td>
+                                        <td>Reboot into download mode</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -1,9 +1,40 @@
 document.addEventListener('DOMContentLoaded', () => {
     initNavbar();
+    initMobileNav();
     initProtocolTabs();
     initCodeCopy();
     initScrollAnimations();
 });
+
+// Mobile navigation toggle
+function initMobileNav() {
+    const navToggle = document.getElementById('navToggle');
+    const navMenu = document.getElementById('navMenu');
+    
+    if (!navToggle || !navMenu) return;
+    
+    const toggleMenu = () => {
+        const isActive = navMenu.classList.toggle('active');
+        navToggle.classList.toggle('active');
+        navToggle.setAttribute('aria-expanded', isActive);
+    };
+    
+    navToggle.addEventListener('click', toggleMenu);
+    navToggle.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleMenu();
+        }
+    });
+    
+    navMenu.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', () => {
+            navMenu.classList.remove('active');
+            navToggle.classList.remove('active');
+            navToggle.setAttribute('aria-expanded', 'false');
+        });
+    });
+}
 
 // Navbar scroll effect and active link tracking
 function initNavbar() {

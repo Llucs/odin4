@@ -106,6 +106,35 @@ h1, h2, h3, h4, h5, h6 {
     align-items: center;
 }
 
+.nav-toggle {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    cursor: pointer;
+    padding: 8px;
+    z-index: 1001;
+}
+
+.nav-toggle span {
+    display: block;
+    width: 24px;
+    height: 2px;
+    background: var(--text);
+    transition: var(--transition);
+}
+
+.nav-toggle.active span:nth-child(1) {
+    transform: rotate(45deg) translate(5px, 5px);
+}
+
+.nav-toggle.active span:nth-child(2) {
+    opacity: 0;
+}
+
+.nav-toggle.active span:nth-child(3) {
+    transform: rotate(-45deg) translate(5px, -5px);
+}
+
 .nav-link {
     text-decoration: none;
     color: var(--text-dim);
@@ -704,7 +733,22 @@ code {
     .hero-grid { grid-template-columns: 1fr; text-align: center; }
     .hero-description { margin: 0 auto 40px; }
     .hero-buttons { justify-content: center; }
-    .nav-menu { display: none; }
+    .nav-toggle { display: flex; }
+    .nav-menu {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100vh;
+        background: var(--bg);
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 24px;
+    }
+    .nav-menu.active { display: flex; }
+    .nav-menu .nav-link { font-size: 1.5rem; }
     .protocol-container { grid-template-columns: 1fr; }
     .protocol-sidebar { border-right: none; border-bottom: 1px solid var(--surface-border); display: flex; overflow-x: auto; gap: 8px; }
     .protocol-tab { white-space: nowrap; width: auto; margin-bottom: 0; }
