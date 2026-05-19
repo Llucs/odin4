@@ -18,7 +18,7 @@
 #include <cstddef>
 #include "protocol/thor_protocol.h"
 #include "firmware/firmware_package.h"
-#include "odin4/fuzz_helpers.h"
+#include "odin4/fuzz_utils.h"
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     try {
