@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
@@ -19,25 +20,35 @@ jobs:
         run: |
           VERSION=$(grep -E '^[[:space:]]*#define[[:space:]]+ODIN4_VERSION[[:space:]]+"' src/odin4.cpp \
             | sed -E 's/.*"([^"]+)".*/\1/' | head -n 1)
+
           TAG_NAME="${GITHUB_REF_NAME#v}"
-          
+
+          # Remove hash/suffix after "-"
+          BASE_VERSION="${VERSION%%-*}"
+
           if [ -z "$VERSION" ]; then
             echo "ERROR: Could not extract VERSION from src/odin4.cpp"
             exit 1
           fi
-          
-          if [ "$VERSION" != "$TAG_NAME" ]; then
+
+          if [ "$BASE_VERSION" != "$TAG_NAME" ]; then
             echo "ERROR: VERSION ($VERSION) does not match tag ($TAG_NAME)"
             exit 1
           fi
-          
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION"
 
       - name: Set up build environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build pkg-config g++ libusb-1.0-0-dev libcrypto++-dev
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            pkg-config \
+            g++ \
+            libusb-1.0-0-dev \
+            libcrypto++-dev
 
       - name: Build odin4
         run: |
@@ -46,7 +57,10 @@ jobs:
 
       - name: Build odin4-gui
         run: |
-          cmake -S . -B build-gui -G Ninja -DCMAKE_BUILD_TYPE=Release -DODIN4_BUILD_GUI=ON
+          cmake -S . -B build-gui -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DODIN4_BUILD_GUI=ON
+
           cmake --build build-gui --parallel $(nproc)
 
       - name: Create release
