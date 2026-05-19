@@ -43,6 +43,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           sudo apt-get update
           sudo apt-get install -y software-properties-common
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
@@ -52,20 +53,39 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           sudo apt-get install -y \
-            cmake ninja-build zip make pkg-config git \
-            libusb-1.0-0-dev libcrypto++-dev qt6-base-dev \
-            libqt6widgets6 libgl1-mesa-dev gcc-14 g++-14
+            cmake \
+            ninja-build \
+            zip \
+            make \
+            pkg-config \
+            git \
+            libusb-1.0-0-dev \
+            libcrypto++-dev \
+            qt6-base-dev \
+            libqt6widgets6 \
+            libgl1-mesa-dev \
+            gcc-14 \
+            g++-14
 
       - name: Ensure Crypto++ static library
         shell: bash
         run: |
           set -euo pipefail
+
           if ! find /usr /usr/local -name "libcryptopp.a" | grep -q .; then
-            git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git /tmp/cryptopp
+            git clone --depth 1 \
+              --branch CRYPTOPP_8_9_0 \
+              https://github.com/weidai11/cryptopp.git \
+              /tmp/cryptopp
+
             cd /tmp/cryptopp
+
             make -j"$(nproc)"
+
             sudo make install PREFIX=/usr/local
+
             sudo ldconfig || true
           fi
 
@@ -75,6 +95,7 @@ jobs:
           set -euo pipefail
 
           VERSION="$(grep -E 'ODIN4_VERSION' src/odin4.cpp | sed -E 's/.*"([^"]+)".*/\1/' | head -n 1)"
+
           SUFFIX="${{ inputs.suffix }}"
 
           if [[ -n "$SUFFIX" && "$SUFFIX" != -* ]]; then
@@ -92,17 +113,22 @@ jobs:
       - name: Build
         shell: bash
         run: |
+          set -euo pipefail
+
           rm -rf build
+
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER=gcc-14 \
             -DCMAKE_CXX_COMPILER=g++-14
+
           cmake --build build --parallel "$(nproc)"
 
       - name: Package
         shell: bash
         run: |
           set -euo pipefail
+
           mkdir -p dist
 
           cp build/odin4 "dist/${OUT_BIN}"
@@ -117,7 +143,10 @@ jobs:
           ZIP_NAME="odin4-linux-${{ matrix.arch }}-${ODIN4_VERSION}${ODIN4_SUFFIX}.zip"
 
           cd dist
+
           zip "../${ZIP_NAME}" *
+
+          cd ..
 
           echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
 
@@ -126,15 +155,21 @@ jobs:
           COSIGN_EXPERIMENTAL: "true"
         shell: bash
         run: |
-          cosign sign-blob --yes "${ZIP_NAME}" \
-            --output-signature "${ZIP_NAME}.sig" \
-            --output-certificate "${ZIP_NAME}.cert"
+          set -euo pipefail
 
-          cosign sign-blob --yes "dist/${OUT_BIN}" \
-            --output-signature "${OUT_BIN}.sig"
+          sign() {
+            local FILE="$1"
 
-          cosign sign-blob --yes "dist/${OUT_GUI}" \
-            --output-signature "${OUT_GUI}.sig"
+            cosign sign-blob --yes "$FILE" \
+              --bundle "${FILE}.bundle"
+          }
+
+          sign "${ZIP_NAME}"
+
+          sign "dist/${OUT_BIN}"
+          sign "dist/${OUT_GUI}"
+          sign "dist/${OUT_SO}"
+          sign "dist/${OUT_A}"
 
       - name: Provenance
         uses: actions/attest-build-provenance@10334b5f1e684784025c3fc0a277c88c19089275 # v4
@@ -147,9 +182,9 @@ jobs:
           name: odin4-linux-${{ matrix.arch }}-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}
           path: |
             dist/*
+            dist/*.bundle
             ${{ env.ZIP_NAME }}
-            ${{ env.ZIP_NAME }}.sig
-            ${{ env.ZIP_NAME }}.cert
+            ${{ env.ZIP_NAME }}.bundle
           retention-days: 14
 
   bundle:
@@ -163,27 +198,47 @@ jobs:
         with:
           path: artifacts
 
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v3
+
       - name: Create bundle
         shell: bash
         run: |
           set -euo pipefail
 
           mkdir -p bundle
+
           find artifacts -type f -name "*.zip" -exec cp {} bundle/ \;
 
           SAMPLE="$(find bundle -type f -name '*.zip' | head -n 1)"
+
           BASE="$(basename "$SAMPLE")"
+
           VERSUFFIX="$(echo "${BASE}" | sed -E 's/^odin4-linux-[^-]+-(.+)\.zip$/\1/')"
 
           OUT="odin4-linux-all-${VERSUFFIX}.zip"
 
           cd bundle
+
           zip "../${OUT}" ./*
 
+          cd ..
+
           echo "OUT=${OUT}" >> "$GITHUB_ENV"
+
+      - name: Sign bundle archive
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cosign sign-blob --yes "${OUT}" \
+            --bundle "${OUT}.bundle"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: odin4-linux-all
-          path: ${{ env.OUT }}
+          path: |
+            ${{ env.OUT }}
+            ${{ env.OUT }}.bundle
           retention-days: 14
