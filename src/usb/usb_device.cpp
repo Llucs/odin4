@@ -1127,15 +1127,16 @@ auto UsbDevice::odin_command(uint32_t cmd, uint32_t subcmd, const void* payload,
         return false;
     }
 
-    rsp.assign(8, 0);
+    rsp.assign(512, 0);
     int read_len = 0;
     if (!bulk_read_once(rsp.data(), rsp.size(), &read_len, timeout_ms)) {
         return false;
     }
-    if (read_len != 8) {
+    if (read_len < 8) {
         log_error(std::format("Odin response size mismatch: {}", read_len));
         return false;
     }
+    rsp.resize(read_len);
     return true;
 }
 
@@ -1197,7 +1198,7 @@ auto UsbDevice::odin_legacy_handshake() -> bool {
         return false;
     }
 
-    unsigned char reply[8] = {0};
+    unsigned char reply[512] = {0};
     int actual = 0;
     if (!bulk_read_once(reply, sizeof(reply), &actual, USB_TIMEOUT_CONTROL)) {
         return false;

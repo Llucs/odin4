@@ -28,7 +28,7 @@
 #include <format>
 #include <filesystem>
 
-#define ODIN4_VERSION "6.0.0-aefb1e5"
+#define ODIN4_VERSION "6.0.1-aefb1e5"
 
 auto odin4_get_version() -> const char* {
     return ODIN4_VERSION;
@@ -185,20 +185,20 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
         }
     }
 
-    if (!usb.begin_session()) {
-        log_error("Failed to begin session.");
-        return OdinExitCode::Protocol;
-    }
-
-    PitTable pit;
-    if (!usb.request_pit(pit)) {
-        log_error("Failed to retrieve or parse PIT from device.");
-        usb.end_session();
-        return OdinExitCode::Pit;
-    }
-    log_info(std::format("PIT received with {} entries.", pit.entries.size()));
-
     if (has_any_firmware_files(cfg)) {
+        if (!usb.begin_session()) {
+            log_error("Failed to begin session.");
+            return OdinExitCode::Protocol;
+        }
+
+        PitTable pit;
+        if (!usb.request_pit(pit)) {
+            log_error("Failed to retrieve or parse PIT from device.");
+            usb.end_session();
+            return OdinExitCode::Pit;
+        }
+        log_info(std::format("PIT received with {} entries.", pit.entries.size()));
+
         const std::vector<std::pair<std::string, std::string>> archives = {
             {"BL", cfg.bootloader}, {"AP", cfg.ap}, {"CP", cfg.cp}, {"CSC", cfg.csc}, {"UMS", cfg.ums}};
 
@@ -231,6 +231,11 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
                 return static_cast<OdinExitCode>(rc);
             }
         }
+
+        if (!usb.end_session()) {
+            log_error("Failed to end session.");
+            return OdinExitCode::Protocol;
+        }
     }
 
     if (!cfg.dry_run) {
@@ -252,11 +257,6 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
         if (cfg.reboot || cfg.redownload) {
             log_verbose("Check-only mode: reboot/redownload commands skipped.");
         }
-    }
-
-    if (!usb.end_session()) {
-        log_error("Failed to end session.");
-        return OdinExitCode::Protocol;
     }
 
     if (cfg.dry_run) {
