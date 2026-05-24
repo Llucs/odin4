@@ -30,9 +30,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231 # v6
 
-      - name: Install toolchain and dependencies
+      - name: Add GCC 16 PPA
         run: |
           sudo apt-get update
+          sudo apt-get install -y software-properties-common
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+
+      - name: Install toolchain and dependencies
+        run: |
           sudo apt-get install -y \
             gcc-16 g++-16 \
             build-essential \
