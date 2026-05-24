@@ -1,14 +1,4 @@
 <p align="center">
-  <img src="docs/assets/logo.png" width="170" alt="odin4 logo">
-</p>
-
-<h1 align="center">odin4</h1>
-
-<p align="center">
-  Modern Samsung firmware flashing tool for Linux
-</p>
-
-<p align="center">
 
   <a href="https://github.com/Llucs/odin4/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg">
@@ -25,6 +15,8 @@
   <a href="https://github.com/Llucs/odin4/actions/workflows/sast.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/sast.yml?label=codeql">
   </a>
+
+  <img src="https://img.shields.io/github/repo-size/Llucs/odin4">
 
   <img src="https://img.shields.io/badge/platform-linux-blue.svg">
   <img src="https://img.shields.io/badge/language-C%2FC%2B%2B-blue.svg">
