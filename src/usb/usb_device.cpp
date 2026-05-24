@@ -1398,7 +1398,8 @@ auto UsbDevice::odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool {
     {
         char zlp_buf[64];
         int actual = 0;
-        bulk_read_once(zlp_buf, sizeof(zlp_buf), &actual, 100);
+        libusb_bulk_transfer(handle, endpoint_in, reinterpret_cast<unsigned char*>(zlp_buf),
+                             static_cast<int>(sizeof(zlp_buf)), &actual, 100);
     }
 
     if (!odin_command(0x65, 0x03, nullptr, 0, rsp, 5000)) {
