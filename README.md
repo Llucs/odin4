@@ -1,44 +1,46 @@
-<p align="center">
-  <img src="docs/assets/logo.png" width="170" alt="odin4 logo">
-</p>
+<p align="center">  
+  <img src="docs/assets/logo.png" width="170" alt="odin4 logo">  
+</p>  
+  
+<h1 align="center">odin4</h1>  
+  
+<p align="center">  
+  Modern Samsung firmware flashing tool for Linux  
+</p>  
+  
+<p align="center">  
+  
+  <a href="https://github.com/Llucs/odin4/blob/main/LICENSE">  
+    <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg">  
+  </a>  
+  
+  <a href="https://securityscorecards.dev/viewer/?uri=github.com/Llucs/odin4">  
+    <img src="https://api.securityscorecards.dev/projects/github.com/Llucs/odin4/badge">  
+  </a>  
+  
+  <a href="https://github.com/Llucs/odin4/actions/workflows/build.yml">  
+    <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/build.yml?label=build">  
+  </a>  
+  
+  <a href="https://github.com/Llucs/odin4/actions/workflows/sast.yml">  
+    <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/sast.yml?label=codeql">  
+  </a>  
+  
+  <img src="https://img.shields.io/badge/platform-linux-blue.svg">  
+  <img src="https://img.shields.io/badge/language-C%2FC%2B%2B-blue.svg">  
+  
+  <img src="https://img.shields.io/github/v/release/Llucs/odin4?display_name=tag&include_prereleases&sort=semver&style=flat" alt="GitHub release (tag)">  
+  <img src="https://img.shields.io/github/release-date/Llucs/odin4" alt="GitHub release date">  
+  
+  <img src="https://img.shields.io/github/stars/Llucs/odin4">  
+  <img src="https://img.shields.io/github/downloads/Llucs/odin4/total">  
 
-<h1 align="center">odin4</h1>
-
-<p align="center">
-  Modern Samsung firmware flashing tool for Linux
-</p>
-
-<p align="center">
-
-  <a href="https://github.com/Llucs/odin4/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg">
-  </a>
-
-  <a href="https://securityscorecards.dev/viewer/?uri=github.com/Llucs/odin4">
-    <img src="https://api.securityscorecards.dev/projects/github.com/Llucs/odin4/badge">
-  </a>
-
-  <a href="https://github.com/Llucs/odin4/actions/workflows/build.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/build.yml?label=build">
-  </a>
-
-  <a href="https://github.com/Llucs/odin4/actions/workflows/sast.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/Llucs/odin4/sast.yml?label=codeql">
-  </a>
-
-  <img src="https://img.shields.io/badge/platform-linux-blue.svg">
-  <img src="https://img.shields.io/badge/language-C%2FC%2B%2B-blue.svg">
-
-  <img src="https://img.shields.io/github/v/release/Llucs/odin4?display_name=tag&include_prereleases&sort=semver&style=flat" alt="GitHub release (tag)">
-  <img src="https://img.shields.io/github/release-date/Llucs/odin4" alt="GitHub release date">
-
-  <img src="https://img.shields.io/github/stars/Llucs/odin4">
-  <img src="https://img.shields.io/github/downloads/Llucs/odin4/total">
-
-  <a href="https://t.me/odin4updates">
-    <img src="https://img.shields.io/badge/telegram-updates-blue.svg">
-  </a>
-
+  <img src="https://img.shields.io/github/repo-size/Llucs/odin4">  
+  
+  <a href="https://t.me/odin4updates">  
+    <img src="https://img.shields.io/badge/telegram-updates-blue.svg">  
+  </a>  
+  
 </p>
 
 ---
