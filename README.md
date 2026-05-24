@@ -236,7 +236,7 @@ If odin4 reports `LIBUSB_ERROR_ACCESS` during operation, it indicates a permissi
     ```
 3.  **Reconnect your device**: Unplug and then re-plug your Samsung device (in Download Mode) to apply the new permissions.
 
-This rule specifically targets known Samsung Download Mode USB Vendor IDs (`04e8`) and Product IDs (`6601`, `685d`, `68c3`) to grant appropriate access.
+This rule specifically targets known Samsung Download Mode USB Vendor IDs (`04e8`) and Product IDs (`6601`, `685d`, `68c3`, `68ef`, `4eee`, `4eef`) to grant appropriate access.
 
 ## Project Status
 

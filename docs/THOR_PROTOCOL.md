@@ -51,9 +51,15 @@ The following table lists the identified packet types used within the Thor proto
 | `THOR_PACKET_RECEIVE_FILE_PART` | `0x000A`              | Acknowledgment of file part reception.          |
 | `THOR_PACKET_CONTROL`      | `0x000B`              | Control commands (e.g., Reboot).                |
 
+> **Note on Protocol Versions:** Sections 3 and 4–8 describe two distinct but related protocols.
+> **Section 3** defines the **Thor** packet types (`0x0001`–`0x000B`) used in modern Samsung devices.
+> **Sections 4–8** document the **Odin legacy** command protocol (`0x64`–`0x69`), an older binary
+> command format used by earlier bootloaders. The odin4 tool auto-detects which protocol the
+> device speaks after the initial handshake.
+
 ## 4. Session Management
 
-Session management within the Thor protocol involves initiating and terminating communication sessions, negotiating protocol versions, and configuring transfer parameters.
+Session management within the Odin legacy protocol involves initiating and terminating communication sessions, negotiating protocol versions, and configuring transfer parameters.
 
 ### 4.1. Session Initiation (`0x64`)
 
@@ -135,7 +141,7 @@ This command informs the device about the total size of the data that will be tr
 | `0x67`        | 32-bit Integer | Packet type.                                    |
 | `0x00`        | 32-bit Integer | Status code (0 = Success).                      |
 
-## 5. Partition Information Table (PIT)
+## 5. Partition Information Table (PIT) [Odin Legacy]
 
 The Partition Information Table (PIT) file is a critical component that describes the storage layout of the device, defining partitions and their attributes.
 
@@ -190,7 +196,7 @@ A PIT file begins with a 28-byte header, followed by a variable number of 132-by
 3.  **Send PIT Data**: The raw buffer of the PIT file is transferred to the device.
 4.  **End PIT Flash**: The host sends `0x65` with command `0x03` to signal the completion of the flash operation.
 
-## 6. File Transfer (Flashing)
+## 6. File Transfer (Flashing) [Odin Legacy]
 
 Firmware file transfers (`0x66`) are structured into sequences, with each sequence further divided into smaller parts.
 
@@ -282,9 +288,9 @@ After all parts of a sequence have been transferred, the host must signal the en
 | `0x66`        | 32-bit Integer | Packet type.                                    |
 | `0x00`        | 32-bit Integer | Status code.                                    |
 
-## 7. Device Information
+## 7. Device Information [Odin Legacy]
 
-The Thor protocol facilitates the extraction of detailed device information (`0x69`).
+The Odin legacy protocol facilitates the extraction of detailed device information (`0x69`).
 
 ### 7.1. Information Structure
 
@@ -322,7 +328,7 @@ Device information is structured with a header followed by arrays of location an
 *   **Dump Block (`0x01`)**: Requests a 500-byte block by passing the block index. The device responds with the raw data for that block.
 *   **End Dump (`0x02`)**: Terminates the information extraction process.
 
-## 8. Error Handling
+## 8. Error Handling [Odin Legacy]
 
 In the event of an error during any operation, the device signals the failure by setting the first byte of its response to `0xFF`. The specific error code is then provided as a 32-bit integer at offset 4 of the response.
 

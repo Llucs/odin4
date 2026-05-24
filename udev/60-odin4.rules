@@ -1,4 +1,7 @@
-# Samsung Download Mode devices (historical IDs; based on public Heimdall udev rules)
+# Samsung Download Mode devices (based on public Heimdall udev rules and community reports)
 SUBSYSTEM=="usb", ATTR{idVendor}=="04e8", ATTR{idProduct}=="6601", MODE="0660", TAG+="uaccess", GROUP="plugdev"
 SUBSYSTEM=="usb", ATTR{idVendor}=="04e8", ATTR{idProduct}=="685d", MODE="0660", TAG+="uaccess", GROUP="plugdev"
 SUBSYSTEM=="usb", ATTR{idVendor}=="04e8", ATTR{idProduct}=="68c3", MODE="0660", TAG+="uaccess", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTR{idVendor}=="04e8", ATTR{idProduct}=="68ef", MODE="0660", TAG+="uaccess", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTR{idVendor}=="04e8", ATTR{idProduct}=="4eee", MODE="0660", TAG+="uaccess", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTR{idVendor}=="04e8", ATTR{idProduct}=="4eef", MODE="0660", TAG+="uaccess", GROUP="plugdev"

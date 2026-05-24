@@ -105,6 +105,25 @@ Retrieves the version string of the Odin4 library.
 -   **Parameters**: None
 -   **Returns**: `const char*` - A C-style string representing the library's version.
 
+#### `void odin4_set_log_callback(OdinLogCallback callback)`
+Sets a custom callback function to receive log messages from the library. This allows integrators to route odin4's log output to their own logging system instead of the default console output.
+
+-   **Parameters**: `callback` - A function pointer of type `OdinLogCallback`. Pass `nullptr` to reset to the default console logger.
+-   **Returns**: `void`
+
+```cpp
+typedef void (*OdinLogCallback)(int level, const char* message);
+```
+
+The `level` parameter uses the following values:
+| Value | Level    |
+| :---- | :------- |
+| 0     | Error    |
+| 1     | Warning  |
+| 2     | Info     |
+| 3     | Verbose  |
+| 4     | Debug    |
+
 ## Usage Example
 
 The following C++ example demonstrates how to initialize the library, list devices, and perform a flashing operation (or dry-run).
@@ -160,6 +179,12 @@ int main() {
 
 To compile an application that uses the Odin4 library, you will typically need to include the header directory and link against the `libodin4` library. Assuming `libodin4.so` and `odin4.h` are in `lib/` and `include/odin4/` relative to your project, respectively:
 
+**Shared library (`libodin4.so`):**
+```bash
+g++ my_app.cpp -o my_app -I./include -L./lib -lodin4 -lusb-1.0
+```
+
+**Static library (`libodin4.a`):**
 ```bash
 g++ my_app.cpp -o my_app -I./include -L./lib -lodin4 -lusb-1.0 -lcryptopp -lpthread -ldl
 ```
@@ -168,5 +193,5 @@ g++ my_app.cpp -o my_app -I./include -L./lib -lodin4 -lusb-1.0 -lcryptopp -lpthr
 -   `-L./lib`: Specifies the directory containing `libodin4.so` or `libodin4.a`.
 -   `-lodin4`: Links against the Odin4 library.
 -   `-lusb-1.0`: Links against the libusb-1.0 library.
--   `-lcryptopp`: Links against the Crypto++ library.
+-   `-lcryptopp`: Links against the Crypto++ library (only needed when linking against the static library).
 -   `-lpthread -ldl`: Additional system libraries that might be required for linking, especially on Linux systems with shared libraries.
