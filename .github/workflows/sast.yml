@@ -34,7 +34,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            gcc-14 g++-14 \
+            gcc-16 g++-16 \
             build-essential \
             cmake \
             ninja-build \
@@ -48,11 +48,11 @@ jobs:
         with:
           languages: ${{ matrix.language }}
 
-      - name: Configure CMake (GCC 14)
+      - name: Configure CMake (GCC 16)
         run: |
           cmake -B build -G Ninja \
-            -DCMAKE_C_COMPILER=gcc-14 \
-            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_C_COMPILER=gcc-16 \
+            -DCMAKE_CXX_COMPILER=g++-16 \
             -DCMAKE_CXX_STANDARD=23
 
       - name: Build project
