@@ -122,7 +122,9 @@ auto UsbDevice::bulk_write_all(const void* data, size_t size, int timeout_ms) ->
         }
         if (offset == size) {
             if (odin_supports_zlp && endpoint_out_max_packet != 0 && (size % endpoint_out_max_packet) == 0) {
-                send_zlp(timeout_ms);
+                if (!send_zlp(timeout_ms)) {
+                    odin_supports_zlp = false;
+                }
             }
             return true;
         }
@@ -1229,11 +1231,11 @@ auto UsbDevice::odin_begin_session() -> bool {
     version = static_cast<uint16_t>(le16toh(version));
 
     if (version <= 1) {
-        odin_flash_timeout_ms = 60000;
+        odin_flash_timeout_ms = 30000;
         odin_flash_packet_size = 131072;
         odin_flash_sequence_count = 240;
     } else {
-        odin_flash_timeout_ms = 180000;
+        odin_flash_timeout_ms = 120000;
         odin_flash_packet_size = 1048576;
         odin_flash_sequence_count = 30;
 
@@ -1338,13 +1340,13 @@ auto UsbDevice::odin_end_sequence_flash(const PitEntry& pit_entry, uint32_t real
     if (pit_entry.binary_type == 1) {
         w32(0, 0x01);
         w32(4, real_size);
-        w32(8, 0U);
+        w32(8, pit_entry.binary_type);
         w32(12, pit_entry.device_type);
         w32(16, (is_last != 0U) ? 1U : 0U);
     } else {
         w32(0, 0x00);
         w32(4, real_size);
-        w32(8, 0U);
+        w32(8, pit_entry.binary_type);
         w32(12, pit_entry.device_type);
         w32(16, pit_entry.identifier);
         w32(20, (is_last != 0U) ? 1U : 0U);
@@ -1391,6 +1393,12 @@ auto UsbDevice::odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool {
         size_t off = static_cast<size_t>(i) * block;
         size_t copy = std::min({rsp.size(), pit_out.size() - off, static_cast<size_t>(block)});
         std::memcpy(pit_out.data() + off, rsp.data(), copy);
+    }
+
+    {
+        char zlp_buf[64];
+        int actual = 0;
+        bulk_read_once(zlp_buf, sizeof(zlp_buf), &actual, 100);
     }
 
     if (!odin_command(0x65, 0x03, nullptr, 0, rsp, 5000)) {
