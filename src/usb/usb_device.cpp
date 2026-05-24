@@ -1071,6 +1071,7 @@ auto UsbDevice::end_file_transfer(uint32_t partition_id) -> bool {
 auto UsbDevice::send_control(uint32_t control_type) -> bool {
     if (protocol_mode == ProtocolMode::OdinLegacy) {
         if (control_type == THOR_CONTROL_REBOOT) {
+            (void) odin_end_session();
             return odin_reboot();
         }
         if (control_type == THOR_CONTROL_REDOWNLOAD) {
@@ -1387,18 +1388,9 @@ auto UsbDevice::odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool {
             return false;
         }
 
-        int got = 0;
-        std::vector<unsigned char> data(block, 0);
-        if (!receive_packet(data.data(), data.size(), &got, false, data.size(), 5000)) {
-            return false;
-        }
-        if (got != static_cast<int>(data.size())) {
-            return false;
-        }
-
         size_t off = static_cast<size_t>(i) * block;
-        size_t copy = std::min(static_cast<size_t>(got), pit_out.size() - off);
-        std::memcpy(pit_out.data() + off, data.data(), copy);
+        size_t copy = std::min({rsp.size(), pit_out.size() - off, static_cast<size_t>(block)});
+        std::memcpy(pit_out.data() + off, rsp.data(), copy);
     }
 
     if (!odin_command(0x65, 0x03, nullptr, 0, rsp, 5000)) {
