@@ -32,7 +32,7 @@
 #define USB_TIMEOUT_BULK 120000
 #define USB_TIMEOUT_CONTROL 10000
 
-static constexpr std::array<uint16_t, 3> SAMSUNG_DOWNLOAD_PIDS{{0x6601, 0x685D, 0x68C3}};
+static constexpr std::array<uint16_t, 6> SAMSUNG_DOWNLOAD_PIDS{{0x6601, 0x685D, 0x68C3, 0x68EF, 0x4EEE, 0x4EEF}};
 
 struct UsbSelectionCriteria {
     bool has_vid = false;
