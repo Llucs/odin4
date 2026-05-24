@@ -250,6 +250,12 @@ odin4 is licensed under the **Apache License 2.0**.
 
 See the [LICENSE](./LICENSE) file for full details.
 
+## Show Your Support
+
+If you find odin4 useful, please consider giving us a star ⭐ on GitHub! It helps increase visibility and motivates us to continue improving the module.
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Llucs/odin4&type=Date)](https://www.star-history.com/#Llucs/odin4&Date)
+
 ## Disclaimer
 
 Flashing firmware always carries inherent risks. This tool is provided **as-is**, without any warranties of any kind, express or implied. The developers are not responsible for any damage or loss of data that may occur from its use. Use at your own risk.
