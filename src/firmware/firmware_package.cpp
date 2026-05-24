@@ -670,6 +670,47 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
     return true;
 }
 
+static auto parse_lz4_frame_header(std::ifstream& file, uint64_t& content_size, uint32_t& max_block_size) -> bool {
+    content_size = 0;
+    max_block_size = 0;
+
+    unsigned char magic[4];
+    if (!read_exact(file, magic, 4)) return false;
+    if (magic[0] != 0x04 || magic[1] != 0x22 || magic[2] != 0x4D || magic[3] != 0x18) {
+        log_error("Invalid LZ4 magic");
+        return false;
+    }
+
+    unsigned char flg_bd[2];
+    if (!read_exact(file, flg_bd, 2)) return false;
+
+    unsigned char flg = flg_bd[0];
+    unsigned char bd = flg_bd[1];
+    max_block_size = (bd >> 4) & 0x07;
+    if (max_block_size == 4) max_block_size = 65536;
+    else if (max_block_size == 5) max_block_size = 262144;
+    else if (max_block_size == 6) max_block_size = 1048576;
+    else if (max_block_size == 7) max_block_size = 4194304;
+    else return false;
+
+    if ((flg & 0x08u)) {
+        unsigned char cs[8];
+        if (!read_exact(file, cs, 8)) return false;
+        for (int i = 0; i < 8; ++i)
+            content_size |= static_cast<uint64_t>(cs[i]) << (i * 8);
+    }
+
+    if ((flg & 0x01u)) {
+        unsigned char dict[4];
+        if (!read_exact(file, dict, 4)) return false;
+    }
+
+    unsigned char hc[1];
+    if (!read_exact(file, hc, 1)) return false;
+
+    return true;
+}
+
 auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const PitTable& pit_table, bool do_flash,
                       bool allow_unknown) -> ExitCode {
     // End-to-end TAR processing entry point:
@@ -961,12 +1002,123 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
                     " (ID " + std::to_string(pit_entry->identifier) + ")");
 
         if (is_lz4) {
-            if (usb_device.is_odin_legacy() && do_flash) {
-                log_error("LZ4 images are not supported in Odin legacy mode");
-                return ExitCode::Protocol;
-            }
-            if (!process_lz4_streaming(file, data_size, usb_device, filename, is_large, do_flash)) {
-                return do_flash ? ExitCode::Protocol : ExitCode::Firmware;
+            if (usb_device.is_odin_legacy() && do_flash &&
+                usb_device.is_compressed_download_supported()) {
+                const std::streampos lz4_entry = file.tellg();
+                if (lz4_entry < 0) {
+                    log_error("Failed to get file position for LZ4 entry: " + filename);
+                    return ExitCode::Firmware;
+                }
+                uint64_t content_size = 0;
+                uint32_t max_block_size = 0;
+                if (!parse_lz4_frame_header(file, content_size, max_block_size)) {
+                    log_error("Failed to parse LZ4 frame header for " + filename);
+                    return ExitCode::Firmware;
+                }
+                const std::streampos data_start = file.tellg();
+                if (data_start < 0) {
+                    log_error("Failed to get data start position for " + filename);
+                    return ExitCode::Firmware;
+                }
+                uint64_t header_bytes = static_cast<uint64_t>(data_start - lz4_entry);
+                if (content_size == 0 || header_bytes >= data_size) {
+                    log_error("Invalid LZ4 content or compressed size for " + filename);
+                    return ExitCode::Firmware;
+                }
+                uint64_t compressed_data_size = data_size - header_bytes;
+                if (!usb_device.flash_partition_stream_compressed(file, compressed_data_size, *pit_entry,
+                                                                   is_large, content_size, max_block_size)) {
+                    return ExitCode::Protocol;
+                }
+                file.clear();
+                file.seekg(lz4_entry);
+                file.seekg(static_cast<std::streamoff>(data_size), std::ios::cur);
+            } else if (usb_device.is_odin_legacy() && do_flash) {
+                const std::streampos lz4_entry = file.tellg();
+                char tmp_path[] = "/tmp/odin4_decomp_XXXXXX";
+                int tmp_fd = mkstemp(tmp_path);
+                if (tmp_fd < 0) {
+                    log_error("Failed to create temp file for LZ4 decompression");
+                    return ExitCode::Firmware;
+                }
+
+                LZ4F_decompressionContext_t dctx;
+                LZ4F_errorCode_t lz4_err = LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
+                if (LZ4F_isError(lz4_err) != 0U) {
+                    log_error(std::string("LZ4 context creation failed: ") + LZ4F_getErrorName(lz4_err));
+                    close(tmp_fd);
+                    unlink(tmp_path);
+                    return ExitCode::Firmware;
+                }
+
+                size_t in_buf_sz = 1024u * 1024u;
+                size_t out_buf_sz = 4u * 1024u * 1024u;
+                std::vector<unsigned char> in_buf(in_buf_sz);
+                std::vector<unsigned char> out_buf(out_buf_sz);
+                uint64_t remaining = data_size;
+                uint64_t total_decompressed = 0;
+                bool frame_ended = false;
+
+                while (remaining > 0 && !frame_ended) {
+                    auto to_read = static_cast<size_t>(std::min<uint64_t>(in_buf_sz, remaining));
+                    file.read(reinterpret_cast<char*>(in_buf.data()), static_cast<std::streamsize>(to_read));
+                    size_t src_sz = static_cast<size_t>(file.gcount());
+                    if (src_sz == 0) break;
+                    remaining -= src_sz;
+                    size_t src_off = 0;
+
+                    while (src_sz > 0 && !frame_ended) {
+                        size_t dst_sz = out_buf_sz;
+                        size_t src_consumed = src_sz;
+                        lz4_err = LZ4F_decompress(dctx, out_buf.data(), &dst_sz,
+                                                   in_buf.data() + src_off, &src_consumed, nullptr);
+                        if (LZ4F_isError(lz4_err) != 0U) {
+                            log_error(std::string("LZ4 decompression error for ") + filename + ": " +
+                                      LZ4F_getErrorName(lz4_err));
+                            LZ4F_freeDecompressionContext(dctx);
+                            close(tmp_fd);
+                            unlink(tmp_path);
+                            return ExitCode::Firmware;
+                        }
+                        if (dst_sz > 0) {
+                            write(tmp_fd, out_buf.data(), dst_sz);
+                            total_decompressed += dst_sz;
+                        }
+                        src_off += src_consumed;
+                        src_sz -= src_consumed;
+                        if (lz4_err == 0) frame_ended = true;
+                    }
+                }
+
+                LZ4F_freeDecompressionContext(dctx);
+                close(tmp_fd);
+
+                if (!frame_ended) {
+                    log_error("LZ4 frame not completed for " + filename);
+                    unlink(tmp_path);
+                    return ExitCode::Firmware;
+                }
+
+                std::ifstream tmp_file(tmp_path, std::ios::binary);
+                if (!tmp_file) {
+                    log_error("Failed to open decompressed temp file for " + filename);
+                    unlink(tmp_path);
+                    return ExitCode::Firmware;
+                }
+
+                bool flash_ok = usb_device.flash_partition_stream(tmp_file, total_decompressed, *pit_entry, is_large);
+                tmp_file.close();
+                unlink(tmp_path);
+
+                if (!flash_ok) return ExitCode::Protocol;
+
+                file.clear();
+                file.seekg(lz4_entry);
+                file.seekg(static_cast<std::streamoff>(data_size), std::ios::cur);
+            } else {
+                if (!process_lz4_streaming(file, data_size, usb_device, filename, is_large, do_flash)) {
+                    return do_flash ? ExitCode::Protocol : ExitCode::Firmware;
+                }
             }
         } else {
             if (do_flash) {

@@ -72,11 +72,15 @@ class UsbDevice {
     int odin_flash_packet_size = 1048576;
     int odin_flash_sequence_count = 30;
     bool odin_supports_zlp = true;
+    bool odin_supports_compressed_download = false;
 
     auto odin_legacy_handshake() -> bool;
     auto odin_begin_session() -> bool;
     auto odin_end_session() -> bool;
     auto odin_reboot() -> bool;
+    auto odin_request_file_flash_compressed() -> bool;
+    auto odin_request_sequence_flash_compressed(uint32_t aligned_size) -> bool;
+    auto odin_end_sequence_flash_compressed(const PitEntry& pit_entry, uint32_t real_size, uint32_t is_last) -> bool;
     auto odin_set_total_bytes(uint64_t total_bytes) -> bool;
     auto odin_reset_flash_count() -> bool;
     auto odin_request_file_flash() -> bool;
@@ -114,6 +118,9 @@ class UsbDevice {
     [[nodiscard]] auto is_odin_legacy() const -> bool {
         return protocol_mode == ProtocolMode::OdinLegacy;
     }
+    [[nodiscard]] auto is_compressed_download_supported() const -> bool {
+        return odin_supports_compressed_download;
+    }
     auto request_device_type() -> bool;
     auto begin_session() -> bool;
     auto end_session() -> bool;
@@ -121,6 +128,9 @@ class UsbDevice {
     auto receive_pit_table(PitTable& pit_table) -> bool;
     auto flash_partition_stream(std::istream& stream, uint64_t size, const PitEntry& pit_entry,
                                 bool large_partition) -> bool;
+    auto flash_partition_stream_compressed(std::istream& stream, uint64_t compressed_size, const PitEntry& pit_entry,
+                                           bool large_partition, uint64_t decompressed_size,
+                                           uint32_t max_block_size = 1048576) -> bool;
     auto send_file_part_chunk(const void* data, size_t size, uint32_t chunk_index,
                               bool large_partition = false) -> bool;
     auto send_file_part_header(uint64_t total_size) -> bool;

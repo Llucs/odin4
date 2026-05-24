@@ -1224,9 +1224,12 @@ auto UsbDevice::odin_begin_session() -> bool {
         return false;
     }
 
-    uint16_t version = 0;
-    std::memcpy(&version, rsp.data() + 6, sizeof(version));
-    version = static_cast<uint16_t>(le16toh(version));
+    uint32_t version_word = 0;
+    std::memcpy(&version_word, rsp.data() + 4, sizeof(version_word));
+    version_word = le32toh(version_word);
+
+    uint16_t version = static_cast<uint16_t>((version_word >> 16) & 0xFFFF);
+    odin_supports_compressed_download = (version_word & 0x8000u) != 0;
 
     if (version <= 1) {
         odin_flash_timeout_ms = 60000;
@@ -1356,6 +1359,56 @@ auto UsbDevice::odin_end_sequence_flash(const PitEntry& pit_entry, uint32_t real
         return false;
     }
     return odin_fail_check(rsp, "EndSequenceFlash", true);
+}
+
+auto UsbDevice::odin_request_file_flash_compressed() -> bool {
+    std::vector<unsigned char> rsp;
+    if (!odin_command(0x66, 0x05, nullptr, 0, rsp, USB_TIMEOUT_CONTROL)) {
+        return false;
+    }
+    return odin_fail_check(rsp, "RequestFileFlashCompressed", false);
+}
+
+auto UsbDevice::odin_request_sequence_flash_compressed(uint32_t aligned_size) -> bool {
+    std::vector<unsigned char> rsp;
+    uint32_t le_sz = h_to_le32(aligned_size);
+    if (!odin_command(0x66, 0x06, &le_sz, sizeof(le_sz), rsp, USB_TIMEOUT_CONTROL)) {
+        return false;
+    }
+    return odin_fail_check(rsp, "RequestSequenceFlashCompressed", false);
+}
+
+auto UsbDevice::odin_end_sequence_flash_compressed(const PitEntry& pit_entry, uint32_t decomp_size,
+                                                   uint32_t is_last) -> bool {
+    std::vector<unsigned char> rsp;
+    std::vector<unsigned char> payload(64, 0);
+
+    auto w32 = [&](size_t off, uint32_t v) {
+        uint32_t le = h_to_le32(v);
+        std::memcpy(payload.data() + off, &le, sizeof(le));
+    };
+
+    if (pit_entry.binary_type == 1) {
+        w32(0, 0x01);
+        w32(4, decomp_size);
+        w32(8, 0U);
+        w32(12, pit_entry.device_type);
+        w32(16, (is_last != 0U) ? 1U : 0U);
+    } else {
+        w32(0, 0x00);
+        w32(4, decomp_size);
+        w32(8, 0U);
+        w32(12, pit_entry.device_type);
+        w32(16, pit_entry.identifier);
+        w32(20, (is_last != 0U) ? 1U : 0U);
+        w32(24, 0U);
+        w32(28, 0U);
+    }
+
+    if (!odin_command(0x66, 0x07, payload.data(), 32, rsp, odin_flash_timeout_ms)) {
+        return false;
+    }
+    return odin_fail_check(rsp, "EndSequenceFlashCompressed", true);
 }
 
 auto UsbDevice::odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool {
@@ -1522,6 +1575,111 @@ auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
                 last_pct = pct;
             }
         }
+    }
+
+    return true;
+}
+
+auto UsbDevice::flash_partition_stream_compressed(std::istream& stream, uint64_t compressed_size,
+                                                   const PitEntry& pit_entry, bool large_partition,
+                                                   uint64_t decompressed_size, uint32_t max_block_size) -> bool {
+    (void) large_partition;
+
+    if (protocol_mode != ProtocolMode::OdinLegacy) {
+        return false;
+    }
+
+    if (!odin_request_file_flash_compressed()) {
+        return false;
+    }
+
+    const uint64_t sequence_bytes =
+        static_cast<uint64_t>(odin_flash_packet_size) * static_cast<uint64_t>(odin_flash_sequence_count);
+    if (sequence_bytes == 0) return false;
+
+    std::vector<unsigned char> part(static_cast<size_t>(odin_flash_packet_size), 0);
+
+    uint64_t comp_remaining = compressed_size;
+    uint64_t decomp_remaining = decompressed_size;
+    uint32_t expected_index = 0;
+    bool done = false;
+
+    while (!done && comp_remaining > 0) {
+        uint64_t seq_comp = 0;
+        uint64_t seq_decomp = 0;
+        std::vector<unsigned char> seq_buf;
+        seq_buf.reserve(static_cast<size_t>(sequence_bytes + 4096));
+
+        uint64_t comp_limit = std::min(comp_remaining, sequence_bytes);
+
+        while (comp_limit > 0 && !done) {
+            unsigned char hdr[4];
+            stream.read(reinterpret_cast<char*>(hdr), 4);
+            if (static_cast<size_t>(stream.gcount()) != 4) return false;
+
+            uint32_t block_sz = static_cast<uint32_t>(hdr[0]) | (static_cast<uint32_t>(hdr[1]) << 8) |
+                                (static_cast<uint32_t>(hdr[2]) << 16) | (static_cast<uint32_t>(hdr[3]) << 24);
+
+            if (block_sz == 0) {
+                seq_buf.insert(seq_buf.end(), hdr, hdr + 4);
+                seq_comp += 4;
+                comp_limit -= 4;
+                done = true;
+                break;
+            }
+
+            uint32_t payload = block_sz & 0x7FFFFFFFu;
+            if (4 + payload > comp_limit) {
+                stream.seekg(-4, std::ios::cur);
+                break;
+            }
+
+            comp_limit -= 4 + payload;
+            seq_buf.insert(seq_buf.end(), hdr, hdr + 4);
+
+            if (payload > 0) {
+                size_t old = seq_buf.size();
+                seq_buf.resize(old + payload);
+                stream.read(reinterpret_cast<char*>(seq_buf.data() + old), static_cast<std::streamsize>(payload));
+                if (static_cast<size_t>(stream.gcount()) != payload) return false;
+            }
+
+            seq_comp += 4 + payload;
+
+            uint64_t block_decomp = (block_sz & 0x80000000u)
+                                        ? static_cast<uint64_t>(payload)
+                                        : std::min<uint64_t>(static_cast<uint64_t>(max_block_size),
+                                                             decomp_remaining - seq_decomp);
+            seq_decomp += block_decomp;
+            comp_remaining -= 4 + payload;
+        }
+
+        if (seq_comp == 0) break;
+
+        uint32_t aligned = static_cast<uint32_t>(seq_comp);
+        if (aligned % odin_flash_packet_size != 0) {
+            aligned += odin_flash_packet_size - (aligned % odin_flash_packet_size);
+        }
+        seq_buf.resize(aligned, 0);
+
+        if (!odin_request_sequence_flash_compressed(aligned)) return false;
+
+        uint32_t parts = aligned / static_cast<uint32_t>(odin_flash_packet_size);
+        for (uint32_t j = 0; j < parts; ++j) {
+            std::memcpy(part.data(), seq_buf.data() + j * static_cast<size_t>(odin_flash_packet_size),
+                        static_cast<size_t>(odin_flash_packet_size));
+            if (!odin_send_file_part_and_ack(part.data(), static_cast<size_t>(odin_flash_packet_size),
+                                             expected_index++)) {
+                return false;
+            }
+        }
+
+        bool is_last = done || (comp_remaining == 0);
+        uint32_t actual_decomp = static_cast<uint32_t>(std::min<uint64_t>(seq_decomp, decomp_remaining));
+        if (!odin_end_sequence_flash_compressed(pit_entry, actual_decomp, is_last ? 1U : 0U)) {
+            return false;
+        }
+        decomp_remaining -= actual_decomp;
     }
 
     return true;
