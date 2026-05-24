@@ -8,13 +8,19 @@ on:
         required: true
         default: "Analyze the repository, detect real issues, apply minimal fixes, create a branch, commit changes, push them, and open a pull request."
 
+permissions:
+  contents: read
+
 jobs:
   openhands:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231 # v6
+        uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231
 
       - name: Send task to OpenHands
         env:
