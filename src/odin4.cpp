@@ -202,17 +202,13 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
         const std::vector<std::pair<std::string, std::string>> archives = {
             {"BL", cfg.bootloader}, {"AP", cfg.ap}, {"CP", cfg.cp}, {"CSC", cfg.csc}, {"UMS", cfg.ums}};
 
-        if (usb.is_odin_legacy()) {
+        {
             uint64_t total_bytes = 0;
             for (const auto& item : archives) {
-                if (item.second.empty()) {
-                    continue;
-                }
+                if (item.second.empty()) continue;
                 std::error_code ec;
                 auto sz = std::filesystem::file_size(item.second, ec);
-                if (!ec) {
-                    total_bytes += sz;
-                }
+                if (!ec) total_bytes += sz;
             }
             if (total_bytes > 0 && !usb.notify_total_bytes(total_bytes)) {
                 log_error("Failed to send total bytes to device.");
@@ -240,14 +236,14 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
 
     if (!cfg.dry_run) {
         if (cfg.reboot) {
-            if (!usb.send_control(THOR_CONTROL_REBOOT)) {
+            if (!usb.send_control(ODIN_CONTROL_REBOOT)) {
                 log_error("Failed to send reboot command.");
                 usb.end_session();
                 return OdinExitCode::Protocol;
             }
         }
         if (cfg.redownload) {
-            if (!usb.send_control(THOR_CONTROL_REDOWNLOAD)) {
+            if (!usb.send_control(ODIN_CONTROL_REDOWNLOAD)) {
                 log_error("Failed to send redownload command.");
                 usb.end_session();
                 return OdinExitCode::Protocol;
