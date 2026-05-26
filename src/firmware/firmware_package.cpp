@@ -29,6 +29,7 @@
 #include <limits>
 #include <format>
 #include <print>
+#include <filesystem>
 #include <lz4frame.h>
 
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
@@ -341,24 +342,13 @@ auto check_md5_signature(const std::string& file_path) -> bool {
     return vr == ExitCode::Success;
 }
 
-// Streams a single LZ4-compressed payload from the current archive/file position.
-// High-level flow:
-//  1) Validate stream position and initialize LZ4 frame decompression context.
-//  2) Read compressed input in chunks, decompress incrementally, and emit output blocks.
-//  3) If do_flash is true, write decompressed output to the target USB partition;
-//     otherwise consume/validate the stream without flashing.
-//  4) Stop at LZ4 frame end and ensure we do not read beyond compressed_size.
-// Returns true only when the frame is processed successfully and all required writes succeed.
-auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDevice& usb_device,
-                           const std::string& filename, bool large_partition, bool do_flash) -> bool {
-    // Record the beginning of this compressed entry so size accounting can be bounded.
+auto decompress_lz4_to_file(std::ifstream& file, uint64_t compressed_size, const std::string& out_path) -> bool {
     const std::streampos entry_start = file.tellg();
     if (entry_start < 0) {
-        log_error("Unexpected end of file during LZ4 streaming.");
+        log_error("Unexpected end of file during LZ4 decompression.");
         return false;
     }
 
-    // Initialize decompression context once; it is reused for the full frame stream.
     LZ4F_decompressionContext_t dctx;
     LZ4F_errorCode_t err = LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
     if (LZ4F_isError(err) != 0U) {
@@ -366,14 +356,17 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
         return false;
     }
 
-    // Ensure decompression context is always released on every return path.
     struct DctxCleanup {
         LZ4F_decompressionContext_t ctx;
         explicit DctxCleanup(LZ4F_decompressionContext_t c) : ctx(c) {}
-        ~DctxCleanup() {
-            LZ4F_freeDecompressionContext(ctx);
-        }
+        ~DctxCleanup() { LZ4F_freeDecompressionContext(ctx); }
     } cleanup(dctx);
+
+    std::ofstream out(out_path, std::ios::binary);
+    if (!out) {
+        log_error("Failed to create temporary file: " + out_path);
+        return false;
+    }
 
     size_t in_buf_size = 1024 * 1024;
     size_t out_buf_size = 4 * 1024 * 1024;
@@ -387,34 +380,28 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 
     uint64_t remaining_compressed = compressed_size;
     uint64_t total_uncompressed = 0;
-    uint32_t chunk_index = 0;
 
-    const bool show_progress = static_cast<int>(get_log_level()) >= static_cast<int>(LogLevel::Info);
-    int last_percent = -1;
-
-    // Read some bytes for frame info.
-    std::streampos start_pos = entry_start;
     const size_t header_read_size = static_cast<size_t>(std::min<uint64_t>(1024, compressed_size));
     std::vector<unsigned char> header_buf(header_read_size);
     file.read(reinterpret_cast<char*>(header_buf.data()), static_cast<std::streamsize>(header_read_size));
     if (static_cast<size_t>(file.gcount()) != header_read_size) {
-        log_error("Failed to read LZ4 header for " + filename);
+        log_error("Failed to read LZ4 header");
         return false;
     }
-    file.seekg(start_pos);
+    file.seekg(entry_start);
 
     LZ4F_frameInfo_t frame_info;
     size_t consumed = header_read_size;
     err = LZ4F_getFrameInfo(dctx, &frame_info, header_buf.data(), &consumed);
     if (LZ4F_isError(err) != 0U) {
-        log_error("Failed to get LZ4 frame info for " + filename + ": " + std::string(LZ4F_getErrorName(err)));
+        log_error("Failed to get LZ4 frame info: " + std::string(LZ4F_getErrorName(err)));
         return false;
     }
 
     uint64_t uncompressed_size = frame_info.contentSize;
 
     if (uncompressed_size == 0) {
-        log_info("LZ4 frame for " + filename + " does not include uncompressed size; scanning to determine size.");
+        log_info("LZ4 frame does not include uncompressed size; scanning to determine size.");
         LZ4F_decompressionContext_t scan_ctx;
         LZ4F_errorCode_t scan_err = LZ4F_createDecompressionContext(&scan_ctx, LZ4F_VERSION);
         if (LZ4F_isError(scan_err) != 0U) {
@@ -426,7 +413,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
         std::streampos scan_start = file.tellg();
         if (scan_start < 0) {
             LZ4F_freeDecompressionContext(scan_ctx);
-            log_error("Unexpected end of file during LZ4 streaming.");
+            log_error("Unexpected end of file during LZ4 decompression.");
             return false;
         }
 
@@ -440,8 +427,8 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
                 file.read(reinterpret_cast<char*>(in_buf.data()), static_cast<std::streamsize>(to_read));
                 const auto read = static_cast<size_t>(file.gcount());
                 if (read == 0) {
-                    log_error("Unexpected end of file during LZ4 streaming.");
                     LZ4F_freeDecompressionContext(scan_ctx);
+                    log_error("Unexpected end of file during LZ4 decompression.");
                     return false;
                 }
                 src_offset = 0;
@@ -452,20 +439,17 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
             while (src_size > 0 && !frame_ended) {
                 size_t dst_sz = out_buf_size;
                 size_t src_consumed = src_size;
-                scan_err = LZ4F_decompress(scan_ctx, out_buf.data(), &dst_sz, in_buf.data() + src_offset, &src_consumed,
-                                           nullptr);
+                scan_err = LZ4F_decompress(scan_ctx, out_buf.data(), &dst_sz, in_buf.data() + src_offset, &src_consumed, nullptr);
                 if (LZ4F_isError(scan_err) != 0U) {
-                    log_error("LZ4 scan decompression error for " + filename + ": " +
-                              std::string(LZ4F_getErrorName(scan_err)));
                     LZ4F_freeDecompressionContext(scan_ctx);
+                    log_error("LZ4 scan decompression error: " + std::string(LZ4F_getErrorName(scan_err)));
                     return false;
                 }
 
                 if (dst_sz != 0) {
                     if (uncompressed_size > (std::numeric_limits<uint64_t>::max() - dst_sz)) {
-                        log_error("LZ4 scan decompression error for " + filename + ": " +
-                                  std::string(LZ4F_getErrorName(scan_err)));
                         LZ4F_freeDecompressionContext(scan_ctx);
+                        log_error("LZ4 scan decompression overflow");
                         return false;
                     }
                     uncompressed_size += dst_sz;
@@ -473,16 +457,14 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 
                 if (src_consumed == 0 && dst_sz == 0 && scan_err != 0) {
                     if (scan_remaining == 0) {
-                        log_error("LZ4 scan decompression error for " + filename + ": " +
-                                  std::string(LZ4F_getErrorName(scan_err)));
                         LZ4F_freeDecompressionContext(scan_ctx);
+                        log_error("LZ4 scan decompression made no progress");
                         return false;
                     }
-
                     if (src_offset != 0) {
                         if (src_offset + src_size > in_buf_size) {
-                            log_error("LZ4 scan buffer overflow for " + filename);
                             LZ4F_freeDecompressionContext(scan_ctx);
+                            log_error("LZ4 scan buffer overflow");
                             return false;
                         }
                         std::memmove(in_buf.data(), in_buf.data() + src_offset, src_size);
@@ -491,16 +473,15 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
                     const size_t space = in_buf_size - src_size;
                     const auto to_read = static_cast<size_t>(std::min<uint64_t>(space, scan_remaining));
                     if (to_read == 0) {
-                        log_error("LZ4 scan decompression error for " + filename + ": " +
-                                  std::string(LZ4F_getErrorName(scan_err)));
                         LZ4F_freeDecompressionContext(scan_ctx);
+                        log_error("LZ4 scan decompression made no progress");
                         return false;
                     }
                     file.read(reinterpret_cast<char*>(in_buf.data() + src_size), static_cast<std::streamsize>(to_read));
                     const auto read = static_cast<size_t>(file.gcount());
                     if (read == 0) {
-                        log_error("Unexpected end of file during LZ4 streaming.");
                         LZ4F_freeDecompressionContext(scan_ctx);
+                        log_error("Unexpected end of file during LZ4 decompression.");
                         return false;
                     }
                     src_size += read;
@@ -510,51 +491,36 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
 
                 src_offset += src_consumed;
                 src_size -= src_consumed;
-                if (scan_err == 0) {
-                    frame_ended = true;
-                }
+                if (scan_err == 0) frame_ended = true;
             }
         }
 
         if (!frame_ended) {
-            log_error(std::format("LZ4 scan decompression error for {}: {}", filename, LZ4F_getErrorName(scan_err)));
             LZ4F_freeDecompressionContext(scan_ctx);
+            log_error("LZ4 scan decompression did not find frame end");
             return false;
         }
 
         if (scan_remaining > 0) {
             if (scan_remaining > static_cast<uint64_t>(std::numeric_limits<std::streamoff>::max())) {
-                log_error("Unexpected end of file during LZ4 streaming.");
                 LZ4F_freeDecompressionContext(scan_ctx);
+                log_error("Unexpected end of file during LZ4 decompression.");
                 return false;
             }
             file.seekg(static_cast<std::streamoff>(scan_remaining), std::ios::cur);
-            if (!file) {
-                log_error("Unexpected end of file during LZ4 streaming.");
-                LZ4F_freeDecompressionContext(scan_ctx);
-                return false;
-            }
         }
 
         LZ4F_freeDecompressionContext(scan_ctx);
         file.clear();
         file.seekg(scan_start);
         if (!file) {
-            log_error(std::format("Failed to rewind file after LZ4 size scan for {}", filename));
+            log_error("Failed to rewind file after LZ4 size scan");
             return false;
         }
         remaining_compressed = compressed_size;
-        log_verbose(std::format("LZ4 size scan complete for {}: {} bytes", filename, uncompressed_size));
+        log_verbose(std::format("LZ4 size scan complete: {} bytes", uncompressed_size));
     }
 
-    if (do_flash) {
-        if (!usb_device.send_file_part_header(uncompressed_size)) {
-            return false;
-        }
-    }
-
-    // Reset the decompression context to ensure we can start decoding from the
-    // beginning of the frame after calling LZ4F_getFrameInfo().
     LZ4F_resetDecompressionContext(dctx);
 
     size_t src_offset = 0;
@@ -566,7 +532,7 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
             file.read(reinterpret_cast<char*>(in_buf.data()), static_cast<std::streamsize>(to_read));
             src_size = static_cast<size_t>(file.gcount());
             if (src_size == 0) {
-                log_error("Unexpected end of file during LZ4 streaming.");
+                log_error("Unexpected end of file during LZ4 decompression.");
                 return false;
             }
             remaining_compressed -= src_size;
@@ -578,35 +544,33 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
             size_t src_consumed = src_size;
             err = LZ4F_decompress(dctx, out_buf.data(), &dst_size, in_buf.data() + src_offset, &src_consumed, nullptr);
             if (LZ4F_isError(err) != 0U) {
-                log_error(std::format("LZ4 decompression error for {}: {}", filename, LZ4F_getErrorName(err)));
+                log_error(std::format("LZ4 decompression error: {}", LZ4F_getErrorName(err)));
                 return false;
             }
+
             if (src_consumed == 0 && dst_size == 0 && err != 0) {
                 if (remaining_compressed == 0) {
-                    log_error(std::format("LZ4 decompression made no progress for {}", filename));
+                    log_error("LZ4 decompression made no progress");
                     return false;
                 }
-
                 if (src_offset != 0) {
                     if (src_offset + src_size > in_buf_size) {
-                        log_error(std::format("LZ4 buffer overflow for {}", filename));
+                        log_error("LZ4 buffer overflow");
                         return false;
                     }
                     std::memmove(in_buf.data(), in_buf.data() + src_offset, src_size);
                     src_offset = 0;
                 }
-
                 const size_t space = in_buf_size - src_size;
                 const auto to_read = static_cast<size_t>(std::min<uint64_t>(space, remaining_compressed));
                 if (to_read == 0) {
-                    log_error(std::format("LZ4 decompression made no progress for {}", filename));
+                    log_error("LZ4 decompression made no progress");
                     return false;
                 }
-
                 file.read(reinterpret_cast<char*>(in_buf.data() + src_size), static_cast<std::streamsize>(to_read));
                 const auto read = static_cast<size_t>(file.gcount());
                 if (read == 0) {
-                    log_error("Unexpected end of file during LZ4 streaming.");
+                    log_error("Unexpected end of file during LZ4 decompression.");
                     return false;
                 }
                 src_size += read;
@@ -615,58 +579,33 @@ auto process_lz4_streaming(std::ifstream& file, uint64_t compressed_size, UsbDev
             }
 
             if (dst_size > 0) {
-                if (do_flash) {
-                    if (!usb_device.send_file_part_chunk(out_buf.data(), dst_size, chunk_index++, large_partition)) {
-                        return false;
-                    }
+                out.write(reinterpret_cast<char*>(out_buf.data()), static_cast<std::streamsize>(dst_size));
+                if (!out) {
+                    log_error("Failed to write decompressed data to temporary file");
+                    return false;
                 }
                 total_uncompressed += dst_size;
-                if (show_progress && uncompressed_size > 0) {
-                    const int percent = static_cast<int>(
-                        (static_cast<double>(total_uncompressed) / static_cast<double>(uncompressed_size)) * 100.0);
-                    if (percent != last_percent) {
-                        std::print("\r[Flash] {}: {}%", filename, percent);
-                        std::cout.flush();
-                        last_percent = percent;
-                    }
-                }
             }
 
             src_offset += src_consumed;
             src_size -= src_consumed;
-            if (err == 0) {
-                break;
-            }
+            if (err == 0) break;
         }
-        if (err == 0) {
-            break;
-        }
+        if (err == 0) break;
     }
 
-    file.clear();
-    if (compressed_size > static_cast<uint64_t>(std::numeric_limits<std::streamoff>::max())) {
-        log_error("Unexpected end of file during LZ4 streaming.");
+    out.close();
+    if (!out) {
+        log_error("Failed to close temporary file after LZ4 decompression");
         return false;
-    }
-    file.seekg(entry_start);
-    file.seekg(static_cast<std::streamoff>(compressed_size), std::ios::cur);
-    if (!file) {
-        log_error("Unexpected end of file during LZ4 streaming.");
-        return false;
-    }
-
-    if (show_progress && uncompressed_size > 0) {
-        std::println("\r[Flash] {}: 100%", filename);
-    } else if (show_progress) {
-        std::println("");
     }
 
     if (uncompressed_size != 0 && total_uncompressed != uncompressed_size) {
-        log_error(std::format("Decompressed size mismatch for {}: expected {}, got {}", filename, uncompressed_size,
-                              total_uncompressed));
+        log_error(std::format("Decompressed size mismatch: expected {}, got {}", uncompressed_size, total_uncompressed));
         return false;
     }
 
+    log_verbose(std::format("LZ4 decompressed {} -> {} bytes", compressed_size, total_uncompressed));
     return true;
 }
 
@@ -961,12 +900,29 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
                     " (ID " + std::to_string(pit_entry->identifier) + ")");
 
         if (is_lz4) {
-            if (usb_device.is_odin_legacy() && do_flash) {
-                log_error("LZ4 images are not supported in Odin legacy mode");
-                return ExitCode::Protocol;
+            if (do_flash) {
+                auto temp_dir = std::filesystem::temp_directory_path();
+                auto temp_path = temp_dir / ("odin4_" + std::to_string(std::rand()) + "_" + std::to_string(data_start) + ".tmp");
+                if (!decompress_lz4_to_file(file, data_size, temp_path.string())) {
+                    return ExitCode::Firmware;
+                }
+                uint64_t decomp_size = 0;
+                std::error_code ec;
+                auto fs_size = std::filesystem::file_size(temp_path, ec);
+                if (!ec) decomp_size = static_cast<uint64_t>(fs_size);
+                std::ifstream temp_in(temp_path.string(), std::ios::binary);
+                bool flash_ok = temp_in && decomp_size > 0 &&
+                    usb_device.flash_partition_stream(temp_in, decomp_size, *pit_entry, is_large);
+                temp_in.close();
+                std::filesystem::remove(temp_path, ec);
+                if (!flash_ok) {
+                    return ExitCode::Protocol;
+                }
             }
-            if (!process_lz4_streaming(file, data_size, usb_device, filename, is_large, do_flash)) {
-                return do_flash ? ExitCode::Protocol : ExitCode::Firmware;
+            file.seekg(static_cast<std::streamoff>(data_start + data_size));
+            if (!file) {
+                log_error("Failed to skip archive entry data: " + filename);
+                return ExitCode::Firmware;
             }
         } else {
             if (do_flash) {
@@ -987,12 +943,6 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
         if (!file) {
             log_error("Failed to skip archive padding for: " + filename);
             return ExitCode::Firmware;
-        }
-
-        if (do_flash) {
-            if (!usb_device.end_file_transfer(pit_entry->identifier)) {
-                return ExitCode::Protocol;
-            }
         }
     }
 

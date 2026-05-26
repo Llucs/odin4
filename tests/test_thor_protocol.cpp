@@ -1,19 +1,3 @@
-/*
- * Copyright (c) 2026 Llucs
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 #include <cstdint>
 #include <cstring>
 
@@ -33,207 +17,146 @@ inline uint64_t test_swap64(uint64_t v) {
     return (static_cast<uint64_t>(test_swap32(lo)) << 32) | test_swap32(hi);
 }
 
-} // namespace
+}
 
 #include "test_framework.h"
 #include "../src/protocol/thor_protocol.h"
 #include <cstdint>
 #include <vector>
 
-void test_ThorProtocol_Endian16_Swap() {
+void test_OdinProtocol_Endian16_Swap() {
     uint16_t val = 0x1234;
     uint16_t swapped = test_swap16(val);
     EXPECT_EQ(swapped, 0x3412);
 }
-REGISTER_TEST(ThorProtocol, Endian16_Swap);
+REGISTER_TEST(OdinProtocol, Endian16_Swap);
 
-void test_ThorProtocol_Endian16_SwapTwice() {
+void test_OdinProtocol_Endian16_SwapTwice() {
     uint16_t val = 0xABCD;
     uint16_t swapped = test_swap16(val);
     uint16_t back = test_swap16(swapped);
     EXPECT_EQ(back, val);
 }
-REGISTER_TEST(ThorProtocol, Endian16_SwapTwice);
+REGISTER_TEST(OdinProtocol, Endian16_SwapTwice);
 
-void test_ThorProtocol_Endian32_Swap() {
+void test_OdinProtocol_Endian32_Swap() {
     uint32_t val = 0x12345678;
     uint32_t swapped = test_swap32(val);
     EXPECT_EQ(swapped, 0x78563412);
 }
-REGISTER_TEST(ThorProtocol, Endian32_Swap);
+REGISTER_TEST(OdinProtocol, Endian32_Swap);
 
-void test_ThorProtocol_Endian32_SwapTwice() {
+void test_OdinProtocol_Endian32_SwapTwice() {
     uint32_t val = 0xDEADBEEF;
     uint32_t swapped = test_swap32(val);
     uint32_t back = test_swap32(swapped);
     EXPECT_EQ(back, val);
 }
-REGISTER_TEST(ThorProtocol, Endian32_SwapTwice);
+REGISTER_TEST(OdinProtocol, Endian32_SwapTwice);
 
-void test_ThorProtocol_Endian64_Swap() {
+void test_OdinProtocol_Endian64_Swap() {
     uint64_t val = 0x0123456789ABCDEF;
     uint64_t swapped = test_swap64(val);
     EXPECT_EQ(swapped, 0xEFCDAB8967452301);
 }
-REGISTER_TEST(ThorProtocol, Endian64_Swap);
+REGISTER_TEST(OdinProtocol, Endian64_Swap);
 
-void test_ThorProtocol_Endian64_SwapTwice() {
+void test_OdinProtocol_Endian64_SwapTwice() {
     uint64_t val = 0xCAFEBABE12345678;
     uint64_t swapped = test_swap64(val);
     uint64_t back = test_swap64(swapped);
     EXPECT_EQ(back, val);
 }
-REGISTER_TEST(ThorProtocol, Endian64_SwapTwice);
+REGISTER_TEST(OdinProtocol, Endian64_SwapTwice);
 
-void test_ThorProtocol_Le16ToH() {
+void test_OdinProtocol_Le16ToH() {
     uint16_t little = 0x3412;
     uint16_t host = le16toh(little);
     EXPECT_EQ(host, 0x3412);
 }
-REGISTER_TEST(ThorProtocol, Le16ToH);
+REGISTER_TEST(OdinProtocol, Le16ToH);
 
-void test_ThorProtocol_HToLe16() {
+void test_OdinProtocol_HToLe16() {
     uint16_t host = 0xABCD;
     uint16_t little = htole16(host);
     EXPECT_EQ(little, 0xABCD);
 }
-REGISTER_TEST(ThorProtocol, HToLe16);
+REGISTER_TEST(OdinProtocol, HToLe16);
 
-void test_ThorProtocol_Le32ToH() {
+void test_OdinProtocol_Le32ToH() {
     uint32_t little = 0x78563412;
     uint32_t host = le32toh(little);
     EXPECT_EQ(host, 0x78563412);
 }
-REGISTER_TEST(ThorProtocol, Le32ToH);
+REGISTER_TEST(OdinProtocol, Le32ToH);
 
-void test_ThorProtocol_HToLe32() {
+void test_OdinProtocol_HToLe32() {
     uint32_t host = 0xDEADBEEF;
     uint32_t little = htole32(host);
     EXPECT_EQ(little, 0xDEADBEEF);
 }
-REGISTER_TEST(ThorProtocol, HToLe32);
+REGISTER_TEST(OdinProtocol, HToLe32);
 
-void test_ThorProtocol_Le64ToH() {
+void test_OdinProtocol_Le64ToH() {
     uint64_t little = 0xEFCDAB8967452301;
     uint64_t host = le64toh(little);
     EXPECT_EQ(host, 0xEFCDAB8967452301);
 }
-REGISTER_TEST(ThorProtocol, Le64ToH);
+REGISTER_TEST(OdinProtocol, Le64ToH);
 
-void test_ThorProtocol_HToLe64() {
+void test_OdinProtocol_HToLe64() {
     uint64_t host = 0xCAFEBABE12345678;
     uint64_t little = htole64(host);
     EXPECT_EQ(little, 0xCAFEBABE12345678);
 }
-REGISTER_TEST(ThorProtocol, HToLe64);
+REGISTER_TEST(OdinProtocol, HToLe64);
 
-void test_ThorProtocol_Le32ToH_Function() {
-    uint32_t val = 0x12345678;
-    uint32_t result = le32_to_h(val);
-    EXPECT_EQ(result, val);
+void test_OdinProtocol_RequestBox_Size() {
+    EXPECT_EQ(sizeof(OdinRequestBox), 1024u);
 }
-REGISTER_TEST(ThorProtocol, Le32ToH_Function);
+REGISTER_TEST(OdinProtocol, RequestBox_Size);
 
-void test_ThorProtocol_HToLe32_Function() {
-    uint32_t val = 0x12345678;
-    uint32_t result = h_to_le32(val);
-    EXPECT_EQ(result, val);
+void test_OdinProtocol_ResponseBox_Size() {
+    EXPECT_EQ(sizeof(OdinResponseBox), 8u);
 }
-REGISTER_TEST(ThorProtocol, HToLe32_Function);
+REGISTER_TEST(OdinProtocol, ResponseBox_Size);
 
-void test_ThorProtocol_HToLe16_Function() {
-    uint16_t val = 0x1234;
-    uint16_t result = h_to_le16(val);
-    EXPECT_EQ(result, val);
+void test_OdinProtocol_CommandType_Values() {
+    EXPECT_EQ(static_cast<int>(OdinCommandType::RQT_INIT), 0x64);
+    EXPECT_EQ(static_cast<int>(OdinCommandType::RQT_PIT), 0x65);
+    EXPECT_EQ(static_cast<int>(OdinCommandType::RQT_XMIT), 0x66);
+    EXPECT_EQ(static_cast<int>(OdinCommandType::RQT_CLOSE), 0x67);
+    EXPECT_EQ(static_cast<int>(OdinCommandType::RQT_EMPTY), 0);
 }
-REGISTER_TEST(ThorProtocol, HToLe16_Function);
+REGISTER_TEST(OdinProtocol, CommandType_Values);
 
-void test_ThorProtocol_Le64ToH_Function() {
-    uint64_t val = 0x0123456789ABCDEF;
-    uint64_t result = le64_to_h(val);
-    EXPECT_EQ(result, val);
+void test_OdinProtocol_ControlType_Values() {
+    EXPECT_EQ(ODIN_CONTROL_REBOOT, 0x0001U);
+    EXPECT_EQ(ODIN_CONTROL_REDOWNLOAD, 0x0002U);
 }
-REGISTER_TEST(ThorProtocol, Le64ToH_Function);
+REGISTER_TEST(OdinProtocol, ControlType_Values);
 
-void test_ThorProtocol_HToLe64_Function() {
-    uint64_t val = 0x0123456789ABCDEF;
-    uint64_t result = h_to_le64(val);
-    EXPECT_EQ(result, val);
+void test_OdinProtocol_MakeRequest_SetsIdAndData() {
+    OdinRequestBox rq = make_request(OdinCommandType::RQT_INIT, OdinCommandParam::RQT_INIT_TARGET);
+    EXPECT_EQ(static_cast<uint32_t>(le32_to_h(static_cast<uint32_t>(rq.id))), 0x64);
+    EXPECT_EQ(static_cast<uint32_t>(le32_to_h(static_cast<uint32_t>(rq.data))), 0);
 }
-REGISTER_TEST(ThorProtocol, HToLe64_Function);
+REGISTER_TEST(OdinProtocol, MakeRequest_SetsIdAndData);
 
-void test_ThorProtocol_PacketHeader_Size() {
-    EXPECT_EQ(sizeof(ThorPacketHeader), 8u);
+void test_OdinProtocol_MakeRequest_WithInts() {
+    std::vector<int32_t> ints = {5, 10};
+    OdinRequestBox rq = make_request(OdinCommandType::RQT_INIT, OdinCommandParam::RQT_INIT_PACKETSIZE, ints);
+    EXPECT_EQ(static_cast<uint32_t>(le32_to_h(static_cast<uint32_t>(rq.intData[0]))), 5U);
+    EXPECT_EQ(static_cast<uint32_t>(le32_to_h(static_cast<uint32_t>(rq.intData[1]))), 10U);
 }
-REGISTER_TEST(ThorProtocol, PacketHeader_Size);
+REGISTER_TEST(OdinProtocol, MakeRequest_WithInts);
 
-void test_ThorProtocol_PacketTypes_Values() {
-    EXPECT_EQ(THOR_PACKET_HANDSHAKE, 0x0001);
-    EXPECT_EQ(THOR_PACKET_DEVICE_TYPE, 0x0002);
-    EXPECT_EQ(THOR_PACKET_FILE_PART, 0x0003);
-    EXPECT_EQ(THOR_PACKET_END_FILE_TRANSFER, 0x0004);
-    EXPECT_EQ(THOR_PACKET_END_SESSION, 0x0005);
-    EXPECT_EQ(THOR_PACKET_RESPONSE, 0x0006);
-    EXPECT_EQ(THOR_PACKET_PIT_FILE, 0x0007);
-    EXPECT_EQ(THOR_PACKET_BEGIN_SESSION, 0x0008);
-    EXPECT_EQ(THOR_PACKET_FILE_PART_SIZE, 0x0009);
-    EXPECT_EQ(THOR_PACKET_RECEIVE_FILE_PART, 0x000A);
-    EXPECT_EQ(THOR_PACKET_CONTROL, 0x000B);
+void test_OdinProtocol_ResponseFromLe() {
+    OdinResponseBox r;
+    r.id = h_to_le32(0x66);
+    r.ack = h_to_le32(0);
+    response_from_le(r);
+    EXPECT_EQ(r.id, 0x66);
+    EXPECT_EQ(r.ack, 0);
 }
-REGISTER_TEST(ThorProtocol, PacketTypes_Values);
-
-void test_ThorProtocol_ControlTypes_Values() {
-    EXPECT_EQ(THOR_CONTROL_REBOOT, 0x0001);
-    EXPECT_EQ(THOR_CONTROL_REDOWNLOAD, 0x0002);
-}
-REGISTER_TEST(ThorProtocol, ControlTypes_Values);
-
-void test_ThorProtocol_HandshakePacket_Size() {
-    EXPECT_EQ(sizeof(ThorHandshakePacket), 20u);
-}
-REGISTER_TEST(ThorProtocol, HandshakePacket_Size);
-
-void test_ThorProtocol_DeviceTypePacket_Size() {
-    EXPECT_EQ(sizeof(ThorDeviceTypePacket), 136u);
-}
-REGISTER_TEST(ThorProtocol, DeviceTypePacket_Size);
-
-void test_ThorProtocol_BeginSessionPacket_Size() {
-    EXPECT_EQ(sizeof(ThorBeginSessionPacket), 16u);
-}
-REGISTER_TEST(ThorProtocol, BeginSessionPacket_Size);
-
-void test_ThorProtocol_PitFilePacket_Size() {
-    EXPECT_EQ(sizeof(ThorPitFilePacket), 12u);
-}
-REGISTER_TEST(ThorProtocol, PitFilePacket_Size);
-
-void test_ThorProtocol_FilePartSizePacket_Size() {
-    EXPECT_EQ(sizeof(ThorFilePartSizePacket), 16u);
-}
-REGISTER_TEST(ThorProtocol, FilePartSizePacket_Size);
-
-void test_ThorProtocol_FilePartPacket_Size() {
-    EXPECT_EQ(sizeof(ThorFilePartPacket), 16u);
-}
-REGISTER_TEST(ThorProtocol, FilePartPacket_Size);
-
-void test_ThorProtocol_EndFileTransferPacket_Size() {
-    EXPECT_EQ(sizeof(ThorEndFileTransferPacket), 12u);
-}
-REGISTER_TEST(ThorProtocol, EndFileTransferPacket_Size);
-
-void test_ThorProtocol_EndSessionPacket_Size() {
-    EXPECT_EQ(sizeof(ThorEndSessionPacket), 8u);
-}
-REGISTER_TEST(ThorProtocol, EndSessionPacket_Size);
-
-void test_ThorProtocol_ControlPacket_Size() {
-    EXPECT_EQ(sizeof(ThorControlPacket), 12u);
-}
-REGISTER_TEST(ThorProtocol, ControlPacket_Size);
-
-void test_ThorProtocol_ResponsePacket_Size() {
-    EXPECT_EQ(sizeof(ThorResponsePacket), 12u);
-}
-REGISTER_TEST(ThorProtocol, ResponsePacket_Size);
+REGISTER_TEST(OdinProtocol, ResponseFromLe);
