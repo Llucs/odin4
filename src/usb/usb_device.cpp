@@ -179,7 +179,7 @@ static auto find_best_interface(libusb_device* dev, const UsbSelectionCriteria& 
             if (bulk_endpoints == 2) score += 10;
 
             if (score > best.score) {
-                best = {score, id->bInterfaceNumber, j, ep_in, ep_out, ep_out_mps, id->bInterfaceClass, id->bNumEndpoints};
+                best = {score, id->bInterfaceNumber, id->bAlternateSetting, ep_in, ep_out, ep_out_mps, id->bInterfaceClass, id->bNumEndpoints};
             }
         }
     }
@@ -318,7 +318,20 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
 
     const int claim_err = libusb_claim_interface(handle, interface_number);
     if (claim_err == 0 && alt_setting >= 0) {
-        libusb_set_interface_alt_setting(handle, interface_number, alt_setting);
+        int alt_err = libusb_set_interface_alt_setting(handle, interface_number, alt_setting);
+        if (alt_err < 0) {
+            last_open_libusb_err = alt_err;
+            last_open_error = UsbOpenError::Other;
+            log_error("Failed to set USB interface alt setting", alt_err);
+            libusb_release_interface(handle, interface_number);
+            if (kernel_driver_detached) {
+                (void) libusb_attach_kernel_driver(handle, interface_number);
+                kernel_driver_detached = false;
+            }
+            libusb_close(handle);
+            handle = nullptr;
+            return false;
+        }
     }
     if (claim_err < 0) {
         last_open_libusb_err = claim_err;
