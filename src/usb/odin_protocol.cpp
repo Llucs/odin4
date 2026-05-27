@@ -165,11 +165,11 @@ auto UsbDevice::end_file_transfer(uint32_t partition_id) -> bool {
 
 auto UsbDevice::send_control(uint32_t control_type) -> bool {
     if (control_type == ODIN_CONTROL_REBOOT) {
-        (void) odin_end_session();
         return odin_reboot();
     }
     if (control_type == ODIN_CONTROL_REDOWNLOAD) {
         log_warn("Redownload is not supported.");
+        return false;
     }
     return true;
 }
@@ -265,7 +265,16 @@ auto UsbDevice::odin_begin_session() -> bool {
     int32_t max_proto = 0x7FFFFFFF;
     uint32_t le_max = h_to_le32(static_cast<uint32_t>(max_proto));
     if (!odin_command(0x64, 0x00, &le_max, sizeof(le_max), rsp, USB_TIMEOUT_CONTROL)) return false;
-    if (!odin_fail_check(rsp, "BeginSession", false)) return false;
+
+    if (rsp.size() < 8) return false;
+
+    int32_t id = 0;
+    std::memcpy(&id, rsp.data(), sizeof(id));
+    id = static_cast<int32_t>(le32toh(static_cast<uint32_t>(id)));
+    if (id == BOOTLOADER_FAIL) {
+        log_error("BeginSession failed with BOOTLOADER_FAIL");
+        return false;
+    }
 
     uint32_t ack_raw = 0;
     std::memcpy(&ack_raw, rsp.data() + 4, sizeof(ack_raw));
@@ -450,10 +459,11 @@ auto UsbDevice::odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool {
     for (uint32_t i = 0; i < blocks; ++i) {
         uint32_t le_i = h_to_le32(i);
         if (!odin_command(0x65, 0x02, &le_i, sizeof(le_i), rsp, 5000)) return false;
-        if (!odin_fail_check(rsp, "PitDumpBlock", false)) return false;
+        if (rsp.size() < 8) return false;
 
         size_t off = static_cast<size_t>(i) * block;
         size_t copy = std::min({rsp.size(), pit_out.size() - off, static_cast<size_t>(block)});
+        if (copy == 0) return false;
         std::memcpy(pit_out.data() + off, rsp.data(), copy);
     }
 
