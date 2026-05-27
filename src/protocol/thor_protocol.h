@@ -91,6 +91,9 @@ enum class OdinCommandParam : int32_t {
     RQT_CLOSE_REBOOT_RECOVERY = 3,
 };
 
+// Sentinel value indicating bootloader failure in response id field
+constexpr int32_t BOOTLOADER_FAIL = -1; // 0xFFFFFFFF
+
 // Control types for send_control
 enum OdinControlType : uint32_t {
     ODIN_CONTROL_REBOOT = 0x0001,

@@ -36,6 +36,7 @@ class UsbDevice {
     uint8_t endpoint_out = 0x01;
     uint8_t endpoint_in = 0x81;
     int interface_number = 0;
+    int alt_setting = -1;
     bool kernel_driver_detached = false;
 
     size_t max_chunk_bytes = 1048576;
@@ -49,6 +50,7 @@ class UsbDevice {
     int odin_flash_packet_size = 1048576;
     int odin_flash_sequence_count = 30;
     bool odin_supports_zlp = true;
+    bool odin_supports_compressed = false;
 
     auto odin_handshake() -> bool;
     auto odin_begin_session() -> bool;
@@ -62,11 +64,16 @@ class UsbDevice {
     auto odin_end_sequence_flash(const PitEntry& pit_entry, uint32_t real_size, uint32_t is_last,
                                  bool efs_clear = false, bool boot_update = false) -> bool;
 
+    auto odin_request_file_flash_compressed() -> bool;
+    auto odin_request_sequence_flash_compressed(uint32_t compressed_size) -> bool;
+    auto odin_end_sequence_flash_compressed(const PitEntry& pit_entry, uint32_t compressed_size, uint32_t is_last,
+                                            bool efs_clear = false, bool boot_update = false) -> bool;
+
     auto odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool;
     auto odin_command(uint32_t cmd, uint32_t subcmd, const void* payload, size_t payload_size,
                       std::vector<unsigned char>& rsp, int timeout_ms) -> bool;
     static auto odin_fail_check(const std::vector<unsigned char>& rsp, const std::string& context,
-                                bool allow_progress) -> bool;
+                                bool allow_progress, int32_t expected_id = -1) -> bool;
 
     auto bulk_write_all(const void* data, size_t size, int timeout_ms) -> bool;
     auto bulk_read_once(void* data, size_t size, int* actual_length, int timeout_ms) -> bool;
@@ -93,11 +100,14 @@ class UsbDevice {
     auto receive_pit_table(PitTable& pit_table) -> bool;
     auto flash_partition_stream(std::istream& stream, uint64_t size, const PitEntry& pit_entry,
                                 bool large_partition) -> bool;
+    auto flash_partition_stream_compressed(std::istream& stream, uint64_t compressed_size, const PitEntry& pit_entry,
+                                           bool large_partition) -> bool;
     auto end_file_transfer(uint32_t partition_id) -> bool;
     auto send_control(uint32_t control_type) -> bool;
     auto notify_total_bytes(uint64_t total) -> bool;
 
     [[nodiscard]] auto get_device_type() const -> const std::string& { return device_type_str; }
+    [[nodiscard]] auto supports_compressed() const -> bool { return odin_supports_compressed; }
 
     static auto list_download_devices() -> std::vector<std::string>;
     static auto list_download_devices(const UsbSelectionCriteria& criteria) -> std::vector<std::string>;

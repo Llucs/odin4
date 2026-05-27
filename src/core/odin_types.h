@@ -55,14 +55,10 @@ struct PitEntry {
 struct PitTable {
     uint32_t entry_count = 0;
     uint32_t header_size = 0;
-    uint32_t unknown1 = 0;
-    uint32_t unknown2 = 0;
-    uint16_t unknown3 = 0;
-    uint16_t unknown4 = 0;
-    uint16_t unknown5 = 0;
-    uint16_t unknown6 = 0;
-    uint16_t unknown7 = 0;
-    uint16_t unknown8 = 0;
+    char com_tar2[8] = {};
+    char cpu_bl_id[8] = {};
+    uint16_t lu_count = 0;
+    uint16_t reserved = 0;
     std::vector<PitEntry> entries;
 };
 

@@ -101,12 +101,10 @@ void test_OdinTypes_PitTable_Init() {
     PitTable table = PitTable();
     EXPECT_EQ(table.entry_count, 0u);
     EXPECT_EQ(table.header_size, 0u);
-    EXPECT_EQ(table.unknown1, 0u);
-    EXPECT_EQ(table.unknown2, 0u);
-    EXPECT_EQ(table.unknown3, 0u);
-    EXPECT_EQ(table.unknown4, 0u);
-    EXPECT_EQ(table.unknown5, 0u);
-    EXPECT_EQ(table.unknown6, 0u);
+    EXPECT_EQ(table.com_tar2[0], '\0');
+    EXPECT_EQ(table.cpu_bl_id[0], '\0');
+    EXPECT_EQ(table.lu_count, 0u);
+    EXPECT_EQ(table.reserved, 0u);
     EXPECT_EQ(table.entries.size(), 0u);
 }
 REGISTER_TEST(OdinTypes, PitTable_Init);
@@ -128,25 +126,17 @@ void test_OdinTypes_PitTable_DefaultValues() {
     PitTable table = PitTable();
     table.entry_count = 10;
     table.header_size = 512;
-    table.unknown1 = 1;
-    table.unknown2 = 2;
-    table.unknown3 = 3;
-    table.unknown4 = 4;
-    table.unknown5 = 5;
-    table.unknown6 = 6;
-    table.unknown7 = 7;
-    table.unknown8 = 8;
+    std::memcpy(table.com_tar2, "PIT1200", 7);
+    std::memcpy(table.cpu_bl_id, "SM-S908B", 8);
+    table.lu_count = 1;
+    table.reserved = 0;
 
     EXPECT_EQ(table.entry_count, 10u);
     EXPECT_EQ(table.header_size, 512u);
-    EXPECT_EQ(table.unknown1, 1u);
-    EXPECT_EQ(table.unknown2, 2u);
-    EXPECT_EQ(table.unknown3, 3u);
-    EXPECT_EQ(table.unknown4, 4u);
-    EXPECT_EQ(table.unknown5, 5u);
-    EXPECT_EQ(table.unknown6, 6u);
-    EXPECT_EQ(table.unknown7, 7u);
-    EXPECT_EQ(table.unknown8, 8u);
+    EXPECT_EQ(std::memcmp(table.com_tar2, "PIT1200\0", 8), 0);
+    EXPECT_EQ(std::memcmp(table.cpu_bl_id, "SM-S908B", 8), 0);
+    EXPECT_EQ(table.lu_count, 1u);
+    EXPECT_EQ(table.reserved, 0u);
 }
 REGISTER_TEST(OdinTypes, PitTable_DefaultValues);
 
