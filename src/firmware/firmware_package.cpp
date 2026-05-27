@@ -19,6 +19,8 @@
 
 #include <iostream>
 #include <vector>
+#include <cstdlib>
+#include <unistd.h>
 #include <algorithm>
 #include <cctype>
 #include <cstring>
