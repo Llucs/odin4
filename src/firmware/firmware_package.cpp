@@ -900,7 +900,11 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
                     " (ID " + std::to_string(pit_entry->identifier) + ")");
 
         if (is_lz4) {
-            if (do_flash) {
+            if (do_flash && usb_device.supports_compressed()) {
+                if (!usb_device.flash_partition_stream_compressed(file, data_size, *pit_entry, is_large)) {
+                    return ExitCode::Protocol;
+                }
+            } else if (do_flash) {
                 auto temp_dir = std::filesystem::temp_directory_path();
                 auto temp_path = temp_dir / ("odin4_" + std::to_string(std::rand()) + "_" + std::to_string(data_start) + ".tmp");
                 if (!decompress_lz4_to_file(file, data_size, temp_path.string())) {
@@ -919,10 +923,12 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
                     return ExitCode::Protocol;
                 }
             }
-            file.seekg(static_cast<std::streamoff>(data_start + data_size));
-            if (!file) {
-                log_error("Failed to skip archive entry data: " + filename);
-                return ExitCode::Firmware;
+            if (!do_flash || !usb_device.supports_compressed()) {
+                file.seekg(static_cast<std::streamoff>(data_start + data_size));
+                if (!file) {
+                    log_error("Failed to skip archive entry data: " + filename);
+                    return ExitCode::Firmware;
+                }
             }
         } else {
             if (do_flash) {

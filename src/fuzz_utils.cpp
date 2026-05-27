@@ -48,14 +48,10 @@ auto fuzz_parse_pit_bytes(PitTable& pit_table, const std::vector<unsigned char>&
         return false;
     }
 
-    pit_table.unknown1 = read_u32(8);
-    pit_table.unknown2 = read_u32(12);
-    pit_table.unknown3 = read_u16(16);
-    pit_table.unknown4 = read_u16(18);
-    pit_table.unknown5 = read_u16(20);
-    pit_table.unknown6 = read_u16(22);
-    pit_table.unknown7 = read_u16(24);
-    pit_table.unknown8 = read_u16(26);
+    std::memcpy(pit_table.com_tar2, pit_data.data() + 8, 8);
+    std::memcpy(pit_table.cpu_bl_id, pit_data.data() + 16, 8);
+    pit_table.lu_count = read_u16(24);
+    pit_table.reserved = read_u16(26);
 
     pit_table.header_size = 28;
     const size_t entry_size = 132;
