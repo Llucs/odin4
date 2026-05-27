@@ -423,7 +423,11 @@ auto UsbDevice::handshake() -> bool {
 }
 
 auto UsbDevice::request_device_type() -> bool {
-    device_type_str.clear();
+    if (!odin_request_device_type(device_type_str)) {
+        log_warn("Device type query failed; continuing without type info.");
+        device_type_str.clear();
+        return true;
+    }
     return true;
 }
 

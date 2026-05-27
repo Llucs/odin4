@@ -610,7 +610,7 @@ auto decompress_lz4_to_file(std::ifstream& file, uint64_t compressed_size, const
 }
 
 auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const PitTable& pit_table, bool do_flash,
-                      bool allow_unknown) -> ExitCode {
+                      bool allow_unknown, bool efs_clear, bool boot_update) -> ExitCode {
     // End-to-end TAR processing entry point:
     //  1) validate archive integrity (TAR/MD5),
     //  2) enumerate and validate package entries against PIT/partition policy,
@@ -900,30 +900,32 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
                     " (ID " + std::to_string(pit_entry->identifier) + ")");
 
         if (is_lz4) {
+            bool compressed_ok = false;
             if (do_flash && usb_device.supports_compressed()) {
-                if (!usb_device.flash_partition_stream_compressed(file, data_size, *pit_entry, is_large)) {
-                    return ExitCode::Protocol;
-                }
-            } else if (do_flash) {
-                auto temp_dir = std::filesystem::temp_directory_path();
-                auto temp_path = temp_dir / ("odin4_" + std::to_string(std::rand()) + "_" + std::to_string(data_start) + ".tmp");
-                if (!decompress_lz4_to_file(file, data_size, temp_path.string())) {
-                    return ExitCode::Firmware;
-                }
-                uint64_t decomp_size = 0;
-                std::error_code ec;
-                auto fs_size = std::filesystem::file_size(temp_path, ec);
-                if (!ec) decomp_size = static_cast<uint64_t>(fs_size);
-                std::ifstream temp_in(temp_path.string(), std::ios::binary);
-                bool flash_ok = temp_in && decomp_size > 0 &&
-                    usb_device.flash_partition_stream(temp_in, decomp_size, *pit_entry, is_large);
-                temp_in.close();
-                std::filesystem::remove(temp_path, ec);
-                if (!flash_ok) {
-                    return ExitCode::Protocol;
+                compressed_ok = usb_device.flash_partition_stream_compressed(file, data_size, *pit_entry, is_large, efs_clear, boot_update);
+            }
+            if (!compressed_ok) {
+                if (do_flash) {
+                    auto temp_dir = std::filesystem::temp_directory_path();
+                    auto temp_path = temp_dir / ("odin4_" + std::to_string(std::rand()) + "_" + std::to_string(data_start) + ".tmp");
+                    if (!decompress_lz4_to_file(file, data_size, temp_path.string())) {
+                        return ExitCode::Firmware;
+                    }
+                    uint64_t decomp_size = 0;
+                    std::error_code ec;
+                    auto fs_size = std::filesystem::file_size(temp_path, ec);
+                    if (!ec) decomp_size = static_cast<uint64_t>(fs_size);
+                    std::ifstream temp_in(temp_path.string(), std::ios::binary);
+                    bool flash_ok = temp_in && decomp_size > 0 &&
+                        usb_device.flash_partition_stream(temp_in, decomp_size, *pit_entry, is_large, efs_clear, boot_update);
+                    temp_in.close();
+                    std::filesystem::remove(temp_path, ec);
+                    if (!flash_ok) {
+                        return ExitCode::Protocol;
+                    }
                 }
             }
-            if (!do_flash || !usb_device.supports_compressed()) {
+            if (!compressed_ok || !do_flash) {
                 file.seekg(static_cast<std::streamoff>(data_start + data_size));
                 if (!file) {
                     log_error("Failed to skip archive entry data: " + filename);
@@ -932,7 +934,7 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
             }
         } else {
             if (do_flash) {
-                if (!usb_device.flash_partition_stream(file, data_size, *pit_entry, is_large)) {
+                if (!usb_device.flash_partition_stream(file, data_size, *pit_entry, is_large, efs_clear, boot_update)) {
                     return ExitCode::Protocol;
                 }
             } else {

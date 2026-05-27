@@ -56,6 +56,8 @@ class UsbDevice {
     auto odin_begin_session() -> bool;
     auto odin_end_session() -> bool;
     auto odin_reboot() -> bool;
+    auto odin_reboot_to_odin() -> bool;
+    auto odin_request_device_type(std::string& out_type) -> bool;
     auto odin_set_total_bytes(uint64_t total_bytes) -> bool;
     auto odin_reset_flash_count() -> bool;
     auto odin_request_file_flash() -> bool;
@@ -70,6 +72,8 @@ class UsbDevice {
                                             bool efs_clear = false, bool boot_update = false) -> bool;
 
     auto odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool;
+    auto build_lz4_decompressed_index(std::istream& stream, uint64_t compressed_size,
+                                      std::vector<uint64_t>& index) -> bool;
     auto odin_command(uint32_t cmd, uint32_t subcmd, const void* payload, size_t payload_size,
                       std::vector<unsigned char>& rsp, int timeout_ms) -> bool;
     static auto odin_fail_check(const std::vector<unsigned char>& rsp, const std::string& context,
@@ -78,6 +82,8 @@ class UsbDevice {
     auto bulk_write_all(const void* data, size_t size, int timeout_ms) -> bool;
     auto bulk_read_once(void* data, size_t size, int* actual_length, int timeout_ms) -> bool;
     auto send_zlp(int timeout_ms) -> bool;
+    auto send_empty_transfer() -> bool;
+    auto receive_empty_transfer() -> bool;
 
   public:
     UsbDevice() = default;
@@ -99,9 +105,9 @@ class UsbDevice {
     auto request_pit(PitTable& pit_table) -> bool;
     auto receive_pit_table(PitTable& pit_table) -> bool;
     auto flash_partition_stream(std::istream& stream, uint64_t size, const PitEntry& pit_entry,
-                                bool large_partition) -> bool;
+                                bool large_partition, bool efs_clear = false, bool boot_update = false) -> bool;
     auto flash_partition_stream_compressed(std::istream& stream, uint64_t compressed_size, const PitEntry& pit_entry,
-                                           bool large_partition) -> bool;
+                                           bool large_partition, bool efs_clear = false, bool boot_update = false) -> bool;
     auto end_file_transfer(uint32_t partition_id) -> bool;
     auto send_control(uint32_t control_type) -> bool;
     auto notify_total_bytes(uint64_t total) -> bool;

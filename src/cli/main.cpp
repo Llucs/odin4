@@ -41,6 +41,8 @@ static void print_usage() {
     std::println("  --allow-unknown      Allow archive entries without a PIT match (disabled by default)");
     std::println("  --reboot             Reboot device after flashing");
     std::println("  --redownload         Reboot into download mode if supported");
+    std::println("  --efs-clear          Clear EFS partition during flash (repair IMEI/calibration)");
+    std::println("  --bl-update          Signal bootloader update to device");
     std::println("");
     std::println("Logging:");
     std::println("  --quiet              Only print errors");
@@ -168,6 +170,14 @@ auto main(int argc, char** argv) -> int {
         }
         if (arg == "--redownload") {
             cfg.redownload = true;
+            continue;
+        }
+        if (arg == "--efs-clear") {
+            cfg.efs_clear = true;
+            continue;
+        }
+        if (arg == "--bl-update") {
+            cfg.boot_update = true;
             continue;
         }
         if (arg == "--check-only") {

@@ -13,6 +13,78 @@
 #include "protocol/thor_protocol.h"
 #include "core/logger.h"
 
+#include <lz4frame.h>
+
+namespace {
+
+constexpr std::array<unsigned char, 4> kLz4Magic{{0x04, 0x22, 0x4D, 0x18}};
+
+struct Lz4FrameInfo {
+    uint64_t content_size = 0;
+    bool valid = false;
+};
+
+auto read_exact_from_stream(std::istream& s, void* buf, size_t len) -> bool {
+    s.read(static_cast<char*>(buf), static_cast<std::streamsize>(len));
+    return static_cast<size_t>(s.gcount()) == len;
+}
+
+auto parse_lz4_frame_header(std::istream& stream) -> Lz4FrameInfo {
+    Lz4FrameInfo info;
+
+    std::array<unsigned char, 4> magic{};
+    if (!read_exact_from_stream(stream, magic.data(), magic.size()))
+        return info;
+    if (magic != kLz4Magic)
+        return info;
+
+    unsigned char flg_bd[2]{};
+    if (!read_exact_from_stream(stream, flg_bd, 2))
+        return info;
+
+    unsigned char flg = flg_bd[0];
+    unsigned char bd = flg_bd[1];
+
+    unsigned char version = (flg >> 6) & 0x03;
+    if (version != 1) return info;
+
+    bool block_independence = (flg & 0x20) != 0;
+    bool block_checksum = (flg & 0x10) != 0;
+    bool has_content_size = (flg & 0x08) != 0;
+    bool has_dict_id = (flg & 0x01) != 0;
+
+    if (!block_independence) return info;
+    if (block_checksum) return info;
+    if (has_dict_id) return info;
+    if (!has_content_size) return info;
+
+    unsigned char bd_val = (bd >> 4) & 0x07;
+    static constexpr size_t block_sizes[] = {0, 0, 0, 0, 65536, 262144, 1048576, 4194304};
+    size_t max_block_size = (bd_val < 8) ? block_sizes[bd_val] : 0;
+    if (max_block_size == 0) return info;
+    if (max_block_size > 1048576) return info;
+
+    unsigned char content_size_bytes[8]{};
+    if (!read_exact_from_stream(stream, content_size_bytes, 8))
+        return info;
+
+    uint64_t cs = 0;
+    std::memcpy(&cs, content_size_bytes, 8);
+    info.content_size = cs;
+
+    if (info.content_size > 1048576 && max_block_size != 1048576)
+        return info;
+
+    unsigned char hc{};
+    if (!read_exact_from_stream(stream, &hc, 1))
+        return info;
+
+    info.valid = true;
+    return info;
+}
+
+} // anonymous namespace
+
 auto UsbDevice::begin_session() -> bool {
     return odin_begin_session();
 }
@@ -159,8 +231,11 @@ auto UsbDevice::notify_total_bytes(uint64_t total) -> bool {
 }
 
 auto UsbDevice::end_file_transfer(uint32_t partition_id) -> bool {
-    (void) partition_id;
-    return true;
+    PitEntry dummy{};
+    dummy.identifier = partition_id;
+    dummy.binary_type = 0;
+    dummy.device_type = 0;
+    return odin_end_sequence_flash(dummy, 0, 1);
 }
 
 auto UsbDevice::send_control(uint32_t control_type) -> bool {
@@ -168,8 +243,7 @@ auto UsbDevice::send_control(uint32_t control_type) -> bool {
         return odin_reboot();
     }
     if (control_type == ODIN_CONTROL_REDOWNLOAD) {
-        log_warn("Redownload is not supported.");
-        return false;
+        return odin_reboot_to_odin();
     }
     return true;
 }
@@ -210,6 +284,27 @@ auto UsbDevice::odin_command(uint32_t cmd, uint32_t subcmd, const void* payload,
         return false;
     }
     rsp.resize(read_len);
+    return true;
+}
+
+auto UsbDevice::send_empty_transfer() -> bool {
+    int actual = 0;
+    int err = libusb_bulk_transfer(handle, endpoint_out, nullptr, 0, &actual, 100);
+    if (err != 0) {
+        log_verbose("Empty bulk transfer failed (non-fatal): " + std::to_string(err));
+        return false;
+    }
+    return true;
+}
+
+auto UsbDevice::receive_empty_transfer() -> bool {
+    int actual = 0;
+    static unsigned char dummy;
+    int err = libusb_bulk_transfer(handle, endpoint_in, &dummy, 1, &actual, 100);
+    if (err != 0) {
+        log_verbose("Empty bulk receive failed (non-fatal): " + std::to_string(err));
+        return false;
+    }
     return true;
 }
 
@@ -312,6 +407,33 @@ auto UsbDevice::odin_reboot() -> bool {
     return odin_fail_check(rsp, "Reboot", false);
 }
 
+auto UsbDevice::odin_reboot_to_odin() -> bool {
+    std::vector<unsigned char> rsp;
+    if (!odin_command(0x67, 0x02, nullptr, 0, rsp, USB_TIMEOUT_CONTROL)) return false;
+    return odin_fail_check(rsp, "RebootToOdin", false);
+}
+
+auto UsbDevice::odin_request_device_type(std::string& out_type) -> bool {
+    std::vector<unsigned char> rsp;
+    if (!odin_command(0x64, 0x01, nullptr, 0, rsp, USB_TIMEOUT_CONTROL)) return false;
+    if (rsp.size() < 12) return false;
+
+    int32_t id = 0;
+    std::memcpy(&id, rsp.data(), sizeof(id));
+    id = static_cast<int32_t>(le32toh(static_cast<uint32_t>(id)));
+    if (id == BOOTLOADER_FAIL) {
+        log_error("DeviceType query failed with BOOTLOADER_FAIL");
+        return false;
+    }
+
+    uint32_t type_raw = 0;
+    std::memcpy(&type_raw, rsp.data() + 8, sizeof(type_raw));
+    type_raw = le32toh(type_raw);
+
+    out_type = "SM-" + std::to_string(type_raw);
+    return true;
+}
+
 auto UsbDevice::odin_set_total_bytes(uint64_t total_bytes) -> bool {
     std::vector<unsigned char> rsp;
     uint64_t le_total = h_to_le64(total_bytes);
@@ -381,7 +503,12 @@ auto UsbDevice::odin_end_sequence_flash_compressed(const PitEntry& pit_entry, ui
         w32(28, boot_update ? 1U : 0U);
     }
 
+    send_empty_transfer();
+
     if (!odin_command(0x66, 0x07, payload.data(), 32, rsp, odin_flash_timeout_ms)) return false;
+
+    receive_empty_transfer();
+
     return odin_fail_check(rsp, "EndSequenceFlashCompressed", true);
 }
 
@@ -435,7 +562,12 @@ auto UsbDevice::odin_end_sequence_flash(const PitEntry& pit_entry, uint32_t real
         w32(28, boot_update ? 1U : 0U);
     }
 
+    send_empty_transfer();
+
     if (!odin_command(0x66, 0x03, payload.data(), 32, rsp, odin_flash_timeout_ms)) return false;
+
+    receive_empty_transfer();
+
     return odin_fail_check(rsp, "EndSequenceFlash", true);
 }
 
@@ -477,7 +609,7 @@ auto UsbDevice::odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool {
 }
 
 auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, const PitEntry& pit_entry,
-                                       bool large_partition) -> bool {
+                                       bool large_partition, bool efs_clear, bool boot_update) -> bool {
     (void) large_partition;
 
     if (!odin_request_file_flash()) return false;
@@ -533,15 +665,142 @@ auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
             total_sent += static_cast<uint64_t>(to_read);
         }
 
-        if (!odin_end_sequence_flash(pit_entry, real_size, last ? 1U : 0U)) return false;
+        if (!odin_end_sequence_flash(pit_entry, real_size, last ? 1U : 0U, efs_clear, boot_update)) return false;
     }
 
     return odin_reset_flash_count();
 }
 
+auto UsbDevice::build_lz4_decompressed_index(std::istream& stream, uint64_t compressed_size,
+                                              std::vector<uint64_t>& index) -> bool {
+    std::streampos saved = stream.tellg();
+    if (saved < 0) return false;
+
+    index.clear();
+    index.reserve(static_cast<size_t>(compressed_size / 65536) + 2);
+    index.push_back(0);
+
+    LZ4F_dctx* dctx = nullptr;
+    LZ4F_errorCode_t err = LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
+    if (LZ4F_isError(err)) return false;
+
+    size_t in_buf_size = 1048576;
+    std::vector<unsigned char> in_buf(in_buf_size);
+    std::vector<unsigned char> out_buf(4194304);
+
+    uint64_t compressed_consumed = 0;
+    uint64_t decompressed_produced = 0;
+    size_t src_offset = 0;
+    size_t src_size = 0;
+    bool done = false;
+
+    while (!done && (compressed_consumed < compressed_size || src_size > 0)) {
+        if (src_size == 0 && compressed_consumed < compressed_size) {
+            size_t to_read = in_buf_size;
+            if (to_read > compressed_size - compressed_consumed)
+                to_read = static_cast<size_t>(compressed_size - compressed_consumed);
+            stream.read(reinterpret_cast<char*>(in_buf.data()), static_cast<std::streamsize>(to_read));
+            src_size = static_cast<size_t>(stream.gcount());
+            if (src_size == 0) break;
+            compressed_consumed += src_size;
+            src_offset = 0;
+        }
+
+        while (src_size > 0 && !done) {
+            size_t dst_size = out_buf.size();
+            size_t src_consumed = src_size;
+
+            err = LZ4F_decompress(dctx, out_buf.data(), &dst_size, in_buf.data() + src_offset, &src_consumed, nullptr);
+            if (LZ4F_isError(err)) { LZ4F_freeDecompressionContext(dctx); stream.clear(); stream.seekg(saved); return false; }
+
+            if (dst_size > 0) {
+                decompressed_produced += dst_size;
+                index.push_back(decompressed_produced);
+            }
+
+            if (src_consumed > 0) {
+                src_offset += src_consumed;
+                src_size -= src_consumed;
+            }
+
+            if (src_consumed == 0 && dst_size == 0) {
+                if (compressed_consumed >= compressed_size) { done = true; break; }
+                if (src_offset > 0) {
+                    std::memmove(in_buf.data(), in_buf.data() + src_offset, src_size);
+                    src_offset = 0;
+                }
+                size_t space = in_buf_size - src_size;
+                size_t to_read = static_cast<size_t>(std::min<uint64_t>(space, compressed_size - compressed_consumed));
+                if (to_read == 0) break;
+                stream.read(reinterpret_cast<char*>(in_buf.data() + src_size), static_cast<std::streamsize>(to_read));
+                size_t got = static_cast<size_t>(stream.gcount());
+                if (got == 0) break;
+                src_size += got;
+                compressed_consumed += got;
+            }
+
+            if (err == 0) done = true;
+        }
+    }
+
+    LZ4F_freeDecompressionContext(dctx);
+    stream.clear();
+    stream.seekg(saved);
+    return !index.empty() && done;
+}
+
+static auto find_decomp_at_comp(const std::vector<uint64_t>& index, uint64_t compressed_pos,
+                                uint64_t total_compressed, uint64_t total_decompressed) -> uint64_t {
+    if (index.empty()) return 0;
+    if (compressed_pos >= total_compressed) return total_decompressed;
+    double ratio = static_cast<double>(compressed_pos) / static_cast<double>(total_compressed);
+    size_t raw_idx = static_cast<size_t>(ratio * static_cast<double>(index.size()));
+    if (raw_idx >= index.size()) raw_idx = index.size() - 1;
+    return index[raw_idx];
+}
+
 auto UsbDevice::flash_partition_stream_compressed(std::istream& stream, uint64_t compressed_size,
-                                                   const PitEntry& pit_entry, bool large_partition) -> bool {
+                                                   const PitEntry& pit_entry, bool large_partition,
+                                                   bool efs_clear, bool boot_update) -> bool {
     (void) large_partition;
+
+    std::streampos saved_pos = stream.tellg();
+    if (saved_pos < 0) return false;
+
+    Lz4FrameInfo lz4_info = parse_lz4_frame_header(stream);
+    if (!lz4_info.valid) {
+        log_error("LZ4 frame validation failed: frame must have content size, independent blocks, "
+                   "no block checksum, no dict ID, and max block size <= 1 MiB");
+        return false;
+    }
+
+    uint64_t total_decompressed = lz4_info.content_size;
+    if (total_decompressed == 0) {
+        log_error("LZ4 frame has zero content size");
+        return false;
+    }
+
+    log_verbose(std::format("LZ4 frame valid: compressed {} -> decompressed {} bytes", compressed_size, total_decompressed));
+
+    stream.clear();
+    stream.seekg(saved_pos);
+    if (!stream) return false;
+
+    std::vector<uint64_t> decomp_index;
+    if (!build_lz4_decompressed_index(stream, compressed_size, decomp_index)) {
+        log_error("Failed to build LZ4 decompressed index");
+        return false;
+    }
+    uint64_t index_total = decomp_index.empty() ? 0 : decomp_index.back();
+    if (index_total > 0 && index_total != total_decompressed) {
+        log_warn(std::format("LZ4 decompressed size mismatch: header says {}, scan says {}; using scan value",
+                              total_decompressed, index_total));
+        total_decompressed = index_total;
+    }
+
+    stream.clear();
+    stream.seekg(saved_pos);
+    if (!stream) return false;
 
     if (!odin_request_file_flash_compressed()) return false;
 
@@ -566,6 +825,7 @@ auto UsbDevice::flash_partition_stream_compressed(std::istream& stream, uint64_t
     uint64_t total_sent = 0;
     std::vector<unsigned char> buf(static_cast<size_t>(odin_flash_packet_size), 0);
 
+    uint64_t prev_decomp = 0;
     uint32_t expected_index = 0;
     for (uint32_t i = 0; i < sequences; ++i) {
         const bool last = (i + 1 == sequences);
@@ -586,7 +846,17 @@ auto UsbDevice::flash_partition_stream_compressed(std::istream& stream, uint64_t
             remaining -= to_read;
         }
 
-        if (!odin_end_sequence_flash_compressed(pit_entry, seq_size, last ? 1U : 0U)) return false;
+        uint64_t seq_end_comp = total_sent;
+        uint64_t decomp_at_end = find_decomp_at_comp(decomp_index, seq_end_comp, compressed_size, total_decompressed);
+        uint64_t this_seq_decomp = decomp_at_end - prev_decomp;
+        prev_decomp = decomp_at_end;
+
+        if (last) {
+            this_seq_decomp = total_decompressed - prev_decomp + this_seq_decomp;
+        }
+        if (this_seq_decomp == 0) this_seq_decomp = static_cast<uint32_t>(total_decompressed);
+
+        if (!odin_end_sequence_flash_compressed(pit_entry, static_cast<uint32_t>(this_seq_decomp), last ? 1U : 0U, efs_clear, boot_update)) return false;
     }
 
     return odin_reset_flash_count();
