@@ -72,7 +72,7 @@ auto parse_lz4_frame_header(std::istream& stream) -> Lz4FrameInfo {
     std::memcpy(&cs, content_size_bytes, 8);
     info.content_size = cs;
 
-    if (info.content_size > 1048576 && max_block_size != 1048576)
+    if (info.content_size > max_block_size)
         return info;
 
     unsigned char hc{};
@@ -303,6 +303,10 @@ auto UsbDevice::receive_empty_transfer() -> bool {
     int err = libusb_bulk_transfer(handle, endpoint_in, &dummy, 1, &actual, 100);
     if (err != 0) {
         log_verbose("Empty bulk receive failed (non-fatal): " + std::to_string(err));
+        return false;
+    }
+    if (actual != 0) {
+        log_verbose(std::format("Empty bulk receive got {} bytes (unexpected)", actual));
         return false;
     }
     return true;
@@ -672,13 +676,13 @@ auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
 }
 
 auto UsbDevice::build_lz4_decompressed_index(std::istream& stream, uint64_t compressed_size,
-                                              std::vector<uint64_t>& index) -> bool {
+                                              std::vector<std::pair<uint64_t,uint64_t>>& index) -> bool {
     std::streampos saved = stream.tellg();
     if (saved < 0) return false;
 
     index.clear();
     index.reserve(static_cast<size_t>(compressed_size / 65536) + 2);
-    index.push_back(0);
+    index.emplace_back(0, 0);
 
     LZ4F_dctx* dctx = nullptr;
     LZ4F_errorCode_t err = LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
@@ -715,7 +719,7 @@ auto UsbDevice::build_lz4_decompressed_index(std::istream& stream, uint64_t comp
 
             if (dst_size > 0) {
                 decompressed_produced += dst_size;
-                index.push_back(decompressed_produced);
+                index.emplace_back(compressed_consumed, decompressed_produced);
             }
 
             if (src_consumed > 0) {
@@ -749,14 +753,13 @@ auto UsbDevice::build_lz4_decompressed_index(std::istream& stream, uint64_t comp
     return !index.empty() && done;
 }
 
-static auto find_decomp_at_comp(const std::vector<uint64_t>& index, uint64_t compressed_pos,
-                                uint64_t total_compressed, uint64_t total_decompressed) -> uint64_t {
+static auto find_decomp_at_comp(const std::vector<std::pair<uint64_t,uint64_t>>& index, uint64_t compressed_pos) -> uint64_t {
     if (index.empty()) return 0;
-    if (compressed_pos >= total_compressed) return total_decompressed;
-    double ratio = static_cast<double>(compressed_pos) / static_cast<double>(total_compressed);
-    size_t raw_idx = static_cast<size_t>(ratio * static_cast<double>(index.size()));
-    if (raw_idx >= index.size()) raw_idx = index.size() - 1;
-    return index[raw_idx];
+    auto it = std::upper_bound(index.begin(), index.end(), compressed_pos,
+                               [](uint64_t pos, const auto& entry) { return pos < entry.first; });
+    if (it == index.begin()) return index.front().second;
+    --it;
+    return it->second;
 }
 
 auto UsbDevice::flash_partition_stream_compressed(std::istream& stream, uint64_t compressed_size,
@@ -786,12 +789,12 @@ auto UsbDevice::flash_partition_stream_compressed(std::istream& stream, uint64_t
     stream.seekg(saved_pos);
     if (!stream) return false;
 
-    std::vector<uint64_t> decomp_index;
+    std::vector<std::pair<uint64_t,uint64_t>> decomp_index;
     if (!build_lz4_decompressed_index(stream, compressed_size, decomp_index)) {
         log_error("Failed to build LZ4 decompressed index");
         return false;
     }
-    uint64_t index_total = decomp_index.empty() ? 0 : decomp_index.back();
+    uint64_t index_total = decomp_index.empty() ? 0 : decomp_index.back().second;
     if (index_total > 0 && index_total != total_decompressed) {
         log_warn(std::format("LZ4 decompressed size mismatch: header says {}, scan says {}; using scan value",
                               total_decompressed, index_total));
@@ -846,8 +849,7 @@ auto UsbDevice::flash_partition_stream_compressed(std::istream& stream, uint64_t
             remaining -= to_read;
         }
 
-        uint64_t seq_end_comp = total_sent;
-        uint64_t decomp_at_end = find_decomp_at_comp(decomp_index, seq_end_comp, compressed_size, total_decompressed);
+        uint64_t decomp_at_end = find_decomp_at_comp(decomp_index, total_sent);
         uint64_t this_seq_decomp = decomp_at_end - prev_decomp;
         prev_decomp = decomp_at_end;
 

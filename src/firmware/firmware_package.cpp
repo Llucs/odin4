@@ -906,20 +906,33 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
             }
             if (!compressed_ok) {
                 if (do_flash) {
-                    auto temp_dir = std::filesystem::temp_directory_path();
-                    auto temp_path = temp_dir / ("odin4_" + std::to_string(std::rand()) + "_" + std::to_string(data_start) + ".tmp");
+                    file.clear();
+                    file.seekg(static_cast<std::streamoff>(data_start));
+                    std::error_code fs_ec;
+                    auto tmp_dir = std::filesystem::temp_directory_path();
+                    auto tmp_pattern = tmp_dir / "odin4_XXXXXX";
+                    std::string tmpl = tmp_pattern.string();
+                    std::vector<char> buf(tmpl.begin(), tmpl.end());
+                    buf.push_back('\0');
+                    int fd = mkstemp(buf.data());
+                    if (fd == -1) {
+                        log_error("Failed to create temporary file");
+                        return ExitCode::Firmware;
+                    }
+                    close(fd);
+                    std::filesystem::path temp_path(std::string(buf.data()));
                     if (!decompress_lz4_to_file(file, data_size, temp_path.string())) {
+                        std::filesystem::remove(temp_path, fs_ec);
                         return ExitCode::Firmware;
                     }
                     uint64_t decomp_size = 0;
-                    std::error_code ec;
-                    auto fs_size = std::filesystem::file_size(temp_path, ec);
-                    if (!ec) decomp_size = static_cast<uint64_t>(fs_size);
+                    auto fs_size = std::filesystem::file_size(temp_path, fs_ec);
+                    if (!fs_ec) decomp_size = static_cast<uint64_t>(fs_size);
                     std::ifstream temp_in(temp_path.string(), std::ios::binary);
                     bool flash_ok = temp_in && decomp_size > 0 &&
                         usb_device.flash_partition_stream(temp_in, decomp_size, *pit_entry, is_large, efs_clear, boot_update);
                     temp_in.close();
-                    std::filesystem::remove(temp_path, ec);
+                    std::filesystem::remove(temp_path, fs_ec);
                     if (!flash_ok) {
                         return ExitCode::Protocol;
                     }

@@ -73,7 +73,7 @@ class UsbDevice {
 
     auto odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool;
     auto build_lz4_decompressed_index(std::istream& stream, uint64_t compressed_size,
-                                      std::vector<uint64_t>& index) -> bool;
+                                      std::vector<std::pair<uint64_t,uint64_t>>& index) -> bool;
     auto odin_command(uint32_t cmd, uint32_t subcmd, const void* payload, size_t payload_size,
                       std::vector<unsigned char>& rsp, int timeout_ms) -> bool;
     static auto odin_fail_check(const std::vector<unsigned char>& rsp, const std::string& context,
