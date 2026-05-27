@@ -221,7 +221,7 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
             if (item.second.empty()) {
                 continue;
             }
-            ExitCode rc = process_tar_file(item.second, usb, pit, !cfg.dry_run, cfg.allow_unknown);
+            ExitCode rc = process_tar_file(item.second, usb, pit, !cfg.dry_run, cfg.allow_unknown, cfg.efs_clear, cfg.boot_update);
             if (rc != ExitCode::Success) {
                 usb.end_session();
                 return static_cast<OdinExitCode>(rc);

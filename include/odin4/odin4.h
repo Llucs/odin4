@@ -45,6 +45,8 @@ struct OdinConfig {
     bool allow_unknown = false;
     bool reboot = false;
     bool redownload = false;
+    bool efs_clear = false;
+    bool boot_update = false;
 
     bool quiet = false;
     bool verbose = false;
