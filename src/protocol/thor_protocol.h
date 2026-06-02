@@ -1,6 +1,7 @@
 #ifndef ODIN_PROTOCOL_H
 #define ODIN_PROTOCOL_H
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <span>
@@ -119,9 +120,9 @@ struct InitTargetInfo {
 // Sentinel value indicating bootloader failure in response id field
 constexpr int32_t BOOTLOADER_FAIL = -1; // 0xFFFFFFFF
 
-// Handshake magic strings
-constexpr char kOdinHandshakeUsb[] = "ODIN\0";    // 5 bytes
-constexpr char kLokeResponse[]     = "LOKE";        // 4 bytes
+// Handshake magic strings (exact byte counts)
+constexpr char kOdinHandshakeUsb[] = { 'O', 'D', 'I', 'N', '\0' }; // 5 bytes
+constexpr char kLokeResponse[]     = { 'L', 'O', 'K', 'E' };        // 4 bytes
 
 constexpr std::size_t kOdinHandshakeUsbSize = 5;
 constexpr std::size_t kLokeResponseSize     = 4;
