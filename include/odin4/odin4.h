@@ -58,6 +58,11 @@ struct OdinConfig {
     uint16_t pid = 0;
     bool has_usb_interface = false;
     int usb_interface = 0;
+
+    // Timeout and retry configuration (milliseconds)
+    int preflash_timeout_ms = 1000;
+    int flash_timeout_ms = 45000;
+    unsigned preflash_retries = 2;
 };
 
 /**
