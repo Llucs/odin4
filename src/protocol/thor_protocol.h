@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <span>
 
 #if defined(__has_include)
@@ -171,6 +172,7 @@ inline void response_from_le(OdinResponseBox& r) noexcept {
 // Check response for common error conditions
 inline bool is_valid_response(const OdinResponseBox& r, int32_t expected_id) noexcept {
     if (r.id == BOOTLOADER_FAIL) return false;
+    if (r.id == std::numeric_limits<int32_t>::min()) return false;
     if (r.id != expected_id) return false;
     if (r.ack < 0) return false;
     return true;
