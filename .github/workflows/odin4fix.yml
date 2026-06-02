@@ -15,19 +15,11 @@ jobs:
     steps:
       - name: Checkout Odin4
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Clone Heimdall
+      - name: Clone Heimdall, Brokkr, and Thor
         run: |
           git clone --depth 1 https://github.com/Benjamin-Dobell/Heimdall.git refs/Heimdall
-
-      - name: Clone Brokkr
-        run: |
           git clone --depth 1 https://github.com/Gabriel2392/brokkr-flash.git refs/Brokkr
-
-      - name: Clone Thor
-        run: |
           git clone --depth 1 https://github.com/Samsung-Loki/Thor.git refs/Thor
 
       - name: Setup Python
@@ -40,44 +32,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install aider-chat
 
-      - name: Create branch
-        run: |
-          git checkout -b ai-protocol-improvements
-
-      - name: Generate repository inventory
-        run: |
-          find . -type f > repository-files.txt
-
       - name: Generate protocol prompt
         run: |
           cat > protocol_prompt.md << 'EOF'
-          You are working on Odin4.
-
-          Repository:
-          https://github.com/Llucs/odin4
-
-          Reference repositories:
-
-          https://github.com/Benjamin-Dobell/Heimdall
-          https://github.com/Gabriel2392/brokkr-flash
-          https://github.com/Samsung-Loki/Thor
-
-          Analyze:
-
-          - Flash protocol implementation
-          - USB communication
-          - Packet handling
-          - Session management
-          - PIT handling
-          - Threading
-          - Transfer pipeline
-          - Error handling
-          - Reliability
-          - Performance
-          - Memory management
+          You are working on Odin4. Analyze the flash protocol implementation.
 
           Rules:
-
           - Never invent protocol behavior.
           - Never invent packet formats.
           - Never invent Odin protocol logic.
@@ -86,38 +46,22 @@ jobs:
           - Never create TODOs.
           - Never generate mock implementations.
           - Never generate speculative protocol features.
-          - Only implement behavior verified from Heimdall, Brokkr or Thor.
+          - Only implement behavior verified from the reference files provided.
           - Treat reference implementations as protocol ground truth.
-          - Preserve compatibility.
-          - Preserve reliability.
+          - Preserve compatibility and reliability.
           - Use English only.
           - Credits must remain exclusively attributed to Llucs.
-          - Do not mention AI.
-          - Do not add assistant credits.
+          - Do not mention AI or add assistant credits.
 
           Tasks:
+          1. Compare Odin4 against Heimdall, Brokkr, and Thor.
+          2. Identify bugs, protocol inconsistencies, and missing functionality.
+          3. Identify unsafe behavior, performance bottlenecks, and memory inefficiencies.
 
-          1. Compare Odin4 against Heimdall.
-          2. Compare Odin4 against Brokkr.
-          3. Compare Odin4 against Thor.
-          4. Identify bugs.
-          5. Identify protocol inconsistencies.
-          6. Identify missing functionality.
-          7. Identify unsafe behavior.
-          8. Identify performance bottlenecks.
-          9. Identify memory inefficiencies.
-          10. Identify cleaner implementations.
-
-          Generate:
-
-          analysis-report.md
-
-          The report must include:
-
+          Generate analysis-report.md containing:
           - Problem
           - Evidence
-          - Reference repository
-          - Reference file
+          - Reference repository & file
           - Proposed fix
 
           Do not modify code yet.
@@ -128,46 +72,28 @@ jobs:
           OPENAI_API_KEY: public
           OPENAI_API_BASE: https://opencode.ai/zen/v1
         run: |
+          # Passando explicitamente os diretórios de referência como leitura
           aider \
             --yes \
             --model openai/deepseek-v4-flash-free \
-            --message-file protocol_prompt.md
+            --message-file protocol_prompt.md \
+            --read refs/Heimdall/heimdall/source \
+            --read refs/Thor/src \
+            --read refs/Brokkr/src
 
       - name: Create implementation prompt
         run: |
           cat > implementation_prompt.md << 'EOF'
           Read analysis-report.md.
 
-          Implement only findings supported by evidence.
+          Implement only findings supported by evidence. Fix confirmed bugs, improve protocol correctness, reliability, maintainability, memory usage, and transfer efficiency.
 
           Requirements:
-
-          - No placeholders
-          - No examples
-          - No mock code
-          - No speculative protocol behavior
-          - No undocumented Odin logic
-          - No protocol changes without evidence
-
-          Goals:
-
-          - Fix confirmed bugs
-          - Improve protocol correctness
-          - Improve reliability
-          - Improve maintainability
-          - Improve memory usage
-          - Improve transfer efficiency
-          - Reduce duplicated code
-
-          Rebuild after modifications.
-
-          Fix build failures if introduced.
-
-          Verify consistency across modified files.
-
-          Do not mention AI.
-
-          Keep credits exclusively attributed to Llucs.
+          - No placeholders, mock code, or examples.
+          - No speculative protocol behavior.
+          - No protocol changes without evidence.
+          - Keep credits exclusively attributed to Llucs.
+          - Do not mention AI.
           EOF
 
       - name: Implementation pass
@@ -180,41 +106,21 @@ jobs:
             --model openai/deepseek-v4-flash-free \
             --message-file implementation_prompt.md
 
-      - name: Build project
+      - name: Build project (Validation)
         run: |
-          chmod +x gradlew || true
-          ./gradlew build || true
-
-      - name: Show changes
-        run: |
-          git status
-          git diff --stat
-
-      - name: Commit changes
-        run: |
-          git config user.name github-actions
-          git config user.email actions@github.com
-
-          git add .
-
-          if ! git diff --cached --quiet; then
-            git commit -m "Protocol improvements and reliability fixes"
-          fi
-
-      - name: Push changes
-        run: |
-          git push origin ai-protocol-improvements --force
+          # Substitua pelos comandos reais de build em C/C++ do odin4
+          # Exemplo genérico com Make:
+          make clean && make || true 
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
         with:
           branch: ai-protocol-improvements
-          title: Protocol Improvements and Reliability Fixes
+          title: "Protocol Improvements and Reliability Fixes"
+          commit-message: "Refactor: Protocol improvements and reliability fixes"
           body: |
-            Protocol improvements.
+            Automated protocol improvements based on Heimdall, Brokkr, and Thor references.
 
-            Reliability fixes.
-
-            Performance improvements.
-
-            Code quality improvements.
+            - Reliability fixes
+            - Performance improvements
+            - Code quality adjustments
