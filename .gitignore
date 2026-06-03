@@ -52,3 +52,4 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+.aider*

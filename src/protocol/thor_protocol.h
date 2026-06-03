@@ -1,8 +1,10 @@
 #ifndef ODIN_PROTOCOL_H
 #define ODIN_PROTOCOL_H
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <span>
 
 #if defined(__has_include)
@@ -91,8 +93,43 @@ enum class OdinCommandParam : int32_t {
     RQT_CLOSE_REBOOT_RECOVERY = 3,
 };
 
+// Protocol version negotiation
+enum class ProtocolVersion : int16_t {
+    PROTOCOL_NONE = 0,
+    PROTOCOL_VER1 = 1,
+    PROTOCOL_VER2 = 2,
+    PROTOCOL_VER3 = 3,
+    PROTOCOL_VER4 = 4,
+    PROTOCOL_VER5 = 5,
+};
+
+// InitTargetInfo extracted from the ack word returned by RQT_INIT_TARGET
+struct InitTargetInfo {
+    uint32_t ack_word = 0;
+
+    ProtocolVersion protocol() const noexcept {
+        auto raw = static_cast<uint16_t>((ack_word >> 16) & 0xFFFFu);
+        if (raw == 0) return ProtocolVersion::PROTOCOL_VER1;
+        return static_cast<ProtocolVersion>(static_cast<int16_t>(raw));
+    }
+
+    bool supports_compressed_download() const noexcept {
+        return (ack_word & 0x8000u) != 0;
+    }
+};
+
 // Sentinel value indicating bootloader failure in response id field
 constexpr int32_t BOOTLOADER_FAIL = -1; // 0xFFFFFFFF
+
+// Handshake magic strings (exact byte counts)
+constexpr char kOdinHandshakeUsb[] = { 'O', 'D', 'I', 'N', '\0' }; // 5 bytes
+constexpr char kLokeResponse[]     = { 'L', 'O', 'K', 'E' };        // 4 bytes
+
+constexpr std::size_t kOdinHandshakeUsbSize = 5;
+constexpr std::size_t kLokeResponseSize     = 4;
+
+// PIT download chunk size (used for legacy protocol)
+constexpr std::size_t kPitChunkSize = 500;
 
 // Control types for send_control
 enum OdinControlType : uint32_t {
@@ -130,6 +167,15 @@ static_assert(sizeof(OdinRequestBox) == 1024, "OdinRequestBox must be 1024 bytes
 inline void response_from_le(OdinResponseBox& r) noexcept {
     r.id = le32_to_h(static_cast<uint32_t>(r.id));
     r.ack = le32_to_h(static_cast<uint32_t>(r.ack));
+}
+
+// Check response for common error conditions
+inline bool is_valid_response(const OdinResponseBox& r, int32_t expected_id) noexcept {
+    if (r.id == BOOTLOADER_FAIL) return false;
+    if (r.id == std::numeric_limits<int32_t>::min()) return false;
+    if (r.id != expected_id) return false;
+    if (r.ack < 0) return false;
+    return true;
 }
 
 inline OdinRequestBox make_request(OdinCommandType type, OdinCommandParam param,
