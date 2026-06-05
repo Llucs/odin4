@@ -23,7 +23,7 @@ jobs:
           git clone --depth 1 https://github.com/Samsung-Loki/Thor.git refs/Thor
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
