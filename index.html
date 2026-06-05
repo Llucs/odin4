@@ -149,7 +149,7 @@
     <section id="protocol" class="section protocol">
         <div class="container">
             <div class="section-header">
-                <h2 class="section-title">Thor Protocol</h2>
+                <h2 class="section-title">Odin Protocol</h2>
                 <p class="section-subtitle">Understand the engineering behind Samsung device communication.</p>
             </div>
             <div class="protocol-container">
@@ -163,115 +163,82 @@
                 </div>
                 <div class="protocol-content">
                     <div id="intro" class="tab-pane active">
-                        <h3>What is the Thor Protocol?</h3>
-                        <p>The Thor protocol is the proprietary language used by Samsung for communication between the host (PC) and the device in Download Mode. It operates over USB and handles critical tasks like partition table delivery and firmware writing.</p>
+                        <h3>What is the Odin Protocol?</h3>
+                        <p>The Odin protocol is the proprietary communication protocol used by Samsung devices in Download Mode. It operates over USB bulk transfers and handles session management, partition table delivery, and firmware writing.</p>
                         <div class="info-box">
                             <strong>Technical Note:</strong> odin4 implements this protocol natively, ensuring every packet follows the exact specifications expected by the device bootloader.
                         </div>
                     </div>
                     <div id="handshake" class="tab-pane">
-                        <h3>Session Start (Handshake)</h3>
-                        <p>Before any operation, the host must initiate a session by sending a handshake packet with the magic identifier and protocol version.</p>
-                        <div class="table-wrapper">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Offset</th>
-                                        <th>Size</th>
-                                        <th>Field</th>
-                                        <th>Description</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td><code>0x00</code></td>
-                                        <td>4 bytes</td>
-                                        <td>packet_size</td>
-                                        <td>Total packet size (0x000C)</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>0x04</code></td>
-                                        <td>2 bytes</td>
-                                        <td>packet_type</td>
-                                        <td>0x0001 = HANDSHAKE</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>0x06</code></td>
-                                        <td>2 bytes</td>
-                                        <td>packet_flags</td>
-                                        <td>Flags word</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>0x08</code></td>
-                                        <td>4 bytes</td>
-                                        <td>magic</td>
-                                        <td>0x4F44494E ("ODIN")</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>0x0C</code></td>
-                                        <td>4 bytes</td>
-                                        <td>version</td>
-                                        <td>Protocol version</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                        <h3>Initial Handshake</h3>
+                        <p>Before any data transfer, the host sends the ASCII string <code>ODIN</code> (4 bytes) over USB bulk transfer. The device bootloader responds with <code>LOKE</code> (4 bytes) to confirm readiness.</p>
+                        <div class="info-box">
+                            <strong>Handshake Flow:</strong> Host sends "ODIN" → Device responds with "LOKE"
                         </div>
                     </div>
                     <div id="pit" class="tab-pane">
                         <h3>PIT Table Extraction</h3>
-                        <p>The Partition Information Table (PIT) defines the device's storage layout. odin4 requests this table to validate firmware compatibility.</p>
-                        <div class="code-header">Request PIT (Packet Type 0x0007)</div>
-                        <div class="code-block">
-                            <code>ThorPitFilePacket:
-  packet_size = 0x0C
-  packet_type = 0x0007 (THOR_PACKET_PIT_FILE)
-  pit_file_size = 0x00000000</code>
+                        <p>The Partition Information Table (PIT) defines the device's storage layout. odin4 requests this table to validate firmware compatibility using the Odin command protocol (command type <code>0x65</code>).</p>
+                        <p>The PIT is retrieved in 500-byte blocks: first the device reports the total PIT size, then individual blocks are fetched, and finally the dump is terminated.</p>
+                        <div class="info-box">
+                            <strong>PIT Structure:</strong> 28-byte header (magic <code>0x12349876</code>) followed by 132-byte partition entries. Each entry includes partition name, flash filename, binary type, device type, identifier, and block geometry.
                         </div>
-                        <p>The device responds with PIT data using the same packet type.</p>
                     </div>
                     <div id="flash" class="tab-pane">
                         <h3>Flash Sequence</h3>
-                        <p>Flashing occurs in three main phases for each file using these packet types:</p>
+                        <p>Flashing uses the Odin command type <code>0x66</code> and proceeds in sequences, each divided into packets of the negotiated size (128 KiB or 1 MiB depending on protocol version).</p>
                         <div class="table-wrapper">
                             <table>
                                 <thead>
                                     <tr>
                                         <th>Phase</th>
-                                        <th>Packet Type</th>
+                                        <th>Command</th>
                                         <th>Name</th>
                                         <th>Description</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td>Begin</td>
-                                        <td><code>0x0008</code></td>
-                                        <td>BEGIN_SESSION</td>
+                                        <td>Init</td>
+                                        <td><code>0x66/0x00</code></td>
+                                        <td>REQUEST_FILE_FLASH</td>
                                         <td>Start file transfer session</td>
                                     </tr>
                                     <tr>
                                         <td>Begin</td>
-                                        <td><code>0x0009</code></td>
-                                        <td>FILE_PART_SIZE</td>
-                                        <td>Notify file size</td>
+                                        <td><code>0x66/0x02</code></td>
+                                        <td>BEGIN_SEQUENCE</td>
+                                        <td>Start a sequence with aligned size</td>
                                     </tr>
                                     <tr>
                                         <td>Data</td>
-                                        <td><code>0x0003</code></td>
+                                        <td>Bulk write</td>
                                         <td>FILE_PART</td>
-                                        <td>Sending data chunks</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Data</td>
-                                        <td><code>0x000A</code></td>
-                                        <td>RECEIVE_FILE_PART</td>
-                                        <td>Continue data transfer</td>
+                                        <td>Raw data chunk at packet size</td>
                                     </tr>
                                     <tr>
                                         <td>End</td>
-                                        <td><code>0x0004</code></td>
-                                        <td>END_FILE_TRANSFER</td>
-                                        <td>Finalize and verify</td>
+                                        <td><code>0x66/0x03</code></td>
+                                        <td>END_SEQUENCE</td>
+                                        <td>Complete sequence with partition metadata</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Init (LZ4)</td>
+                                        <td><code>0x66/0x05</code></td>
+                                        <td>REQUEST_COMPRESSED</td>
+                                        <td>Start compressed file transfer</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Begin (LZ4)</td>
+                                        <td><code>0x66/0x06</code></td>
+                                        <td>BEGIN_COMPRESSED_SEQUENCE</td>
+                                        <td>Start a compressed sequence</td>
+                                    </tr>
+                                    <tr>
+                                        <td>End (LZ4)</td>
+                                        <td><code>0x66/0x07</code></td>
+                                        <td>END_COMPRESSED_SEQUENCE</td>
+                                        <td>Complete compressed sequence</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -279,48 +246,38 @@
                     </div>
                     <div id="info" class="tab-pane">
                         <h3>Device Information</h3>
-                        <p>Query device metadata using packet type 0x0002 (DEVICE_TYPE) for device information retrieval.</p>
-                        <div class="table-wrapper">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Field</th>
-                                        <th>Size</th>
-                                        <th>Description</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td><code>device_type</code></td>
-                                        <td>128 bytes</td>
-                                        <td>Null-terminated string (e.g., "SM-G991B")</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                        <p>The device type is queried using command <code>0x64</code> with subcommand <code>0x01</code>. The device responds with a model code which the host formats as <code>SM-&lt;code&gt;</code>.</p>
+                        <div class="info-box">
+                            <strong>Note:</strong> The device type string is used for firmware compatibility verification — odin4 checks that firmware filenames match the detected device model.
                         </div>
                     </div>
                     <div id="control" class="tab-pane">
                         <h3>Control Operations</h3>
-                        <p>Device control using packet type 0x000B (CONTROL):</p>
+                        <p>Device control uses command type <code>0x67</code> with the following subcommands:</p>
                         <div class="table-wrapper">
                             <table>
                                 <thead>
                                     <tr>
-                                        <th>Control Type</th>
+                                        <th>Command</th>
                                         <th>Value</th>
                                         <th>Description</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
+                                        <td>END_SESSION</td>
+                                        <td><code>0x00</code></td>
+                                        <td>Terminate session gracefully</td>
+                                    </tr>
+                                    <tr>
                                         <td>REBOOT</td>
-                                        <td><code>0x0001</code></td>
+                                        <td><code>0x01</code></td>
                                         <td>Reboot device normally</td>
                                     </tr>
                                     <tr>
                                         <td>REDOWNLOAD</td>
-                                        <td><code>0x0002</code></td>
-                                        <td>Reboot into download mode</td>
+                                        <td><code>0x02</code></td>
+                                        <td>Reboot into Download Mode</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -392,7 +349,7 @@ sudo udevadm trigger</code>
                         </div>
                         <div class="terminal-body">
                             <pre><code>Usage: odin4 [options]
-Samsung firmware flashing tool for Linux. Version: x.x.x
+Samsung firmware flashing tool for Linux.
 
 Options:
   -h                  Show this help message
@@ -409,6 +366,8 @@ Options:
   --allow-unknown      Allow archive entries without a PIT match
   --reboot             Reboot device after flashing
   --redownload         Reboot into download mode if supported
+  --efs-clear          Clear EFS partition during flash
+  --bl-update          Signal bootloader update to device
 
 Logging:
   --quiet              Only print errors
