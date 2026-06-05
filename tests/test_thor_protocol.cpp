@@ -143,6 +143,32 @@ void test_OdinProtocol_MakeRequest_SetsIdAndData() {
 }
 REGISTER_TEST(OdinProtocol, MakeRequest_SetsIdAndData);
 
+void test_OdinProtocol_RqtPitSet_Value() {
+    EXPECT_EQ(static_cast<int>(OdinCommandParam::RQT_PIT_SET), 0);
+}
+REGISTER_TEST(OdinProtocol, RqtPitSet_Value);
+
+void test_OdinProtocol_RqtPitGet_Value() {
+    EXPECT_EQ(static_cast<int>(OdinCommandParam::RQT_PIT_GET), 1);
+}
+REGISTER_TEST(OdinProtocol, RqtPitGet_Value);
+
+void test_OdinProtocol_RqtPitStart_Value() {
+    EXPECT_EQ(static_cast<int>(OdinCommandParam::RQT_PIT_START), 2);
+}
+REGISTER_TEST(OdinProtocol, RqtPitStart_Value);
+
+void test_OdinProtocol_RqtPitComplete_Value() {
+    EXPECT_EQ(static_cast<int>(OdinCommandParam::RQT_PIT_COMPLETE), 3);
+}
+REGISTER_TEST(OdinProtocol, RqtPitComplete_Value);
+
+void test_OdinProtocol_HandshakeStringSize() {
+    EXPECT_EQ(kOdinHandshakeUsbSize, 5u);
+    EXPECT_EQ(kLokeResponseSize, 4u);
+}
+REGISTER_TEST(OdinProtocol, HandshakeStringSize);
+
 void test_OdinProtocol_MakeRequest_WithInts() {
     std::vector<int32_t> ints = {5, 10};
     OdinRequestBox rq = make_request(OdinCommandType::RQT_INIT, OdinCommandParam::RQT_INIT_PACKETSIZE, ints);
