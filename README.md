@@ -172,6 +172,8 @@ Options:
   --allow-unknown      Allow archive entries without a PIT match (disabled by default)
   --reboot             Reboot device after flashing
   --redownload         Reboot into download mode if supported
+  --efs-clear          Clear EFS partition during flash (repair IMEI/calibration)
+  --bl-update          Signal bootloader update to device
 
 Logging:
   --quiet              Only print errors

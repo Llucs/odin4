@@ -41,6 +41,8 @@ struct OdinConfig {
     bool allow_unknown = false;  // If true, allows flashing of unknown firmware files
     bool reboot = false;         // If true, reboots the device after a successful operation
     bool redownload = false;     // If true, instructs the device to re-enter Download Mode after operation
+    bool efs_clear = false;      // If true, clears EFS partition during flash
+    bool boot_update = false;    // If true, signals bootloader update to device
 
     bool quiet = false;          // Suppresses informational output
     bool verbose = false;        // Enables verbose logging
@@ -52,6 +54,11 @@ struct OdinConfig {
     uint16_t pid = 0;            // Product ID for device selection
     bool has_usb_interface = false; // Indicates if a USB interface number is specified
     int usb_interface = 0;       // USB interface number for device selection
+
+    // Timeout and retry configuration (milliseconds)
+    int preflash_timeout_ms = 1000;
+    int flash_timeout_ms = 45000;
+    unsigned preflash_retries = 2;
 };
 ```
 

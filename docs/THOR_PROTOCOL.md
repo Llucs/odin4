@@ -1,350 +1,314 @@
-# Thor Protocol Technical Report
+# Odin Protocol Reference
 
 **Author**: Llucs
 
 ## 1. Introduction
 
-The Thor protocol, also known as Odin, is a proprietary USB communication protocol developed by Samsung. It is primarily utilized by Samsung devices when operating in Download Mode for various firmware management operations, including reading, writing, and overall firmware handling. This report provides a comprehensive technical overview of the Thor protocol, detailing its communication layers, packet structures, command sets, Partition Information Table (PIT) management, and file transfer mechanisms.
+The Odin protocol is a proprietary USB communication protocol developed by Samsung, used by devices in Download Mode for firmware management operations. This document describes the wire protocol as implemented by odin4, covering packet structures, command sets, Partition Information Table (PIT) management, file transfer mechanisms, and compressed data support.
 
 ## 2. Transport Layer and Handshake
 
-Communication within the Thor protocol is established over USB using Bulk Transfers. The target USB interface typically belongs to the `0x0A` (CDC Data) class and features two endpoints (one IN and one OUT). Samsung's standard Vendor ID (VID) is `0x04E8`, with common Product IDs (PID) in Download Mode including `0x6601`, `0x685D`, and `0x68C3`.
+Communication is established over USB using Bulk Transfers. The target USB interface typically belongs to the `0x0A` (CDC Data) class and features two bulk endpoints (one IN, one OUT). Samsung's standard Vendor ID (VID) is `0x04E8`, with known Download Mode Product IDs (PID) including `0x6601`, `0x685D`, `0x68C3`, `0x68EF`, `0x4EEE`, and `0x4EEF`.
 
 ### 2.1. Initial Handshake
 
-Before any operational data transfer, an initial handshake procedure is performed to confirm the presence and readiness of the device's bootloader (LOKE).
+Before any data transfer, the host performs a handshake to confirm the device bootloader is ready.
 
-*   **Host to Device**: The host initiates the handshake by sending the ASCII string `ODIN` (4 bytes).
-*   **Device to Host**: The device is expected to respond with the ASCII string `LOKE` (4 bytes).
+*   **Host to Device**: Sends the ASCII string `ODIN` (4 bytes).
+*   **Device to Host**: Responds with the ASCII string `LOKE` (4 bytes).
 
-In more recent implementations of the Thor protocol, the host may send the string `THOR`, with the device still responding with `LOKE`.
+## 3. Packet Structures
 
-## 3. Packet Structure
+After the handshake, all command communication uses two fixed-size structures: the request box and the response box. Raw data transfers bypass this structure and use the negotiated packet size directly.
 
-Subsequent to the handshake, all communication is conducted using binary packets. With the exception of raw data transfers, every packet adheres to a standard header format.
+### 3.1. Request Box (OdinRequestBox)
 
-### 3.1. Packet Header (ThorPacketHeader)
+The request is a 1024-byte structure sent from host to device for all commands.
 
-The packet header is 8 bytes in length and specifies the total size and type of the packet.
+| Field      | Offset | Size    | Description                                           |
+| :--------- | :----- | :------ | :---------------------------------------------------- |
+| `id`       | 0x000  | 4 bytes | Command type (`0x64`, `0x65`, `0x66`, or `0x67`).    |
+| `data`     | 0x004  | 4 bytes | Command parameter (subcommand).                       |
+| `intData`  | 0x008  | 36 bytes| Integer argument array (9 x 32-bit).                  |
+| `charData` | 0x02C  | 128 bytes| Character argument buffer.                           |
+| `md5`      | 0x0AC  | 32 bytes | MD5 hash field (reserved).                            |
+| `dummy`    | 0x0CC  | 820 bytes| Padding to 1024 bytes.                                |
 
-| Field         | Size    | Type                        | Description                                     |
-| :------------ | :------ | :-------------------------- | :---------------------------------------------- |
-| `packet_size` | 4 bytes | 32-bit Integer (Little-Endian) | Total size of the packet, including the header. |
-| `packet_type` | 2 bytes | 16-bit Integer (Little-Endian) | Identifier for the packet type.                 |
-| `packet_flags`| 2 bytes | 16-bit Integer (Little-Endian) | Additional flags (typically `0x0000`).          |
+All multi-byte fields are little-endian.
 
-### 3.2. Known Packet Types
+### 3.2. Response Box (OdinResponseBox)
 
-The following table lists the identified packet types used within the Thor protocol:
+The response is an 8-byte structure returned by the device after each command.
 
-| Name                       | Value (`packet_type`) | Description                                     |
-| :------------------------- | :-------------------- | :---------------------------------------------- |
-| `THOR_PACKET_HANDSHAKE`    | `0x0001`              | Extended handshake packet.                      |
-| `THOR_PACKET_DEVICE_TYPE`  | `0x0002`              | Request for device type.                        |
-| `THOR_PACKET_FILE_PART`    | `0x0003`              | Transfer of a file part.                        |
-| `THOR_PACKET_END_FILE_TRANSFER` | `0x0004`              | End of file transfer.                           |
-| `THOR_PACKET_END_SESSION`  | `0x0005`              | Session termination.                            |
-| `THOR_PACKET_RESPONSE`     | `0x0006`              | Generic device response.                        |
-| `THOR_PACKET_PIT_FILE`     | `0x0007`              | PIT file transfer.                              |
-| `THOR_PACKET_BEGIN_SESSION`| `0x0008`              | Session initiation.                             |
-| `THOR_PACKET_FILE_PART_SIZE`| `0x0009`              | Definition of file part size.                   |
-| `THOR_PACKET_RECEIVE_FILE_PART` | `0x000A`              | Acknowledgment of file part reception.          |
-| `THOR_PACKET_CONTROL`      | `0x000B`              | Control commands (e.g., Reboot).                |
+| Field  | Offset | Size    | Description                                                   |
+| :----- | :----- | :------ | :------------------------------------------------------------ |
+| `id`   | 0x000  | 4 bytes | Echo of command type, or `0xFFFFFFFF` on failure.             |
+| `ack`  | 0x004  | 4 bytes | Status code (0 = success, negative values indicate progress or error). |
 
-> **Note on Protocol Versions:** Sections 3 and 4–8 describe two distinct but related protocols.
-> **Section 3** defines the **Thor** packet types (`0x0001`–`0x000B`) used in modern Samsung devices.
-> **Sections 4–8** document the **Odin legacy** command protocol (`0x64`–`0x69`), an older binary
-> command format used by earlier bootloaders. The odin4 tool auto-detects which protocol the
-> device speaks after the initial handshake.
+### 3.3. Failure Detection
+
+The bootloader signals failure by setting `id` to `0xFFFFFFFF` (`BOOTLOADER_FAIL`). The `ack` field contains a specific error code. An `ack` value of `INT32_MIN` is also treated as failure.
+
+### 3.4. Zero-Length Packets (ZLP)
+
+After bulk writes that are multiples of the endpoint's `wMaxPacketSize`, the host sends a zero-length packet (ZLP) to signal transfer completion. If the device does not support ZLP, the feature is disabled for the remainder of the session.
 
 ## 4. Session Management
 
-Session management within the Odin legacy protocol involves initiating and terminating communication sessions, negotiating protocol versions, and configuring transfer parameters.
+Session management involves initiating and terminating communication, negotiating protocol version, and configuring transfer parameters.
 
-### 4.1. Session Initiation (`0x64`)
+### 4.1. Command Type `0x64` (Session)
 
-The session initiation command is crucial for negotiating the protocol version and establishing transfer parameters between the host and the device.
+#### 4.1.1. Session Initiation (Command `0x00`)
 
-**Request Structure:**
+Negotiates protocol version and detects device capabilities.
 
-| Value         | Type         | Description                                     |
-| :------------ | :----------- | :---------------------------------------------- |
-| `0x64`        | 32-bit Integer | Packet type (Session).                          |
-| `0x00`        | 32-bit Integer | Command (Initiate).                             |
-| Dynamic       | 32-bit Integer | Requested protocol version (e.g., `0x00`, `0x03`, `0x04`, `0x05`, or `0x7FFFFFFF` for catch-all). |
+**Request:**
 
-**Response Structure:**
+| Field    | Value      | Description                        |
+| :------- | :--------- | :--------------------------------- |
+| `id`     | `0x64`     | Session command type.              |
+| `data`   | `0x00`     | Initiate subcommand.               |
+| `intData[0]` | `0x7FFFFFFF` | Requested protocol version (catch-all). |
 
-| Value         | Type         | Description                                     |
-| :------------ | :----------- | :---------------------------------------------- |
-| `0x64`        | 32-bit Integer | Packet type (`0xFF` in case of failure).        |
-| Dynamic       | 32-bit Integer | Modified protocol version returned by the device. |
+**Response (`id` = `0x64`):**
 
-The modified protocol version returned by the device dictates the following standard parameters:
+| Field  | Description                                              |
+| :----- | :------------------------------------------------------- |
+| `ack`  | Upper 16 bits encode the bootloader version; bit 15 (0x8000) indicates compressed download support. Lower 16 bits are reserved. |
 
-*   If the requested version is `0`, the device returns `0x20000`.
-*   If the requested version is less than the bootloader's version, it returns `(<Requested Version> << 16) | 0x0`.
-*   Otherwise, it returns `(<Bootloader Version> << 16) | 0x0`.
+**Version-based Parameters:**
 
-Based on the negotiated version, default transfer parameters are set:
+*   **Version 0 or 1**: 30,000 ms timeout, 131,072 bytes (128 KiB) packet size, maximum 240 packets per sequence.
+*   **Version >= 2**: 120,000 ms timeout, 1,048,576 bytes (1 MiB) packet size, maximum 30 packets per sequence. Additionally, the host sends `0x64`, command `0x05`, to set the file part size.
 
-*   **Version 0 or 1**: 30,000 ms (30s) timeout, 131,072 bytes (128 KiB) packet size, maximum sequence of 240 packets.
-*   **Version >= 2**: 120,000 ms (2 min) timeout, 1,048,576 bytes (1 MiB) packet size, maximum sequence of 30 packets.
+#### 4.1.2. Device Type Query (Command `0x01`)
 
-### 4.2. Total Size Configuration (`0x64`, Command `0x02`)
+Requests the device model identifier.
 
-This command informs the device about the total size of the data that will be transferred during the session.
+**Request:** `id` = `0x64`, `data` = `0x01`
 
-**Request Structure:**
+**Response:** `ack` contains an integer model code. The host formats it as `"SM-<code>"`.
 
-| Value         | Type         | Description                                     |
-| :------------ | :----------- | :---------------------------------------------- |
-| `0x64`        | 32-bit Integer | Packet type.                                    |
-| `0x02`        | 32-bit Integer | Command (Set Total Bytes).                      |
-| Dynamic       | 64-bit Integer | Total size in bytes.                            |
+#### 4.1.3. Total Size Configuration (Command `0x02`)
 
-**Response Structure:**
+Informs the device of the total firmware size to be transferred.
 
-| Value         | Type         | Description                                     |
-| :------------ | :----------- | :---------------------------------------------- |
-| `0x64`        | 32-bit Integer | Packet type.                                    |
-| `0x00`        | 32-bit Integer | Status code (0 = Success).                      |
+**Request:** `id` = `0x64`, `data` = `0x02`, `intData[0..1]` = 64-bit total size in bytes (little-endian).
 
-### 4.3. Other Session Commands (`0x64`)
+**Response:** `id` = `0x64`, `ack` = `0x00` on success.
 
-*   **Reset Flash Count (`0x01`)**: Resets the device's flash counter.
-*   **Set File Part Size (`0x05`)**: Defines the size of a file part (32-bit argument).
-*   **Erase Userdata (`0x07`)**: Erases the user data partition (equivalent to a Factory Reset).
-*   **Enable T-Flash (`0x08`)**: Enables T-Flash mode.
-*   **Set Region Code (`0x09`)**: Changes the device's region code (3-byte string argument).
+#### 4.1.4. Set File Part Size (Command `0x05`)
 
-### 4.4. Session Termination and Control (`0x67`)
+Defines the file part size for the session. Sent when protocol version >= 2.
 
-**Base Request Structure:**
+**Request:** `id` = `0x64`, `data` = `0x05`, `intData[0]` = part size in bytes.
 
-| Value         | Type         | Description                                     |
-| :------------ | :----------- | :---------------------------------------------- |
-| `0x67`        | 32-bit Integer | Packet type.                                    |
-| Command       | 32-bit Integer | Control command.                                |
+**Response:** `id` = `0x64`, `ack` = `0x00` on success.
 
-**Available Commands:**
+### 4.2. Command Type `0x67` (Close)
 
-*   `0x00`: End Session (Terminates the current session).
-*   `0x01`: Reboot (Reboots the device normally).
-*   `0x02`: Reboot to Odin (Reboots the device back into Download Mode).
-*   `0x03`: Shutdown (Powers off the device).
+Controls session termination and device reboot.
 
-**Response Structure:**
+**Commands:**
 
-| Value         | Type         | Description                                     |
-| :------------ | :----------- | :---------------------------------------------- |
-| `0x67`        | 32-bit Integer | Packet type.                                    |
-| `0x00`        | 32-bit Integer | Status code (0 = Success).                      |
+| `data`  | Description                                                  |
+| :------ | :----------------------------------------------------------- |
+| `0x00`  | End Session — terminates the current session gracefully.     |
+| `0x01`  | Reboot — reboots the device normally.                        |
+| `0x02`  | Reboot to Odin — reboots the device back into Download Mode. |
 
-## 5. Partition Information Table (PIT) [Odin Legacy]
+**Response:** `id` = `0x67`, `ack` = `0x00` on success.
 
-The Partition Information Table (PIT) file is a critical component that describes the storage layout of the device, defining partitions and their attributes.
+## 5. Partition Information Table (PIT)
+
+The PIT describes the device storage layout and is required for safe firmware flashing.
 
 ### 5.1. PIT File Structure
 
-A PIT file begins with a 28-byte header, followed by a variable number of 132-byte entries, each describing a specific partition.
+A PIT file begins with a 28-byte header followed by a variable number of 132-byte entries.
 
 **Header (28 bytes):**
 
-| Offset | Size    | Type         | Description                                     |
-| :----- | :------ | :----------- | :---------------------------------------------- |
-| `0x00` | 4 bytes | 32-bit Integer | Magic Number (`0x12349876`).                    |
-| `0x04` | 4 bytes | 32-bit Integer | Entry Count (Number of partition entries).      |
-| `0x08` | 4 bytes | 32-bit Integer | Unknown 1.                                      |
-| `0x0C` | 4 bytes | 32-bit Integer | Unknown 2.                                      |
-| `0x10` | 2 bytes | 16-bit Integer | Unknown 3.                                      |
-| `0x12` | 2 bytes | 16-bit Integer | Unknown 4.                                      |
-| `0x14` | 2 bytes | 16-bit Integer | Unknown 5.                                      |
-| `0x16` | 2 bytes | 16-bit Integer | Unknown 6.                                      |
-| `0x18` | 2 bytes | 16-bit Integer | Unknown 7.                                      |
-| `0x1A` | 2 bytes | 16-bit Integer | Unknown 8.                                      |
+| Offset | Size    | Type            | Description                                          |
+| :----- | :------ | :-------------- | :--------------------------------------------------- |
+| `0x00` | 4 bytes | 32-bit Integer  | Magic number (`0x12349876`).                         |
+| `0x04` | 4 bytes | 32-bit Integer  | Entry count (number of partition entries).           |
+| `0x08` | 8 bytes | Raw             | `com_tar2` field.                                    |
+| `0x10` | 8 bytes | Raw             | `cpu_bl_id` field.                                   |
+| `0x18` | 2 bytes | 16-bit Integer  | `lu_count`.                                          |
+| `0x1A` | 2 bytes | 16-bit Integer  | Reserved.                                            |
 
 **PIT Entry (132 bytes):**
 
-| Offset | Size    | Type         | Description                                     |
-| :----- | :------ | :----------- | :---------------------------------------------- |
-| `0x00` | 4 bytes | 32-bit Integer | Binary Type (0 = AP, 1 = CP).                   |
-| `0x04` | 4 bytes | 32-bit Integer | Device Type (0 = OneNAND, 1 = FAT, 2 = MMC).    |
-| `0x08` | 4 bytes | 32-bit Integer | Partition Identifier.                           |
-| `0x0C` | 4 bytes | 32-bit Integer | Attributes (1 = Write, 2 = STL).                |
-| `0x10` | 4 bytes | 32-bit Integer | Update Attributes (1 = FOTA, 2 = Secure).       |
-| `0x14` | 4 bytes | 32-bit Integer | Block Size or Offset.                           |
-| `0x18` | 4 bytes | 32-bit Integer | Block Count.                                    |
-| `0x1C` | 4 bytes | 32-bit Integer | File Offset (Obsolete).                         |
-| `0x20` | 4 bytes | 32-bit Integer | File Size (Obsolete).                           |
-| `0x24` | 32 bytes | ASCII String | Partition Name.                                 |
-| `0x44` | 32 bytes | ASCII String | Flash Filename.                                 |
-| `0x64` | 32 bytes | ASCII String | FOTA Filename.                                  |
+| Offset | Size    | Type            | Description                                          |
+| :----- | :------ | :-------------- | :--------------------------------------------------- |
+| `0x00` | 4 bytes | 32-bit Integer  | Binary type (0 = AP, 1 = CP).                        |
+| `0x04` | 4 bytes | 32-bit Integer  | Device type (0 = OneNAND, 1 = FAT, 2 = MMC).         |
+| `0x08` | 4 bytes | 32-bit Integer  | Partition identifier.                                |
+| `0x0C` | 4 bytes | 32-bit Integer  | Attributes.                                          |
+| `0x10` | 4 bytes | 32-bit Integer  | Update attributes.                                   |
+| `0x14` | 4 bytes | 32-bit Integer  | Block size or offset.                                |
+| `0x18` | 4 bytes | 32-bit Integer  | Block count.                                         |
+| `0x1C` | 4 bytes | 32-bit Integer  | File offset (obsolete).                              |
+| `0x20` | 4 bytes | 32-bit Integer  | File size (obsolete).                                |
+| `0x24` | 32 bytes | ASCII String   | Partition name.                                      |
+| `0x44` | 32 bytes | ASCII String   | Flash filename.                                      |
+| `0x64` | 32 bytes | ASCII String   | FOTA filename.                                       |
 
 ### 5.2. PIT Operations (`0x65`)
 
-**Dumping (Reading PIT from Device):**
+#### Dumping (Reading PIT from Device)
 
-1.  **Request PIT Dump**: The host sends `0x65` with command `0x01`. The device responds with the total size of the PIT data.
-2.  **Dump PIT Block**: The host requests 500-byte blocks by sending `0x65`, command `0x02`, and the block index. The device responds with the raw data for that block.
-3.  **End PIT Dump**: The host sends `0x65` with command `0x03` to signal the end of the dump operation.
+1. **Request PIT Size** (`0x65`, command `0x01`): The device responds with the total PIT data size in `ack`.
+2. **Read PIT Block** (`0x65`, command `0x02`, `intData[0]` = block index): Requests a 500-byte block of PIT data. The device responds with raw data.
+3. **End PIT Dump** (`0x65`, command `0x03`): Signals completion of the dump.
 
-**Flashing (Writing PIT to Device):**
+#### Flashing (Writing PIT to Device)
 
-1.  **Request PIT Flash**: The host sends `0x65` with command `0x00`.
-2.  **Begin PIT Flash**: The host sends `0x65`, command `0x02`, and the size of the PIT in bytes.
-3.  **Send PIT Data**: The raw buffer of the PIT file is transferred to the device.
-4.  **End PIT Flash**: The host sends `0x65` with command `0x03` to signal the completion of the flash operation.
+1. **Request PIT Flash** (`0x65`, command `0x00`): Prepares the device to receive a PIT.
+2. **Send PIT Data** (`0x65`, command `0x01`, `intData[0]` = PIT size): Raw PIT buffer is transferred.
+3. **End PIT Flash** (`0x65`, command `0x02`, `intData[0]` = PIT size): Completes the PIT write.
 
-## 6. File Transfer (Flashing) [Odin Legacy]
+#### Validation
 
-Firmware file transfers (`0x66`) are structured into sequences, with each sequence further divided into smaller parts.
+The host validates:
+- Magic number matches `0x12349876`.
+- Entry count is between 1 and 512.
+- Entry identifier is non-zero and unique.
+- Partition names contain only printable ASCII (0x20–0x7E), excluding `/` and `\`.
+- Block size/count multiplication does not overflow.
 
-### 6.1. Request File Flash
+## 6. File Transfer (Flashing)
 
-This command initiates a file flash operation, specifying whether the data is compressed.
+Firmware file transfers (`0x66`) are divided into sequences, each further divided into packets of the negotiated size.
 
-**Request Structure:**
+### 6.1. Request File Flash (Command `0x00`)
 
-| Value         | Type         | Description                                     |
-| :------------ | :----------- | :---------------------------------------------- |
-| `0x66`        | 32-bit Integer | Packet type.                                    |
-| `0x00` or `0x05` | 32-bit Integer | Command (`0x00` for uncompressed data, `0x05` for LZ4 compressed data). |
+Initiates a file flash operation for uncompressed data.
 
-**Response Structure:**
+**Request:** `id` = `0x66`, `data` = `0x00`
 
-| Value         | Type         | Description                                     |
-| :------------ | :----------- | :---------------------------------------------- |
-| `0x66`        | 32-bit Integer | Packet type.                                    |
-| `0x00`        | 32-bit Integer | Status code.                                    |
+**Response:** `id` = `0x66`, `ack` = `0x00` on success.
 
-### 6.2. Begin File Sequence Flash
+### 6.2. Request Sequence Flash (Command `0x02`)
 
-This command signals the start of a file sequence transfer and provides the aligned size of the sequence.
+Begins a new sequence and provides the aligned packet-aligned size.
 
-**Request Structure:**
+**Request:** `id` = `0x66`, `data` = `0x02`, `intData[0]` = aligned sequence size in bytes.
 
-| Value         | Type         | Description                                     |
-| :------------ | :----------- | :---------------------------------------------- |
-| `0x66`        | 32-bit Integer | Packet type.                                    |
-| `0x02` or `0x06` | 32-bit Integer | Command (`0x02` for uncompressed, `0x06` for compressed). |
-| Dynamic       | 32-bit Integer | Aligned size of the sequence in bytes.          |
+**Response:** `id` = `0x66`, `ack` = `0x00` on success.
 
-**Response Structure:**
+### 6.3. Send File Part
 
-| Value         | Type         | Description                                     |
-| :------------ | :----------- | :---------------------------------------------- |
-| `0x66`        | 32-bit Integer | Packet type.                                    |
-| `0x00`        | 32-bit Integer | Status code.                                    |
+Raw data blocks are sent at the negotiated packet size (128 KiB or 1 MiB). After each block the device responds with the current part index, which is validated against the sender's expected index.
 
-### 6.3. Flash File Part
+**Request:** Raw byte buffer (negotiated packet size).
 
-Raw data blocks are sent, corresponding to the negotiated packet size (e.g., 1 MiB).
+**Response:** `id` = `0x66`, `ack` = current file part index (device-side).
 
-**Request**: Raw byte buffer.
+### 6.4. End Sequence Flash (Command `0x03`)
 
-**Response Structure:**
+Signals the end of a sequence. Payload varies by partition type (CP/modem vs AP/phone).
 
-| Value         | Type         | Description                                     |
-| :------------ | :----------- | :---------------------------------------------- |
-| `0x66`        | 32-bit Integer | Packet type.                                    |
-| Dynamic       | 32-bit Integer | Current file part index on the device side.     |
+**For CP (binary_type = 1), 32 bytes:**
 
-### 6.4. End File Sequence Flash
+| Offset | Size    | Description                                         |
+| :----- | :------ | :-------------------------------------------------- |
+| 0x00   | 4 bytes | Modem identifier (`0x01`).                          |
+| 0x04   | 4 bytes | Actual size of the sequence in bytes.               |
+| 0x08   | 4 bytes | Binary type (from PIT).                             |
+| 0x0C   | 4 bytes | Device type (from PIT).                             |
+| 0x10   | 4 bytes | Reserved (`0`).                                     |
+| 0x14   | 4 bytes | Last sequence flag (`1` = yes, `0` = no).           |
+| 0x18   | 4 bytes | Reserved (`0`).                                     |
+| 0x1C   | 4 bytes | Reserved (`0`).                                     |
 
-After all parts of a sequence have been transferred, the host must signal the end of that sequence. The format of this command varies depending on whether the file is intended for the Modem (CP) or Phone (AP).
+**For AP (binary_type = 0), 32 bytes:**
 
-**For Modem (CP):**
+| Offset | Size    | Description                                         |
+| :----- | :------ | :-------------------------------------------------- |
+| 0x00   | 4 bytes | Phone identifier (`0x00`).                          |
+| 0x04   | 4 bytes | Actual size of the sequence in bytes.               |
+| 0x08   | 4 bytes | Binary type (from PIT).                             |
+| 0x0C   | 4 bytes | Device type (from PIT).                             |
+| 0x10   | 4 bytes | Partition identifier (from PIT).                    |
+| 0x14   | 4 bytes | Last sequence flag (`1` = yes, `0` = no).           |
+| 0x18   | 4 bytes | EFS clear flag (`1` = yes, `0` = no).               |
+| 0x1C   | 4 bytes | Bootloader update flag (`1` = yes, `0` = no).       |
 
-| Value         | Type         | Description                                     |
-| :------------ | :----------- | :---------------------------------------------- |
-| `0x66`        | 32-bit Integer | Packet type.                                    |
-| `0x03` or `0x07` | 32-bit Integer | Command (`0x03` for uncompressed, `0x07` for compressed). |
-| `0x01`        | 32-bit Integer | Modem/CP Identifier.                            |
-| Dynamic       | 32-bit Integer | Actual size of the sequence in bytes.           |
-| Dynamic       | 32-bit Integer | Binary Type (from PIT).                         |
-| Dynamic       | 32-bit Integer | Device Type (from PIT).                         |
-| Dynamic       | 32-bit Integer | Flag indicating if it is the last sequence (1 = Yes, 0 = No). |
+Before the end-sequence command, the host sends an empty bulk transfer (USB ZLP). After the command, it drains any unexpected response bytes.
 
-**For Phone (AP):**
+### 6.5. Large Partitions
 
-| Value         | Type         | Description                                     |
-| :------------ | :----------- | :---------------------------------------------- |
-| `0x66`        | 32-bit Integer | Packet type.                                    |
-| `0x03` or `0x07` | 32-bit Integer | Command (`0x03` for uncompressed, `0x07` for compressed). |
-| `0x00`        | 32-bit Integer | Phone/AP Identifier.                            |
-| Dynamic       | 32-bit Integer | Actual size of the sequence in bytes.           |
-| Dynamic       | 32-bit Integer | Binary Type (from PIT).                         |
-| Dynamic       | 32-bit Integer | Device Type (from PIT).                         |
-| Dynamic       | 32-bit Integer | Partition Identifier (from PIT).                |
-| Dynamic       | 32-bit Integer | Flag indicating if it is the last sequence (1 = Yes, 0 = No). |
-| Dynamic       | 32-bit Integer | EFS Clear Flag (1 = Yes, 0 = No).               |
-| Dynamic       | 32-bit Integer | Bootloader Update Flag (1 = Yes, 0 = No).       |
+Partitions named `SYSTEM`, `USERDATA`, or `SUPER` have their real sizes rounded up to the next 512-byte boundary for the end-sequence reporting.
 
-**Response Structure:**
+### 6.6. Compressed Transfers
 
-| Value         | Type         | Description                                     |
-| :------------ | :----------- | :---------------------------------------------- |
-| `0x66`        | 32-bit Integer | Packet type.                                    |
-| `0x00`        | 32-bit Integer | Status code.                                    |
+If the device supports compressed downloads (detected during session initiation), LZ4-compressed firmware can be streamed directly.
 
-## 7. Device Information [Odin Legacy]
+#### 6.6.1. Request Compressed Flash (Command `0x05`)
 
-The Odin legacy protocol facilitates the extraction of detailed device information (`0x69`).
+Initiates a compressed flash operation.
 
-### 7.1. Information Structure
+**Request:** `id` = `0x66`, `data` = `0x05`
 
-Device information is structured with a header followed by arrays of location and data structures.
+**Response:** `id` = `0x66`, `ack` = `0x00` on success.
 
-**Header:**
+#### 6.6.2. Request Compressed Sequence (Command `0x06`)
 
-*   Magic Number: `0x12345678` (32-bit)
-*   Count: Number of items (32-bit)
-*   Array of Location Structures
-*   Array of Data Structures
+Begins a new compressed sequence.
 
-**Location Structure:**
+**Request:** `id` = `0x66`, `data` = `0x06`, `intData[0]` = compressed sequence size in bytes.
 
-*   DevInfo Type (32-bit)
-*   Offset in bytes (32-bit)
-*   Size in bytes (32-bit)
+**Response:** `id` = `0x66`, `ack` = `0x00` on success.
 
-**Data Structure:**
+#### 6.6.3. End Compressed Sequence (Command `0x07`)
 
-*   DevInfo Type (32-bit)
-*   Size in bytes (32-bit)
-*   Raw data buffer
+Same payload layout as the uncompressed end-sequence (command `0x03`), but with command value `0x07`. The size field reports the *decompressed* size of the sequence.
 
-**Known DevInfo Types:**
+#### 6.6.4. LZ4 Frame Requirements
 
-*   `0x00`: Model Name
-*   `0x01`: Serial Code
-*   `0x02`: Region Code (OMCSALESCODE)
-*   `0x03`: Carrier ID
+The host validates LZ4 frames before transfer:
+- Frame version must be 1.
+- Content size must be present.
+- Block independence must be enabled.
+- Block checksum must be disabled.
+- No dictionary ID.
+- Maximum block size ≤ 1 MiB.
 
-### 7.2. Extraction Commands (`0x69`)
+If compressed transfer fails or is unsupported, the host falls back to decompressing to a temporary file and flashing the uncompressed data.
 
-*   **Dump Device Info (`0x00`)**: Requests the size of the device information. The device responds with the size (typically 500 bytes).
-*   **Dump Block (`0x01`)**: Requests a 500-byte block by passing the block index. The device responds with the raw data for that block.
-*   **End Dump (`0x02`)**: Terminates the information extraction process.
+### 6.7. Reset Flash Count
 
-## 8. Error Handling [Odin Legacy]
+After each file transfer, the host sends `0x64`, command `0x01` to reset the device flash counter.
 
-In the event of an error during any operation, the device signals the failure by setting the first byte of its response to `0xFF`. The specific error code is then provided as a 32-bit integer at offset 4 of the response.
+### 6.8. Retry Behavior
 
-**Known Error Codes during End File Sequence Flash:**
+USB bulk transfers include up to 5 retries with exponential backoff (100 ms initial, doubling per attempt, capped at 1500 ms). Pipe errors trigger a clear-halt on the endpoint. Timeout or pipe errors on writes reduce the chunk size to 16 KiB for the remainder of the transfer.
 
-*   `-2`: Write Protection (WP) Error.
-*   `-3`: Erase Error.
-*   `-4`: Write Error.
-*   `-5`: Authentication (Auth) Error.
-*   `-6`: Size Error.
-*   `-7`: File System (Ext4) Error.
+## 7. Device Information
+
+The device type is queried via `0x64`, command `0x01`. The response code is formatted as `"SM-<code>"` for display purposes.
+
+## 8. Error Handling
+
+When an operation fails, the device sets `id` to `0xFFFFFFFF` in the response. Negative `ack` values indicate specific conditions during end-sequence operations:
+
+| Code | Name      | Description                    |
+| :--- | :-------- | :----------------------------- |
+| `-2` | WP        | Write protection error.        |
+| `-3` | Erase     | Erase error.                   |
+| `-4` | Write     | Write error.                   |
+| `-5` | Auth      | Authentication error.          |
+| `-6` | Size      | Size error.                    |
+| `-7` | Ext4      | File system (Ext4) error.      |
+
+During end-sequence flash, negative codes in this range are treated as progress indicators (non-fatal).
 
 ## 9. References
 
-[1] Documentação Técnica do Protocolo Thor (User Provided Document)
-[2] Gabriel2392/brokkr-flash: Odin but better (and open-source). https://github.com/Gabriel2392/brokkr-flash
-[3] Llucs/odin4: odin4 is a flash tool for Samsung devices. https://github.com/Llucs/odin4
-[4] Benjamin-Dobell/Heimdall: Heimdall is a cross-platform open-source tool suite used to flash firmware (aka ROMs) onto Samsung Galaxy devices. https://github.com/Benjamin-Dobell/Heimdall
-[5] Samsung-Loki/Thor: An alternative to Heimdall. https://github.com/Samsung-Loki/Thor
+[1] Llucs/odin4: odin4 is a flash tool for Samsung devices. https://github.com/Llucs/odin4
+[2] Benjamin-Dobell/Heimdall: Cross-platform open-source tool suite for flashing firmware onto Samsung Galaxy devices. https://github.com/Benjamin-Dobell/Heimdall
+[3] Gabriel2392/brokkr-flash: Odin reimplementation. https://github.com/Gabriel2392/brokkr-flash
+[4] Samsung-Loki/Thor: Alternative to Heimdall. https://github.com/Samsung-Loki/Thor
