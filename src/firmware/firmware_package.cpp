@@ -156,28 +156,35 @@ auto detect_tar_md5_info(const std::string& file_path, TarMd5Info& info) -> Exit
         return ExitCode::Firmware;
     }
 
-    int64_t best_pos = -1;
-    for (int64_t pos = static_cast<int64_t>(tail.size()) - 32; pos >= 0; --pos) {
-        bool ok = true;
-        for (int i = 0; i < 32; ++i) {
-            if (!is_hex_char(static_cast<unsigned char>(tail[static_cast<size_t>(pos + i)]))) {
-                ok = false;
-                break;
+    auto find_md5_in_tail = [&](bool require_block_aligned) -> int64_t {
+        for (int64_t pos = static_cast<int64_t>(tail.size()) - 32; pos >= 0; --pos) {
+            if (require_block_aligned) {
+                uint64_t abs_pos = (file_size - tail_len) + static_cast<uint64_t>(pos);
+                if (abs_pos % 512 != 0) continue;
             }
-        }
-        if (!ok) {
-            continue;
-        }
 
-        const bool left_ok = (pos == 0) || !is_hex_char(static_cast<unsigned char>(tail[static_cast<size_t>(pos - 1)]));
-        const bool right_ok = (static_cast<size_t>(pos + 32) >= tail.size()) ||
-                              !is_hex_char(static_cast<unsigned char>(tail[static_cast<size_t>(pos + 32)]));
-        if (!left_ok || !right_ok) {
-            continue;
-        }
+            bool ok = true;
+            for (int i = 0; i < 32; ++i) {
+                if (!is_hex_char(static_cast<unsigned char>(tail[static_cast<size_t>(pos + i)]))) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (!ok) continue;
 
-        best_pos = pos;
-        break;
+            const bool left_ok = (pos == 0) || !is_hex_char(static_cast<unsigned char>(tail[static_cast<size_t>(pos - 1)]));
+            const bool right_ok = (static_cast<size_t>(pos + 32) >= tail.size()) ||
+                                  !is_hex_char(static_cast<unsigned char>(tail[static_cast<size_t>(pos + 32)]));
+            if (!left_ok || !right_ok) continue;
+
+            return pos;
+        }
+        return -1;
+    };
+
+    int64_t best_pos = find_md5_in_tail(true);
+    if (best_pos < 0) {
+        best_pos = find_md5_in_tail(false);
     }
 
     if (best_pos < 0) {
