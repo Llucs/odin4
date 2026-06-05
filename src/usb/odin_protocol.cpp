@@ -607,7 +607,7 @@ auto UsbDevice::odin_send_pit(const std::vector<unsigned char>& pit_data) -> boo
     if (!odin_command(0x65, 0x00, nullptr, 0, rsp, USB_TIMEOUT_CONTROL)) return false;
     if (!odin_fail_check(rsp, "PitSendSet", false)) return false;
 
-    int32_t pit_size_le = static_cast<int32_t>(pit_data.size());
+    uint32_t pit_size_le = h_to_le32(static_cast<uint32_t>(pit_data.size()));
     if (!odin_command(0x65, 0x01, &pit_size_le, sizeof(pit_size_le), rsp, USB_TIMEOUT_CONTROL)) return false;
     if (!odin_fail_check(rsp, "PitSendStart", false)) return false;
 
