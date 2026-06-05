@@ -226,6 +226,10 @@ auto UsbDevice::receive_pit_table(PitTable& pit_table) -> bool {
     return request_pit(pit_table);
 }
 
+auto UsbDevice::send_pit(const std::vector<unsigned char>& pit_data) -> bool {
+    return odin_send_pit(pit_data);
+}
+
 auto UsbDevice::notify_total_bytes(uint64_t total) -> bool {
     return odin_set_total_bytes(total);
 }
@@ -298,15 +302,24 @@ auto UsbDevice::send_empty_transfer() -> bool {
 }
 
 auto UsbDevice::receive_empty_transfer() -> bool {
+    unsigned char dummy{};
     int actual = 0;
-    static unsigned char dummy;
     int err = libusb_bulk_transfer(handle, endpoint_in, &dummy, 1, &actual, 100);
-    if (err != 0) {
-        log_verbose("Empty bulk receive failed (non-fatal): " + std::to_string(err));
+    if (err != 0 && err != LIBUSB_ERROR_TIMEOUT) {
+        log_warn(std::format("Empty bulk receive error: {}", err));
         return false;
     }
     if (actual != 0) {
-        log_verbose(std::format("Empty bulk receive got {} bytes (unexpected)", actual));
+        log_warn(std::format("Empty bulk receive got {} bytes (unusual, draining)", actual));
+        int drained = 0;
+        while (actual > 0 && drained < 64) {
+            err = libusb_bulk_transfer(handle, endpoint_in, &dummy, 1, &actual, 50);
+            if (err != 0 || actual == 0) break;
+            ++drained;
+        }
+        if (drained > 0) {
+            log_warn(std::format("Drained {} unexpected bytes after empty bulk receive", drained));
+        }
         return false;
     }
     return true;
@@ -511,7 +524,9 @@ auto UsbDevice::odin_end_sequence_flash_compressed(const PitEntry& pit_entry, ui
 
     if (!odin_command(0x66, 0x07, payload.data(), 32, rsp, odin_flash_timeout_ms)) return false;
 
-    receive_empty_transfer();
+    if (!receive_empty_transfer()) {
+        log_warn("EndSequenceFlashCompressed: ZLP receive unexpected");
+    }
 
     return odin_fail_check(rsp, "EndSequenceFlashCompressed", true);
 }
@@ -570,9 +585,42 @@ auto UsbDevice::odin_end_sequence_flash(const PitEntry& pit_entry, uint32_t real
 
     if (!odin_command(0x66, 0x03, payload.data(), 32, rsp, odin_flash_timeout_ms)) return false;
 
-    receive_empty_transfer();
+    if (!receive_empty_transfer()) {
+        log_warn("EndSequenceFlash: ZLP receive unexpected");
+    }
 
     return odin_fail_check(rsp, "EndSequenceFlash", true);
+}
+
+auto UsbDevice::odin_send_pit(const std::vector<unsigned char>& pit_data) -> bool {
+    if (pit_data.empty()) {
+        log_error("PIT data is empty");
+        return false;
+    }
+    if (pit_data.size() > 0x7FFFFFFFL) {
+        log_error("PIT data too large");
+        return false;
+    }
+
+    std::vector<unsigned char> rsp;
+
+    if (!odin_command(0x65, 0x00, nullptr, 0, rsp, USB_TIMEOUT_CONTROL)) return false;
+    if (!odin_fail_check(rsp, "PitSendSet", false)) return false;
+
+    int32_t pit_size_le = static_cast<int32_t>(pit_data.size());
+    if (!odin_command(0x65, 0x01, &pit_size_le, sizeof(pit_size_le), rsp, USB_TIMEOUT_CONTROL)) return false;
+    if (!odin_fail_check(rsp, "PitSendStart", false)) return false;
+
+    if (!bulk_write_all(pit_data.data(), pit_data.size(), USB_TIMEOUT_CONTROL)) return false;
+
+    rsp.assign(512, 0);
+    int got = 0;
+    if (!bulk_read_once(rsp.data(), rsp.size(), &got, USB_TIMEOUT_CONTROL)) return false;
+    rsp.resize(static_cast<size_t>(got));
+    if (!odin_fail_check(rsp, "PitSendAck", false)) return false;
+
+    if (!odin_command(0x65, 0x02, &pit_size_le, sizeof(pit_size_le), rsp, USB_TIMEOUT_CONTROL)) return false;
+    return odin_fail_check(rsp, "PitSendComplete", false);
 }
 
 auto UsbDevice::odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool {
@@ -614,8 +662,6 @@ auto UsbDevice::odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool {
 
 auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, const PitEntry& pit_entry,
                                        bool large_partition, bool efs_clear, bool boot_update) -> bool {
-    (void) large_partition;
-
     if (!odin_request_file_flash()) return false;
 
     const uint64_t sequence_bytes =
@@ -643,7 +689,11 @@ auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
     uint32_t expected_index = 0;
     for (uint32_t i = 0; i < sequences; ++i) {
         const bool last = (i + 1 == sequences);
-        const uint32_t real_size = last ? last_sequence : static_cast<uint32_t>(sequence_bytes);
+        uint32_t real_size = last ? last_sequence : static_cast<uint32_t>(sequence_bytes);
+        if (large_partition) {
+            uint32_t rem = real_size % 512;
+            if (rem != 0) real_size += 512 - rem;
+        }
         uint32_t aligned_size = real_size;
         if (aligned_size % static_cast<uint32_t>(odin_flash_packet_size) != 0) {
             aligned_size += static_cast<uint32_t>(odin_flash_packet_size) -
@@ -763,10 +813,8 @@ static auto find_decomp_at_comp(const std::vector<std::pair<uint64_t,uint64_t>>&
 }
 
 auto UsbDevice::flash_partition_stream_compressed(std::istream& stream, uint64_t compressed_size,
-                                                   const PitEntry& pit_entry, bool large_partition,
-                                                   bool efs_clear, bool boot_update) -> bool {
-    (void) large_partition;
-
+                                                    const PitEntry& pit_entry, bool large_partition,
+                                                    bool efs_clear, bool boot_update) -> bool {
     std::streampos saved_pos = stream.tellg();
     if (saved_pos < 0) return false;
 
@@ -857,6 +905,11 @@ auto UsbDevice::flash_partition_stream_compressed(std::istream& stream, uint64_t
             this_seq_decomp = total_decompressed - prev_decomp + this_seq_decomp;
         }
         if (this_seq_decomp == 0) this_seq_decomp = static_cast<uint32_t>(total_decompressed);
+
+        if (large_partition) {
+            uint64_t rem = this_seq_decomp % 512;
+            if (rem != 0) this_seq_decomp += 512 - rem;
+        }
 
         if (!odin_end_sequence_flash_compressed(pit_entry, static_cast<uint32_t>(this_seq_decomp), last ? 1U : 0U, efs_clear, boot_update)) return false;
     }

@@ -72,6 +72,7 @@ class UsbDevice {
                                             bool efs_clear = false, bool boot_update = false) -> bool;
 
     auto odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool;
+    auto odin_send_pit(const std::vector<unsigned char>& pit_data) -> bool;
     auto build_lz4_decompressed_index(std::istream& stream, uint64_t compressed_size,
                                       std::vector<std::pair<uint64_t,uint64_t>>& index) -> bool;
     auto odin_command(uint32_t cmd, uint32_t subcmd, const void* payload, size_t payload_size,
@@ -103,6 +104,7 @@ class UsbDevice {
     auto begin_session() -> bool;
     auto end_session() -> bool;
     auto request_pit(PitTable& pit_table) -> bool;
+    auto send_pit(const std::vector<unsigned char>& pit_data) -> bool;
     auto receive_pit_table(PitTable& pit_table) -> bool;
     auto flash_partition_stream(std::istream& stream, uint64_t size, const PitEntry& pit_entry,
                                 bool large_partition, bool efs_clear = false, bool boot_update = false) -> bool;
