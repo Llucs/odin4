@@ -115,9 +115,16 @@ jobs:
 
           choco install cmake ninja zip -y
 
-          C:\msys64\usr\bin\pacman --noconfirm -S mingw-w64-x86_64-libusb mingw-w64-x86_64-cryptopp
+          # Install MSYS2 and MinGW packages
+          choco install msys2 -y --params="/NoPath"
 
-          echo "CMAKE_PREFIX_PATH=C:/msys64/mingw64" >> "$GITHUB_ENV"
+          # Initiate MSYS2
+          C:\tools\msys64\usr\bin\pacman --noconfirm -Syu --noprogressbar 2>&1 || true
+
+          # Install libusb and cryptopp for MinGW
+          C:\tools\msys64\usr\bin\pacman --noconfirm -S mingw-w64-x86_64-libusb mingw-w64-x86_64-cryptopp
+
+          echo "CMAKE_PREFIX_PATH=C:/tools/msys64/mingw64" >> "$GITHUB_ENV"
 
       - name: Read version
         shell: bash
