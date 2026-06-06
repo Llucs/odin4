@@ -20,7 +20,6 @@
 #include <iostream>
 #include <vector>
 #include <cstdlib>
-#include <unistd.h>
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -30,7 +29,6 @@
 #include <sstream>
 #include <limits>
 #include <format>
-#include <print>
 #include <filesystem>
 #include <lz4frame.h>
 
@@ -919,17 +917,14 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
                     file.seekg(static_cast<std::streamoff>(data_start));
                     std::error_code fs_ec;
                     auto tmp_dir = std::filesystem::temp_directory_path();
-                    auto tmp_pattern = tmp_dir / "odin4_XXXXXX";
-                    std::string tmpl = tmp_pattern.string();
-                    std::vector<char> buf(tmpl.begin(), tmpl.end());
-                    buf.push_back('\0');
-                    int fd = mkstemp(buf.data());
-                    if (fd == -1) {
-                        log_error("Failed to create temporary file");
-                        return ExitCode::Firmware;
+                    auto temp_path = tmp_dir / ("odin4_" + std::to_string(std::rand()) + ".tmp");
+                    {
+                        std::ofstream touch(temp_path, std::ios::binary);
+                        if (!touch) {
+                            log_error("Failed to create temporary file");
+                            return ExitCode::Firmware;
+                        }
                     }
-                    close(fd);
-                    std::filesystem::path temp_path(std::string(buf.data()));
                     if (!decompress_lz4_to_file(file, data_size, temp_path.string())) {
                         std::filesystem::remove(temp_path, fs_ec);
                         return ExitCode::Firmware;

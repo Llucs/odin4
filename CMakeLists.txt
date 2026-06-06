@@ -11,30 +11,108 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+find_package(PkgConfig QUIET)
 
-find_path(CRYPTOPP_INCLUDE_DIR cryptlib.h
-    PATHS /usr/local/include /usr/include
-    PATH_SUFFIXES cryptopp crypto++
-)
-
-set(_OLD_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
-set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
-
-find_library(CRYPTOPP_STATIC_LIB
-    NAMES cryptopp libcryptopp
-    PATHS /usr/local/lib /usr/local/lib64 /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu
-)
-
-set(CMAKE_FIND_LIBRARY_SUFFIXES ${_OLD_CMAKE_FIND_LIBRARY_SUFFIXES})
-
-if (CRYPTOPP_INCLUDE_DIR AND CRYPTOPP_STATIC_LIB AND CRYPTOPP_STATIC_LIB MATCHES "\\.a$")
-    set(CRYPTOPP_USE_STATIC ON)
+if(WIN32)
+    find_package(libusb CONFIG QUIET)
+    if(NOT libusb_FOUND)
+        find_path(LIBUSB_INCLUDE_DIRS libusb.h
+            PATHS "$ENV{VCPKG_ROOT}/installed/$ENV{VCPKG_TARGET_TRIPLET}/include"
+                  "$ENV{CONAN_PREFIX}/include"
+        )
+        find_library(LIBUSB_LIBRARIES
+            NAMES libusb-1.0 usb-1.0
+            PATHS "$ENV{VCPKG_ROOT}/installed/$ENV{VCPKG_TARGET_TRIPLET}/lib"
+                  "$ENV{CONAN_PREFIX}/lib"
+        )
+        if(NOT LIBUSB_INCLUDE_DIRS OR NOT LIBUSB_LIBRARIES)
+            message(FATAL_ERROR "libusb not found. Install it via vcpkg.")
+        endif()
+    else()
+        get_target_property(LIBUSB_INCLUDE_DIRS libusb::usb INTERFACE_INCLUDE_DIRECTORIES)
+    endif()
+elseif(APPLE)
+    find_package(libusb CONFIG QUIET)
+    if(NOT libusb_FOUND)
+        find_path(LIBUSB_INCLUDE_DIRS libusb.h
+            PATHS /usr/local/include /opt/homebrew/include
+        )
+        find_library(LIBUSB_LIBRARIES
+            NAMES libusb-1.0 usb-1.0
+            PATHS /usr/local/lib /opt/homebrew/lib
+        )
+        if(NOT LIBUSB_INCLUDE_DIRS OR NOT LIBUSB_LIBRARIES)
+            if(PkgConfig_FOUND)
+                pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+            else()
+                message(FATAL_ERROR "libusb not found. Install it via Homebrew.")
+            endif()
+        endif()
+    else()
+        get_target_property(LIBUSB_INCLUDE_DIRS libusb::usb INTERFACE_INCLUDE_DIRECTORIES)
+    endif()
 else()
+    if(PkgConfig_FOUND)
+        pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+    else()
+        find_path(LIBUSB_INCLUDE_DIRS libusb.h
+            PATHS /usr/local/include /usr/include
+        )
+        find_library(LIBUSB_LIBRARIES
+            NAMES libusb-1.0 usb-1.0
+            PATHS /usr/local/lib /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu
+        )
+        if(NOT LIBUSB_INCLUDE_DIRS OR NOT LIBUSB_LIBRARIES)
+            message(FATAL_ERROR "libusb not found.")
+        endif()
+    endif()
+endif()
+
+if(WIN32)
+    find_path(CRYPTOPP_INCLUDE_DIR cryptlib.h
+        PATHS "$ENV{VCPKG_ROOT}/installed/$ENV{VCPKG_TARGET_TRIPLET}/include"
+              "$ENV{CONAN_PREFIX}/include"
+        PATH_SUFFIXES cryptopp crypto++
+    )
+    set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a)
+    find_library(CRYPTOPP_STATIC_LIB
+        NAMES cryptopp libcryptopp cryptopp-static
+        PATHS "$ENV{VCPKG_ROOT}/installed/$ENV{VCPKG_TARGET_TRIPLET}/lib"
+              "$ENV{CONAN_PREFIX}/lib"
+    )
+elseif(APPLE)
+    find_path(CRYPTOPP_INCLUDE_DIR cryptlib.h
+        PATHS /usr/local/include /opt/homebrew/include
+        PATH_SUFFIXES cryptopp crypto++
+    )
+    set(CMAKE_FIND_LIBRARY_SUFFIXES .a .dylib)
+    find_library(CRYPTOPP_STATIC_LIB
+        NAMES cryptopp libcryptopp
+        PATHS /usr/local/lib /opt/homebrew/lib
+    )
+else()
+    find_path(CRYPTOPP_INCLUDE_DIR cryptlib.h
+        PATHS /usr/local/include /usr/include
+        PATH_SUFFIXES cryptopp crypto++
+    )
+    set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+    find_library(CRYPTOPP_STATIC_LIB
+        NAMES cryptopp libcryptopp
+        PATHS /usr/local/lib /usr/local/lib64 /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu
+    )
+endif()
+
+if (CRYPTOPP_INCLUDE_DIR AND CRYPTOPP_STATIC_LIB)
+    set(CRYPTOPP_USE_STATIC ON)
+elseif(PkgConfig_FOUND)
     set(CRYPTOPP_USE_STATIC OFF)
-    find_package(PkgConfig REQUIRED)
     pkg_check_modules(CRYPTOPP REQUIRED libcrypto++)
+else()
+    message(FATAL_ERROR "Crypto++ not found. Install it via vcpkg, Homebrew, or your package manager.")
+endif()
+
+if(WIN32)
+    add_definitions(-DNOMINMAX)
 endif()
 
 file(STRINGS "${CMAKE_SOURCE_DIR}/src/odin4.cpp" ODIN_VERSION_LINE REGEX "#define ODIN4_VERSION")
@@ -79,7 +157,10 @@ endforeach()
 add_executable(odin4 src/cli/main.cpp)
 set_target_properties(odin4 PROPERTIES OUTPUT_NAME "odin4")
 target_include_directories(odin4 PRIVATE ${CMAKE_SOURCE_DIR}/include)
-target_link_libraries(odin4 PRIVATE odin4_static -static-libgcc -static-libstdc++)
+target_link_libraries(odin4 PRIVATE odin4_static)
+if(NOT MSVC)
+    target_link_options(odin4 PRIVATE "-static-libgcc" "-static-libstdc++")
+endif()
 
 # Optional GUI build
 option(ODIN4_BUILD_GUI "Build Qt6 GUI target" ON)
@@ -142,7 +223,11 @@ target_include_directories(odin4_fuzz PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(odin4_fuzz PUBLIC ${CMAKE_SOURCE_DIR}/lib)
 
 foreach(target ${ODIN4_ALL_TARGETS})
-    target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-cast-function-type)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W3)
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-cast-function-type)
+    endif()
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         target_compile_options(${target} PRIVATE -fstack-protector-strong -D_FORTIFY_SOURCE=2)
         target_link_options(${target} PRIVATE "SHELL:-z relro" "SHELL:-z now")
@@ -152,3 +237,20 @@ foreach(target ${ODIN4_ALL_TARGETS})
         endif()
     endif()
 endforeach()
+
+# macOS universal build
+if(APPLE)
+    set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Universal build for macOS")
+endif()
+
+# Install rules
+install(TARGETS odin4_static odin4_shared odin4
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+)
+if(ODIN4_BUILD_GUI)
+    install(TARGETS odin4-gui RUNTIME DESTINATION bin)
+endif()
+install(FILES include/odin4/odin4.h DESTINATION include/odin4)
+install(FILES udev/60-odin4.rules DESTINATION share/odin4)

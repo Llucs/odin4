@@ -31,13 +31,22 @@ jobs:
         include:
           - arch: x86_64
             runner: ubuntu-22.04
+            os: linux
           - arch: arm64
             runner: ubuntu-22.04-arm
+            os: linux
+          - arch: x86_64
+            runner: windows-2022
+            os: windows
+          - arch: arm64
+            runner: macos-14
+            os: macos
 
     steps:
       - uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231
 
-      - name: Add GCC 16 PPA
+      - name: Install dependencies (Linux)
+        if: ${{ matrix.os == 'linux' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -46,11 +55,6 @@ jobs:
           sudo apt-get install -y software-properties-common
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get update
-
-      - name: Install dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
 
           sudo apt-get install -y \
             cmake \
@@ -71,7 +75,8 @@ jobs:
             gcc-16 \
             g++-16
 
-      - name: Ensure Crypto++ static library
+      - name: Ensure Crypto++ static library (Linux)
+        if: ${{ matrix.os == 'linux' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -91,6 +96,23 @@ jobs:
             sudo ldconfig || true
           fi
 
+      - name: Install dependencies (macOS)
+        if: ${{ matrix.os == 'macos' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          brew update
+          brew install cmake ninja pkg-config libusb cryptopp qt lz4
+
+      - name: Install dependencies (Windows)
+        if: ${{ matrix.os == 'windows' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          choco install cmake ninja zip
+
       - name: Read version
         shell: bash
         run: |
@@ -109,10 +131,11 @@ jobs:
 
           echo "OUT_BIN=odin4_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
           echo "OUT_GUI=odin4-gui_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
-          echo "OUT_SO=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}.so" >> "$GITHUB_ENV"
-          echo "OUT_A=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}.a" >> "$GITHUB_ENV"
+          echo "OUT_SO=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
+          echo "OUT_A=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
 
-      - name: Build
+      - name: Build (Linux)
+        if: ${{ matrix.os == 'linux' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -126,7 +149,34 @@ jobs:
 
           cmake --build build --parallel "$(nproc)"
 
-      - name: Package
+      - name: Build (macOS)
+        if: ${{ matrix.os == 'macos' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf build
+
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release
+
+          cmake --build build --parallel "$(sysctl -n hw.logicalcpu)"
+
+      - name: Build (Windows)
+        if: ${{ matrix.os == 'windows' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf build
+
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release
+
+          cmake --build build --parallel
+
+      - name: Package (Linux)
+        if: ${{ matrix.os == 'linux' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -150,10 +200,52 @@ jobs:
 
           echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
 
+      - name: Package (macOS)
+        if: ${{ matrix.os == 'macos' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p dist
+
+          cp build/odin4 "dist/${OUT_BIN}"
+          cp build/odin4-gui "dist/${OUT_GUI}"
+          cp build/libodin4.dylib "dist/${OUT_SO}" || true
+          cp build/libodin4_static.a "dist/${OUT_A}"
+
+          ZIP_NAME="odin4-macos-${{ matrix.arch }}-${ODIN4_VERSION}${ODIN4_SUFFIX}.zip"
+
+          cd dist
+          zip "../${ZIP_NAME}" *
+          cd ..
+
+          echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
+
+      - name: Package (Windows)
+        if: ${{ matrix.os == 'windows' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p dist
+
+          cp build/odin4.exe "dist/${OUT_BIN}.exe" || true
+          cp build/odin4-gui.exe "dist/${OUT_GUI}.exe" || true
+          cp build/libodin4.dll "dist/${OUT_SO}.dll" || true
+          cp build/libodin4_static.lib "dist/${OUT_A}" || true
+
+          ZIP_NAME="odin4-windows-${{ matrix.arch }}-${ODIN4_VERSION}${ODIN4_SUFFIX}.zip"
+
+          cd dist
+          7z a "../${ZIP_NAME}" * || zip "../${ZIP_NAME}" *
+          cd ..
+
+          echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: odin4-linux-${{ matrix.arch }}-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}
+          name: odin4-${{ matrix.os }}-${{ matrix.arch }}-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}
           path: |
             dist/*
             ${{ env.ZIP_NAME }}
@@ -180,9 +272,9 @@ jobs:
 
           SAMPLE="$(find bundle -type f -name '*.zip' | head -n 1)"
           BASE="$(basename "$SAMPLE")"
-          VERSUFFIX="$(echo "${BASE}" | sed -E 's/^odin4-linux-[^-]+-(.+)\.zip$/\1/')"
+          VERSUFFIX="$(echo "${BASE}" | sed -E 's/^odin4-(linux|macos|windows)-[^-]+-(.+)\.zip$/\2/')"
 
-          OUT="odin4-linux-all-${VERSUFFIX}.zip"
+          OUT="odin4-all-${VERSUFFIX}.zip"
 
           cd bundle
           zip "../${OUT}" ./*
@@ -192,7 +284,7 @@ jobs:
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: odin4-linux-all
+          name: odin4-all
           path: |
             ${{ env.OUT }}
           retention-days: 14

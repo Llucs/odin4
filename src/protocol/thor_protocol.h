@@ -7,12 +7,28 @@
 #include <limits>
 #include <span>
 
+#if defined(_WIN32)
+#include <cstdlib>
+#define le16toh(x) (x)
+#define le32toh(x) (x)
+#define le64toh(x) (x)
+#define htole16(x) (x)
+#define htole32(x) (x)
+#define htole64(x) (x)
+#elif defined(__APPLE__)
+#include <libkern/OSByteOrder.h>
+#define le16toh(x) OSSwapLittleToHostInt16(x)
+#define le32toh(x) OSSwapLittleToHostInt32(x)
+#define le64toh(x) OSSwapLittleToHostInt64(x)
+#define htole16(x) OSSwapHostToLittleInt16(x)
+#define htole32(x) OSSwapHostToLittleInt32(x)
+#define htole64(x) OSSwapHostToLittleInt64(x)
+#else
 #if defined(__has_include)
 #if __has_include(<endian.h>)
 #include <endian.h>
 #endif
 #endif
-
 #ifndef le16toh
 static inline uint16_t odin_swap16(uint16_t v) {
     return static_cast<uint16_t>((v << 8) | (v >> 8));
@@ -39,6 +55,7 @@ static inline uint64_t odin_swap64(uint64_t v) {
 #define htole16(x) (x)
 #define htole32(x) (x)
 #define htole64(x) (x)
+#endif
 #endif
 #endif
 

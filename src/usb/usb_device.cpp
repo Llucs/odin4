@@ -58,10 +58,12 @@ static auto retry_backoff_ms(int attempt) -> int {
 UsbDevice::~UsbDevice() {
     if (handle != nullptr) {
         libusb_release_interface(handle, interface_number);
+#if defined(__linux__)
         if (kernel_driver_detached) {
             (void) libusb_attach_kernel_driver(handle, interface_number);
             kernel_driver_detached = false;
         }
+#endif
         libusb_close(handle);
         handle = nullptr;
     }
@@ -123,8 +125,11 @@ auto UsbDevice::bulk_read_once(void* data, size_t size, int* actual_length, int 
 
 static auto usb_path_for_device(libusb_device* dev) -> std::string {
     std::ostringstream oss;
-    oss << "/dev/bus/usb/" << std::setfill('0') << std::setw(3) << static_cast<int>(libusb_get_bus_number(dev)) << "/"
-        << std::setfill('0') << std::setw(3) << static_cast<int>(libusb_get_device_address(dev));
+    oss << libusb_get_bus_number(dev);
+    uint8_t port_numbers[8];
+    int ports = libusb_get_port_numbers(dev, port_numbers, 8);
+    for (int i = 0; i < ports; ++i)
+        oss << "-" << static_cast<int>(port_numbers[i]);
     return oss.str();
 }
 
@@ -199,10 +204,12 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
 
     if (handle != nullptr) {
         libusb_release_interface(handle, interface_number);
+#if defined(__linux__)
         if (kernel_driver_detached) {
             (void) libusb_attach_kernel_driver(handle, interface_number);
             kernel_driver_detached = false;
         }
+#endif
         libusb_close(handle);
         handle = nullptr;
     }
@@ -294,6 +301,7 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
         return false;
     }
 
+#if defined(__linux__)
     const int kernel_driver_state = libusb_kernel_driver_active(handle, interface_number);
     if (kernel_driver_state < 0) {
         last_open_libusb_err = kernel_driver_state;
@@ -315,6 +323,9 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
         }
         kernel_driver_detached = true;
     }
+#else
+    kernel_driver_detached = false;
+#endif
 
     const int claim_err = libusb_claim_interface(handle, interface_number);
     if (claim_err == 0 && alt_setting >= 0) {
@@ -324,10 +335,12 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
             last_open_error = UsbOpenError::Other;
             log_error("Failed to set USB interface alt setting", alt_err);
             libusb_release_interface(handle, interface_number);
+#if defined(__linux__)
             if (kernel_driver_detached) {
                 (void) libusb_attach_kernel_driver(handle, interface_number);
                 kernel_driver_detached = false;
             }
+#endif
             libusb_close(handle);
             handle = nullptr;
             return false;
@@ -340,10 +353,12 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
         else
             last_open_error = UsbOpenError::Other;
         log_error("Failed to claim USB interface", claim_err);
+#if defined(__linux__)
         if (kernel_driver_detached) {
             (void) libusb_attach_kernel_driver(handle, interface_number);
             kernel_driver_detached = false;
         }
+#endif
         libusb_close(handle);
         handle = nullptr;
         return false;

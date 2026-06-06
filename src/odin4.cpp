@@ -72,7 +72,25 @@ void odin4_init(const OdinConfig& cfg) {
         set_log_level(LogLevel::Info);
     }
 
-    set_log_file("odin4.log");
+#if defined(_WIN32)
+    const char* appdata = std::getenv("APPDATA");
+    std::string log_path = appdata ? (std::string(appdata) + "/odin4/odin4.log") : "odin4.log";
+#elif defined(__APPLE__)
+    const char* home = std::getenv("HOME");
+    std::string log_path = home ? (std::string(home) + "/Library/Logs/odin4.log") : "odin4.log";
+#else
+    const char* xdg = std::getenv("XDG_DATA_HOME");
+    std::string log_path;
+    if (xdg) {
+        log_path = std::string(xdg) + "/odin4/odin4.log";
+    } else {
+        const char* home = std::getenv("HOME");
+        log_path = home ? (std::string(home) + "/.local/share/odin4/odin4.log") : "odin4.log";
+    }
+#endif
+    std::error_code fs_ec;
+    std::filesystem::create_directories(std::filesystem::path(log_path).parent_path(), fs_ec);
+    set_log_file(log_path);
 }
 
 auto odin4_list_devices(const OdinConfig& cfg) -> std::vector<std::string> {
@@ -128,9 +146,20 @@ static auto verify_firmware_compatibility(const OdinConfig& cfg, const std::stri
 }
 
 static void print_access_hint() {
+#if defined(__linux__)
     log_error("Permission denied while opening the USB device. This usually means udev rules are missing.");
     log_info("Install the udev rule shipped with odin4: udev/60-odin4.rules");
     log_info("Then reload udev rules and reconnect the device.");
+#elif defined(_WIN32)
+    log_error("Permission denied while opening the USB device. Use Zadig to install a WinUSB driver for the device.");
+    log_info("See: https://zadig.akeo.ie/");
+#elif defined(__APPLE__)
+    log_error("Permission denied while opening the USB device. Check System Settings > Privacy & Security > USB.");
+    log_info("Alternatively, run with sudo or approve the USB accessory in System Settings.");
+#else
+    log_error("Permission denied while opening the USB device.");
+    log_info("Ensure you have the appropriate permissions to access USB devices on your system.");
+#endif
 }
 
 static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
