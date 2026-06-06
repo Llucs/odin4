@@ -99,11 +99,13 @@ jobs:
       - name: Install dependencies (macOS)
         if: ${{ matrix.os == 'macos' }}
         shell: bash
+        env:
+          HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
         run: |
           set -euo pipefail
 
           brew update
-          brew install cmake ninja pkg-config libusb cryptopp qt lz4
+          brew install cmake ninja pkg-config libusb cryptopp
 
       - name: Install dependencies (Windows)
         if: ${{ matrix.os == 'windows' }}
@@ -111,7 +113,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          choco install cmake ninja zip
+          choco install cmake ninja zip -y
+
+          C:\msys64\usr\bin\pacman --noconfirm -S mingw-w64-x86_64-libusb mingw-w64-x86_64-cryptopp
+
+          echo "CMAKE_PREFIX_PATH=C:/msys64/mingw64" >> "$GITHUB_ENV"
 
       - name: Read version
         shell: bash

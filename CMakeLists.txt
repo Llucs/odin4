@@ -19,14 +19,18 @@ if(WIN32)
         find_path(LIBUSB_INCLUDE_DIRS libusb.h
             PATHS "$ENV{VCPKG_ROOT}/installed/$ENV{VCPKG_TARGET_TRIPLET}/include"
                   "$ENV{CONAN_PREFIX}/include"
+                  "C:/msys64/mingw64/include"
+                  "C:/msys64/usr/include"
         )
         find_library(LIBUSB_LIBRARIES
             NAMES libusb-1.0 usb-1.0
             PATHS "$ENV{VCPKG_ROOT}/installed/$ENV{VCPKG_TARGET_TRIPLET}/lib"
                   "$ENV{CONAN_PREFIX}/lib"
+                  "C:/msys64/mingw64/lib"
+                  "C:/msys64/usr/lib"
         )
         if(NOT LIBUSB_INCLUDE_DIRS OR NOT LIBUSB_LIBRARIES)
-            message(FATAL_ERROR "libusb not found. Install it via vcpkg.")
+            message(FATAL_ERROR "libusb not found. Install it via MSYS2 (pacman -S mingw-w64-x86_64-libusb) or vcpkg.")
         endif()
     else()
         get_target_property(LIBUSB_INCLUDE_DIRS libusb::usb INTERFACE_INCLUDE_DIRECTORIES)
@@ -68,10 +72,20 @@ else()
     endif()
 endif()
 
+macro(find_cryptopp_include OUT_VAR)
+    find_path(_CRYPTOPP_RAW_DIR cryptlib.h
+        ${ARGN}
+    )
+    if(_CRYPTOPP_RAW_DIR)
+        get_filename_component(${OUT_VAR} "${_CRYPTOPP_RAW_DIR}" DIRECTORY)
+    endif()
+endmacro()
+
 if(WIN32)
-    find_path(CRYPTOPP_INCLUDE_DIR cryptlib.h
+    find_cryptopp_include(CRYPTOPP_INCLUDE_DIR
         PATHS "$ENV{VCPKG_ROOT}/installed/$ENV{VCPKG_TARGET_TRIPLET}/include"
               "$ENV{CONAN_PREFIX}/include"
+              "C:/msys64/mingw64/include"
         PATH_SUFFIXES cryptopp crypto++
     )
     set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a)
@@ -79,9 +93,10 @@ if(WIN32)
         NAMES cryptopp libcryptopp cryptopp-static
         PATHS "$ENV{VCPKG_ROOT}/installed/$ENV{VCPKG_TARGET_TRIPLET}/lib"
               "$ENV{CONAN_PREFIX}/lib"
+              "C:/msys64/mingw64/lib"
     )
 elseif(APPLE)
-    find_path(CRYPTOPP_INCLUDE_DIR cryptlib.h
+    find_cryptopp_include(CRYPTOPP_INCLUDE_DIR
         PATHS /usr/local/include /opt/homebrew/include
         PATH_SUFFIXES cryptopp crypto++
     )
@@ -91,7 +106,7 @@ elseif(APPLE)
         PATHS /usr/local/lib /opt/homebrew/lib
     )
 else()
-    find_path(CRYPTOPP_INCLUDE_DIR cryptlib.h
+    find_cryptopp_include(CRYPTOPP_INCLUDE_DIR
         PATHS /usr/local/include /usr/include
         PATH_SUFFIXES cryptopp crypto++
     )
@@ -168,7 +183,14 @@ set(ODIN4_ALL_TARGETS odin4_static odin4_shared odin4)
 
 # GUI Target
 if(ODIN4_BUILD_GUI)
-    find_package(Qt6 COMPONENTS Widgets REQUIRED)
+    find_package(Qt6 COMPONENTS Widgets QUIET)
+    if(NOT Qt6_FOUND)
+        message(WARNING "Qt6 not found (missing OpenGL or other dependencies). GUI target will not be built.")
+        set(ODIN4_BUILD_GUI OFF)
+    endif()
+endif()
+
+if(ODIN4_BUILD_GUI)
     add_executable(odin4-gui src/gui/main.cpp)
     set_target_properties(odin4-gui PROPERTIES
         OUTPUT_NAME "odin4-gui"
