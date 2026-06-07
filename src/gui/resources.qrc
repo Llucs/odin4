@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="icons/odin4.png">../../docs/assets/logo.png</file>
+    </qresource>
+</RCC>

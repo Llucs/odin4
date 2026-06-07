@@ -29,6 +29,10 @@
 #include <QTimer>
 #include <QThread>
 #include <QCloseEvent>
+#include <QIcon>
+#include <QPixmap>
+#include <QScreen>
+#include <QStyle>
 #include <odin4/odin4.h>
 #include <mutex>
 
@@ -57,9 +61,21 @@ class OdinGui : public QMainWindow {
     OdinGui(QWidget* parent = nullptr) : QMainWindow(parent), flashThread(nullptr) {
         setWindowTitle("Odin4 GUI - Llucs");
         setMinimumSize(700, 500);
+        setWindowIcon(QIcon(":/icons/odin4.png"));
 
         auto* centralWidget = new QWidget(this);
         auto* layout = new QVBoxLayout(centralWidget);
+
+        {
+            auto* banner = new QLabel();
+            QPixmap pix(":/icons/odin4.png");
+            if (!pix.isNull()) {
+                QPixmap scaled = pix.scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                banner->setPixmap(scaled);
+                banner->setAlignment(Qt::AlignCenter);
+                layout->addWidget(banner);
+            }
+        }
 
         auto createBrowseRow = [&](const QString& label, QLineEdit*& edit) {
             auto* row = new QHBoxLayout();

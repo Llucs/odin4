@@ -221,13 +221,26 @@ if(ODIN4_BUILD_GUI)
 endif()
 
 if(ODIN4_BUILD_GUI)
-    add_executable(odin4-gui src/gui/main.cpp)
+    add_executable(odin4-gui
+        src/gui/main.cpp
+        src/gui/resources.qrc
+    )
     set_target_properties(odin4-gui PROPERTIES
         OUTPUT_NAME "odin4-gui"
         AUTOMOC ON
+        AUTORCC ON
     )
     target_include_directories(odin4-gui PRIVATE ${CMAKE_SOURCE_DIR}/include)
     target_link_libraries(odin4-gui PRIVATE odin4_static Qt6::Widgets)
+    if(WIN32)
+        set_target_properties(odin4-gui PROPERTIES WIN32_EXECUTABLE TRUE)
+        target_sources(odin4-gui PRIVATE src/gui/app.rc)
+    endif()
+    if(APPLE)
+        set_target_properties(odin4-gui PROPERTIES
+            MACOSX_BUNDLE_GUI_IDENTIFIER com.llucs.odin4
+        )
+    endif()
     if(NOT MSVC AND NOT APPLE)
         target_link_options(odin4-gui PRIVATE "-static-libgcc" "-static-libstdc++")
     endif()

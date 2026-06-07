@@ -324,6 +324,9 @@ jobs:
           # Use the project logo as icon
           if [ -f "${PWD}/docs/assets/logo.png" ]; then
             cp "${PWD}/docs/assets/logo.png" "${APPDIR}/odin4.png"
+            ln -sf "odin4.png" "${APPDIR}/.DirIcon"
+            mkdir -p "${APPDIR}/usr/share/icons/hicolor/256x256/apps"
+            cp "${PWD}/docs/assets/logo.png" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/odin4.png"
           fi
 
           # Create AppRun launcher
@@ -427,8 +430,9 @@ jobs:
           fi
 
           # Use logo as icon (icns)
-          if [ -f "${PWD}/docs/assets/logo.png" ]; then
-            # macOS expects .icns; create a simple iconset from PNG
+          if [ -f "${PKG_DIR}/macos/odin4.icns" ]; then
+            cp "${PKG_DIR}/macos/odin4.icns" "${APP_BUNDLE}/Contents/Resources/odin4.icns"
+          elif [ -f "${PWD}/docs/assets/logo.png" ]; then
             ICON_DIR="${DIST_DIR}/Odin4.iconset"
             mkdir -p "${ICON_DIR}"
             for SIZE in 16 32 64 128 256 512; do
