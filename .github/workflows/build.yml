@@ -120,16 +120,15 @@ jobs:
 
           choco install cmake ninja zip -y
 
-          # Download and extract pre-built libusb
-          curl -L --fail -o /tmp/libusb.7z https://github.com/libusb/libusb/releases/download/v1.0.27/libusb-1.0.27.7z
-          7z x /tmp/libusb.7z -oC:/libusb -y
-
-          # Copy headers and libraries to where CMake expects them
-          mkdir -p C:/mingw64/lib C:/mingw64/include
-          find C:/libusb -name "*.a" -exec cp -n {} C:/mingw64/lib/ \;
-          find C:/libusb -name "*.dll" -exec cp -n {} C:/mingw64/bin/ \; 2>/dev/null || true
-          find C:/libusb -name "libusb.h" -exec cp -n {} C:/mingw64/include/ \;
-          find C:/libusb -type d -name "libusb-1.0" -exec cp -rn {} C:/mingw64/include/ \; 2>/dev/null || true
+          # Build libusb from source (pre-built MinGW64 package only provides import libraries)
+          git clone --depth 1 --branch v1.0.27 https://github.com/libusb/libusb.git C:/libusb_src
+          cd C:/libusb_src
+          mkdir -p build && cd build
+          cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DCMAKE_INSTALL_PREFIX=C:/mingw64
+          mingw32-make -j$(nproc) 2>/dev/null || make -j$(nproc)
+          mingw32-make install 2>/dev/null || make install
 
           # Build Crypto++ from source
           git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git C:/cryptopp
