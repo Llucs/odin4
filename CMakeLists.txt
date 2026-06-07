@@ -172,6 +172,9 @@ add_subdirectory(src)
 add_library(odin4_static STATIC ${ODIN4_CORE_SOURCES})
 target_include_directories(odin4_static PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>)
 target_include_directories(odin4_static PRIVATE ${CMAKE_SOURCE_DIR}/src ${LIBUSB_INCLUDE_DIRS})
+if(WIN32)
+    set_target_properties(odin4_static PROPERTIES PREFIX "")
+endif()
 
 add_library(odin4_shared SHARED ${ODIN4_CORE_SOURCES})
 set_target_properties(odin4_shared PROPERTIES 
@@ -179,6 +182,9 @@ set_target_properties(odin4_shared PROPERTIES
     VERSION "${ODIN_VERSION_CLEAN}" 
     SOVERSION "${ODIN_SOVERSION}"
 )
+if(WIN32)
+    set_target_properties(odin4_shared PROPERTIES PREFIX "")
+endif()
 target_include_directories(odin4_shared PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
 target_include_directories(odin4_shared PRIVATE ${CMAKE_SOURCE_DIR}/src ${LIBUSB_INCLUDE_DIRS})
 

@@ -483,6 +483,11 @@ jobs:
 
           mkdir -p "${DIST_DIR}"
 
+          # Normalize library filenames for ISS (MinGW uses .a, MSVC uses .lib)
+          if [ -f "${BUILD_DIR}/odin4_static.a" ] && [ ! -f "${BUILD_DIR}/odin4_static.lib" ]; then
+            cp "${BUILD_DIR}/odin4_static.a" "${BUILD_DIR}/odin4_static.lib"
+          fi
+
           # --------------------------------------------------
           # 1. Inno Setup installer
           # --------------------------------------------------
