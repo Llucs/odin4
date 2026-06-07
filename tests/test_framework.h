@@ -121,7 +121,6 @@ struct TestRegister {
 
 inline int run_suite(const std::string& suite_name) {
     auto& suites = get_suites();
-    int total_passed = 0;
     int total_failed = 0;
 
     for (auto& suite : suites) {
@@ -136,7 +135,6 @@ inline int run_suite(const std::string& suite_name) {
                 test.func();
                 std::cout << "[PASS] " << test.name << "\n";
                 suite.passed++;
-                total_passed++;
             } catch (const std::exception& e) {
                 std::cout << "[FAIL] " << test.name << ": " << e.what() << "\n";
                 suite.failed++;

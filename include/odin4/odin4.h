@@ -21,10 +21,6 @@
 #include <vector>
 #include <cstdint>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * @brief Exit codes for Odin4 operations.
  */
@@ -59,47 +55,20 @@ struct OdinConfig {
     bool has_usb_interface = false;
     int usb_interface = 0;
 
-    // Timeout and retry configuration (milliseconds)
     int preflash_timeout_ms = 1000;
     int flash_timeout_ms = 45000;
     unsigned preflash_retries = 2;
 };
 
-/**
- * @brief Initialize the library (e.g., logging).
- * @param cfg The configuration to use for initialization.
- */
 void odin4_init(const OdinConfig& cfg);
 
-/**
- * @brief List detected Samsung devices in Download Mode.
- * @param cfg The configuration containing USB selection criteria.
- * @return A list of device paths.
- */
 auto odin4_list_devices(const OdinConfig& cfg) -> std::vector<std::string>;
 
-/**
- * @brief Run the flashing process or validation for a specific device.
- * @param cfg The configuration for the operation.
- * @return OdinExitCode indicating success or failure.
- */
 auto odin4_run(const OdinConfig& cfg) -> OdinExitCode;
 
-/**
- * @brief Get the version string of the library.
- * @return The version string.
- */
 auto odin4_get_version() -> const char*;
 
-/**
- * @brief Set a callback function to receive log messages.
- * @param callback The function to call for each log message.
- */
 typedef void (*OdinLogCallback)(int level, const char* message);
 void odin4_set_log_callback(OdinLogCallback callback);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif // ODIN4_H

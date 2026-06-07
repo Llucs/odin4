@@ -42,6 +42,7 @@ elseif(APPLE)
     if(NOT libusb_FOUND)
         find_path(LIBUSB_INCLUDE_DIRS libusb.h
             PATHS /usr/local/include /opt/homebrew/include
+            PATH_SUFFIXES libusb-1.0
         )
         find_library(LIBUSB_LIBRARIES
             NAMES libusb-1.0 usb-1.0
@@ -63,6 +64,7 @@ else()
     else()
         find_path(LIBUSB_INCLUDE_DIRS libusb.h
             PATHS /usr/local/include /usr/include
+            PATH_SUFFIXES libusb-1.0
         )
         find_library(LIBUSB_LIBRARIES
             NAMES libusb-1.0 usb-1.0
@@ -170,7 +172,7 @@ foreach(target odin4_static odin4_shared)
         target_include_directories(${target} PRIVATE ${CRYPTOPP_INCLUDE_DIRS})
         target_link_libraries(${target} PRIVATE ${CRYPTOPP_LIBRARIES})
     endif()
-    target_link_libraries(${target} PRIVATE ${LIBUSB_LIBRARIES} lz4_lib)
+    target_link_libraries(${target} PRIVATE ${LIBUSB_LDFLAGS} ${LIBUSB_LIBRARIES} lz4_lib)
 endforeach()
 
 add_executable(odin4 src/cli/main.cpp)
