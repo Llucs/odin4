@@ -4,16 +4,14 @@ set -euxo pipefail
 export CC=clang
 export CXX=clang++
 
-export CXXFLAGS="-O1 -g -std=c++23 -pthread"
-export CFLAGS="-O1 -g -pthread"
+export CXXFLAGS="$CXXFLAGS -std=c++23 -pthread"
+export CFLAGS="$CFLAGS -pthread"
 
 apt-get update || true
 apt-get install -y --no-install-recommends \
     cmake \
     ninja-build \
     clang \
-    libc++-dev \
-    libc++abi-dev \
     pkg-config \
     libusb-1.0-0-dev \
     libcrypto++-dev \
@@ -27,8 +25,7 @@ cmake .. -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DODIN4_BUILD_GUI=OFF \
     -DODIN4_BUILD_TESTS=OFF \
-    -DCMAKE_C_FLAGS="-O1 -g" \
-    -DCMAKE_CXX_FLAGS="-O1 -g -std=c++23" \
+    -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
     -DCMAKE_EXE_LINKER_FLAGS="-pthread"
 
 cmake --build . --parallel
