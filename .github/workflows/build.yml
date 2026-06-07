@@ -50,6 +50,7 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
+          modules: qtbase
           cache: true
           cache-key-prefix: install-qt-action-linux-x86_64
           arch: linux_gcc_64
@@ -166,6 +167,7 @@ jobs:
         with:
           version: ${{ env.QT_VERSION }}
           cache: true
+          modules: qtbase
           cache-key-prefix: install-qt-action-linux-arm64
           arch: linux_gcc_arm64
 
@@ -273,6 +275,7 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
+          modules: qtbase
           cache: true
           cache-key-prefix: install-qt-action-macos-arm64
           arch: clang_64
@@ -284,7 +287,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3
 
       - name: Strip missing AGL framework
         run: |
@@ -375,6 +378,7 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
+          modules: qtbase
           cache: true
           cache-key-prefix: install-qt-action-macos-x86_64
           arch: clang_64
@@ -386,7 +390,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3
 
       - name: Strip missing AGL framework
         run: |
@@ -478,12 +482,14 @@ jobs:
         run: |
           set -euo pipefail
           choco install ninja -y
+          echo "VCPKG_TARGET_TRIPLET=x64-windows" >> "$GITHUB_ENV"
           vcpkg install libusb:x64-windows cryptopp:x64-windows
 
       - name: Install Qt6
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
+          modules: qtbase
           cache: true
           cache-key-prefix: install-qt-action-windows-x86_64
           host: windows
@@ -556,12 +562,14 @@ jobs:
         run: |
           set -euo pipefail
           choco install ninja -y
+          echo "VCPKG_TARGET_TRIPLET=arm64-windows" >> "$GITHUB_ENV"
           vcpkg install libusb:arm64-windows cryptopp:arm64-windows
 
       - name: Install Qt6
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
+          modules: qtbase
           cache: true
           cache-key-prefix: install-qt-action-windows-arm64
           host: windows
