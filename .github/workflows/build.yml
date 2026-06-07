@@ -495,13 +495,15 @@ jobs:
       - name: Package installer (NSIS)
         run: |
           set -euo pipefail
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           cd build
-          cpack -G NSIS -C Release || {
+          cpack -G NSIS -C Release \
+            -D CPACK_PACKAGE_NAME="Odin4" \
+            -D CPACK_PACKAGE_VERSION="$VERSION" || {
             echo "NSIS packaging failed"
             cat _CPack_Packages/*/NSIS/NSISOutput.log 2>/dev/null || true
             exit 1
           }
-          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' ../src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           installer="$(ls -1 *.exe | head -n1)"
           mkdir -p ../dist
@@ -571,13 +573,15 @@ jobs:
       - name: Package installer (NSIS)
         run: |
           set -euo pipefail
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           cd build
-          cpack -G NSIS -C Release || {
+          cpack -G NSIS -C Release \
+            -D CPACK_PACKAGE_NAME="Odin4" \
+            -D CPACK_PACKAGE_VERSION="$VERSION" || {
             echo "NSIS packaging failed"
             cat _CPack_Packages/*/NSIS/NSISOutput.log 2>/dev/null || true
             exit 1
           }
-          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' ../src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           installer="$(ls -1 *.exe | head -n1)"
           mkdir -p ../dist
