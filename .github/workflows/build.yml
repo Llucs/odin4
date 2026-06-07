@@ -121,7 +121,7 @@ jobs:
           choco install cmake ninja zip -y
 
           # Download and extract pre-built libusb
-          curl -L -o /tmp/libusb.7z https://github.com/libusb/libusb/releases/download/v1.0.27/libusb-1.0.27-binaries.7z
+          curl -L --fail -o /tmp/libusb.7z https://github.com/libusb/libusb/releases/download/v1.0.27/libusb-1.0.27.7z
           7z x /tmp/libusb.7z -oC:/libusb
           cp -r C:/libusb/MinGW64/ C:/mingw64/
 
