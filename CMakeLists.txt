@@ -14,11 +14,14 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 find_package(PkgConfig QUIET)
 
 if(WIN32)
+    # Normalize VCPKG_ROOT to forward slashes to avoid escape issues in find_path/find_library
+    file(TO_CMAKE_PATH "$ENV{VCPKG_ROOT}" _VCPKG_ROOT_NORM)
+
     set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a .dll.a)
     find_package(libusb CONFIG QUIET)
     if(NOT libusb_FOUND)
         find_path(LIBUSB_INCLUDE_DIRS libusb.h
-            PATHS "$ENV{VCPKG_ROOT}/installed/$ENV{VCPKG_TARGET_TRIPLET}/include"
+            PATHS "${_VCPKG_ROOT_NORM}/installed/$ENV{VCPKG_TARGET_TRIPLET}/include"
                   "$ENV{CONAN_PREFIX}/include"
                   "C:/mingw64/include"
                   "C:/msys64/mingw64/include"
@@ -27,7 +30,7 @@ if(WIN32)
         )
         find_library(LIBUSB_LIBRARIES
             NAMES libusb-1.0 usb-1.0
-            PATHS "$ENV{VCPKG_ROOT}/installed/$ENV{VCPKG_TARGET_TRIPLET}/lib"
+            PATHS "${_VCPKG_ROOT_NORM}/installed/$ENV{VCPKG_TARGET_TRIPLET}/lib"
                   "$ENV{CONAN_PREFIX}/lib"
                   "C:/mingw64/lib"
                   "C:/msys64/mingw64/lib"
@@ -79,8 +82,15 @@ else()
 endif()
 
 macro(find_cryptopp_include OUT_VAR)
+    # Normalize backslashes to forward slashes in all arguments
+    # to avoid escape-sequence errors on Windows
+    set(_CLEANED_ARGS "")
+    foreach(_arg ${ARGN})
+        string(REPLACE "\\" "/" _arg "${_arg}")
+        list(APPEND _CLEANED_ARGS "${_arg}")
+    endforeach()
     find_path(_CRYPTOPP_RAW_DIR cryptlib.h
-        ${ARGN}
+        ${_CLEANED_ARGS}
     )
     if(_CRYPTOPP_RAW_DIR)
         get_filename_component(${OUT_VAR} "${_CRYPTOPP_RAW_DIR}" DIRECTORY)
@@ -89,7 +99,7 @@ endmacro()
 
 if(WIN32)
     find_cryptopp_include(CRYPTOPP_INCLUDE_DIR
-        PATHS "$ENV{VCPKG_ROOT}/installed/$ENV{VCPKG_TARGET_TRIPLET}/include"
+        PATHS "${_VCPKG_ROOT_NORM}/installed/$ENV{VCPKG_TARGET_TRIPLET}/include"
               "$ENV{CONAN_PREFIX}/include"
               "C:/mingw64/include"
               "C:/msys64/mingw64/include"
@@ -98,7 +108,7 @@ if(WIN32)
     set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a)
     find_library(CRYPTOPP_STATIC_LIB
         NAMES cryptopp libcryptopp cryptopp-static
-        PATHS "$ENV{VCPKG_ROOT}/installed/$ENV{VCPKG_TARGET_TRIPLET}/lib"
+        PATHS "${_VCPKG_ROOT_NORM}/installed/$ENV{VCPKG_TARGET_TRIPLET}/lib"
               "$ENV{CONAN_PREFIX}/lib"
               "C:/mingw64/lib"
               "C:/msys64/mingw64/lib"
