@@ -105,7 +105,10 @@ jobs:
 
           VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
-          mv Odin4-*-x86_64.AppImage "Odin4-${VERSION}${SUFFIX}-linux-x86_64.AppImage"
+          APPIMAGE_FILE="$(ls -1 *.AppImage 2>/dev/null | head -n1)"
+          if [ -n "$APPIMAGE_FILE" ]; then
+            mv "$APPIMAGE_FILE" "Odin4-${VERSION}${SUFFIX}-linux-x86_64.AppImage"
+          fi
 
       - name: Package CLI tarball
         run: |
@@ -218,7 +221,10 @@ jobs:
 
           VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
-          mv Odin4-*-aarch64.AppImage "Odin4-${VERSION}${SUFFIX}-linux-arm64.AppImage"
+          APPIMAGE_FILE="$(ls -1 *.AppImage 2>/dev/null | head -n1)"
+          if [ -n "$APPIMAGE_FILE" ]; then
+            mv "$APPIMAGE_FILE" "Odin4-${VERSION}${SUFFIX}-linux-arm64.AppImage"
+          fi
 
       - name: Package CLI tarball
         run: |

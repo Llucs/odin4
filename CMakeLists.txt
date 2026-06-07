@@ -318,6 +318,8 @@ install(FILES include/odin4/odin4.h DESTINATION include/odin4)
 install(FILES udev/60-odin4.rules DESTINATION share/odin4)
 
 # CPack for Windows installer and macOS DMG
+set(CPACK_PACKAGE_NAME "Odin4")
+set(CPACK_PACKAGE_VERSION "${ODIN_VERSION_CLEAN}")
 if(WIN32)
     set(CPACK_GENERATOR "NSIS")
     set(CPACK_NSIS_DISPLAY_NAME "Odin4")
