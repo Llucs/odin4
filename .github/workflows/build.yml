@@ -123,12 +123,19 @@ jobs:
           # Download and extract pre-built libusb
           curl -L --fail -o /tmp/libusb.7z https://github.com/libusb/libusb/releases/download/v1.0.27/libusb-1.0.27.7z
           7z x /tmp/libusb.7z -oC:/libusb -y
-          # The archive contains MinGW64/{dll,static,include}/...
-          # Copy files to where CMake and the linker can find them
+
+          # Locate MinGW64 directory (handles flat or nested archive structure)
+          MINGW64_DIR=$(find C:/libusb -type d -name "MinGW64" 2>/dev/null | head -1)
+          if [ -z "$MINGW64_DIR" ]; then
+            echo "ERROR: MinGW64 directory not found in libusb archive"
+            exit 1
+          fi
+
+          # Copy headers and libraries to where CMake expects them
           mkdir -p C:/mingw64/lib C:/mingw64/include
-          cp -r C:/libusb/MinGW64/static/*.a C:/mingw64/lib/
-          cp -r C:/libusb/MinGW64/dll/*.dll C:/mingw64/bin/ 2>/dev/null || true
-          cp -r C:/libusb/MinGW64/include/* C:/mingw64/include/
+          cp -r "$MINGW64_DIR"/static/*.a C:/mingw64/lib/ 2>/dev/null || true
+          cp -r "$MINGW64_DIR"/dll/*.dll C:/mingw64/bin/ 2>/dev/null || true
+          cp -r "$MINGW64_DIR"/include/* C:/mingw64/include/
 
           # Build Crypto++ from source
           git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git C:/cryptopp
