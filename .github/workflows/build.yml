@@ -135,7 +135,8 @@ jobs:
           git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git C:/cryptopp
           mingw32-make -C C:/cryptopp -j$(nproc) static 2>/dev/null || make -C C:/cryptopp -j$(nproc) static
           cp C:/cryptopp/libcryptopp.a C:/mingw64/lib/
-          cp C:/cryptopp/*.h C:/mingw64/include/
+          mkdir -p C:/mingw64/include/cryptopp
+          cp C:/cryptopp/*.h C:/mingw64/include/cryptopp/
 
           echo "CMAKE_PREFIX_PATH=C:/mingw64" >> "$GITHUB_ENV"
 
