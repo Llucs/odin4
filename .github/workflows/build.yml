@@ -104,6 +104,11 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Remove problematic taps that may block brew update
+          brew untap aws/tap 2>/dev/null || true
+          brew untap azure/bicep 2>/dev/null || true
+          brew untap hashicorp/tap 2>/dev/null || true
+
           brew update
           brew install cmake ninja pkg-config libusb cryptopp
 
@@ -115,16 +120,18 @@ jobs:
 
           choco install cmake ninja zip -y
 
-          # Install MSYS2 and MinGW packages
-          choco install msys2 -y --params="/NoPath"
+          # Download and extract pre-built libusb
+          curl -L -o /tmp/libusb.7z https://github.com/libusb/libusb/releases/download/v1.0.27/libusb-1.0.27-binaries.7z
+          7z x /tmp/libusb.7z -oC:/libusb
+          cp -r C:/libusb/MinGW64/ C:/mingw64/
 
-          # Initiate MSYS2
-          C:\tools\msys64\usr\bin\pacman --noconfirm -Syu --noprogressbar 2>&1 || true
+          # Build Crypto++ from source
+          git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git C:/cryptopp
+          make -C C:/cryptopp -j$(nproc) static
+          cp C:/cryptopp/src/cryptlib.a C:/mingw64/lib/
+          cp C:/cryptopp/*.h C:/mingw64/include/
 
-          # Install libusb and cryptopp for MinGW
-          C:\tools\msys64\usr\bin\pacman --noconfirm -S mingw-w64-x86_64-libusb mingw-w64-x86_64-cryptopp
-
-          echo "CMAKE_PREFIX_PATH=C:/tools/msys64/mingw64" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=C:/mingw64" >> "$GITHUB_ENV"
 
       - name: Read version
         shell: bash
