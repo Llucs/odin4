@@ -155,16 +155,11 @@ jobs:
 
           choco install cmake ninja zip -y
 
-          # Install libusb via vcpkg (MSVC ARM64)
-          vcpkg install libusb[core]:arm64-windows
+          # Install libusb and Crypto++ via vcpkg (MSVC ARM64)
+          vcpkg install libusb[core]:arm64-windows cryptopp:arm64-windows
 
-          # Build Crypto++ 8.9.0 from source (MSVC ARM64)
-          git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git C:/cryptopp
-          cmake -S C:/cryptopp -B C:/cryptopp/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=C:/deps
-          cmake --build C:/cryptopp/build
-          cmake --install C:/cryptopp/build
-
-          echo "CMAKE_PREFIX_PATH=C:/vcpkg/installed/arm64-windows;C:/deps" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=C:/vcpkg/installed/arm64-windows" >> "$GITHUB_ENV"
+          echo "VCPKG_TARGET_TRIPLET=arm64-windows" >> "$GITHUB_ENV"
 
       - name: Read version
         shell: bash
