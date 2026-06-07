@@ -136,6 +136,7 @@ endif()
 
 if(WIN32)
     add_definitions(-DNOMINMAX)
+    add_definitions(-DLIBUSB_STATIC)
 endif()
 
 file(STRINGS "${CMAKE_SOURCE_DIR}/src/odin4.cpp" ODIN_VERSION_LINE REGEX "#define ODIN4_VERSION")
