@@ -496,18 +496,15 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
-          cd build
-          cpack -G NSIS -C Release \
-            -D CPACK_PACKAGE_NAME="Odin4" \
-            -D CPACK_PACKAGE_VERSION="$VERSION" || {
+          cmake --build build --target package --config Release || {
             echo "NSIS packaging failed"
-            cat _CPack_Packages/*/NSIS/NSISOutput.log 2>/dev/null || true
+            cat build/_CPack_Packages/*/NSIS/NSISOutput.log 2>/dev/null || true
             exit 1
           }
           SUFFIX="${{ inputs.suffix }}"
-          installer="$(ls -1 *.exe | head -n1)"
-          mkdir -p ../dist
-          mv "$installer" "../dist/Odin4-${VERSION}${SUFFIX}-windows-x86_64-setup.exe"
+          installer="$(ls -1 build/*.exe | head -n1)"
+          mkdir -p dist
+          mv "$installer" "dist/Odin4-${VERSION}${SUFFIX}-windows-x86_64-setup.exe"
 
       - name: Package portable zip
         run: |
@@ -574,18 +571,15 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
-          cd build
-          cpack -G NSIS -C Release \
-            -D CPACK_PACKAGE_NAME="Odin4" \
-            -D CPACK_PACKAGE_VERSION="$VERSION" || {
+          cmake --build build --target package --config Release || {
             echo "NSIS packaging failed"
-            cat _CPack_Packages/*/NSIS/NSISOutput.log 2>/dev/null || true
+            cat build/_CPack_Packages/*/NSIS/NSISOutput.log 2>/dev/null || true
             exit 1
           }
           SUFFIX="${{ inputs.suffix }}"
-          installer="$(ls -1 *.exe | head -n1)"
-          mkdir -p ../dist
-          mv "$installer" "../dist/Odin4-${VERSION}${SUFFIX}-windows-arm64-setup.exe"
+          installer="$(ls -1 build/*.exe | head -n1)"
+          mkdir -p dist
+          mv "$installer" "dist/Odin4-${VERSION}${SUFFIX}-windows-arm64-setup.exe"
 
       - name: Package portable zip
         run: |
