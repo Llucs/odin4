@@ -78,8 +78,10 @@ jobs:
             qt6-base-dev \
             libqt6widgets6 \
             libgl1-mesa-dev \
-            libglvnd-dev \
+            libgl-dev \
+            libglx-dev \
             mesa-common-dev \
+            pkg-config \
             libxkbcommon-dev \
             libxkbcommon-x11-dev \
             libx11-dev \
@@ -227,10 +229,22 @@ jobs:
 
           rm -rf build
 
+          # Find OpenGL libraries via pkg-config and pass explicitly to CMake
+          OPENGL_GL_LIB="$(pkg-config --libs-only-L gl 2>/dev/null || true)"
+          OPENGL_GLX_LIB="$(pkg-config --libs-only-L glx 2>/dev/null || true)"
+          GL_LIB_PATH=""
+          GLX_LIB_PATH=""
+          for dir in /usr/lib /usr/lib/"$(uname -m)"-linux-gnu; do
+            [ -f "$dir/libGL.so" ] && GL_LIB_PATH="$dir/libGL.so"
+            [ -f "$dir/libGLX.so" ] && GLX_LIB_PATH="$dir/libGLX.so"
+          done
+
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER=gcc-16 \
-            -DCMAKE_CXX_COMPILER=g++-16
+            -DCMAKE_CXX_COMPILER=g++-16 \
+            ${GL_LIB_PATH:+-DOPENGL_opengl_LIBRARY="${GL_LIB_PATH}"} \
+            ${GLX_LIB_PATH:+-DOPENGL_glx_LIBRARY="${GLX_LIB_PATH}"}
 
           cmake --build build --parallel "$(nproc)"
 
