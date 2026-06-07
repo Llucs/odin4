@@ -120,24 +120,20 @@ jobs:
 
           choco install cmake ninja zip -y
 
-          # Build libusb from source (pre-built MinGW64 package only provides import libraries)
-          # The autotools/libtool build breaks when the shell path contains spaces
-          # (C:/Program Files/Git/usr/bin/sh). Fix by using MSYS2 bash which has no spaces.
-          curl -sL https://github.com/libusb/libusb/releases/download/v1.0.27/libusb-1.0.27.tar.bz2 -o /tmp/libusb.tar.bz2
-          tar -xjf /tmp/libusb.tar.bz2 -C /tmp
-          cd /tmp/libusb-1.0.27
-          export SHELL="C:/msys64/usr/bin/bash.exe"
-          export CONFIG_SHELL="C:/msys64/usr/bin/bash.exe"
-          ./configure --enable-static --disable-shared --prefix=C:/mingw64
-          make -j$(nproc)
-          make install
+          # Download pre-built MSYS2 MinGW64 packages (avoids autotools/libtool path issues on Windows)
+          mkdir -p C:/mingw64/include C:/mingw64/lib
 
-          # Build Crypto++ from source
-          git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git C:/cryptopp
-          mingw32-make -C C:/cryptopp -j$(nproc) static 2>/dev/null || make -C C:/cryptopp -j$(nproc) static
-          cp C:/cryptopp/libcryptopp.a C:/mingw64/lib/
-          mkdir -p C:/mingw64/include/cryptopp
-          cp C:/cryptopp/*.h C:/mingw64/include/cryptopp/
+          # libusb 1.0.27 (matches tag used in original CI)
+          curl -sL https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-libusb-1.0.27-1-any.pkg.tar.zst -o /tmp/libusb.pkg.tar.zst
+          tar --zstd -xf /tmp/libusb.pkg.tar.zst -C /tmp/libusb_pkg
+          cp -r /tmp/libusb_pkg/mingw64/include/libusb-1.0 C:/mingw64/include/
+          cp /tmp/libusb_pkg/mingw64/lib/libusb-1.0.a C:/mingw64/lib/
+
+          # Crypto++ 8.9.0 (matches tag used in original CI)
+          curl -sL "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-crypto%2B%2B-8.9.0-1-any.pkg.tar.zst" -o /tmp/cryptopp.pkg.tar.zst
+          tar --zstd -xf /tmp/cryptopp.pkg.tar.zst -C /tmp/cryptopp_pkg
+          cp -r /tmp/cryptopp_pkg/mingw64/include/cryptopp C:/mingw64/include/
+          cp /tmp/cryptopp_pkg/mingw64/lib/libcryptopp.a C:/mingw64/lib/
 
           echo "CMAKE_PREFIX_PATH=C:/mingw64" >> "$GITHUB_ENV"
 
