@@ -183,14 +183,20 @@ jobs:
           # Install libusb and Crypto++ via vcpkg (MSVC ARM64)
           vcpkg install libusb[core]:arm64-windows cryptopp:arm64-windows
 
-          # Install Qt6 pre-built binaries for ARM64 using aqtinstall
-          # ARM64 Qt requires the x86_64 desktop version as a base
-          pip install aqtinstall
-          aqt install-qt --outputdir "${{ runner.temp }}/qt" windows desktop 6.7.2 win64_msvc2019_64
-          aqt install-qt --outputdir "${{ runner.temp }}/qt" windows desktop 6.7.2 win64_msvc2022_arm64
-
-          # Set CMake prefix paths (vcpkg for libusb/cryptopp, aqtinstall for Qt6 ARM64)
-          echo "CMAKE_PREFIX_PATH=C:/vcpkg/installed/arm64-windows;${{ runner.temp }}/qt/6.7.2/msvc2022_arm64" >> "$GITHUB_ENV"
+          # Install Qt6 ARM64 — try aqtinstall (pre-built) first, fall back to vcpkg
+          pip install aqtinstall -q
+          QT_VER="6.9.0"
+          QT_DIR="${{ runner.temp }}/qt"
+          # ARM64 add-on requires desktop x86_64 base
+          if aqt install-qt --outputdir "${QT_DIR}" windows desktop "${QT_VER}" win64_msvc2019_64 2>/dev/null && \
+             aqt install-qt --outputdir "${QT_DIR}" windows desktop "${QT_VER}" win64_msvc2022_arm64 2>/dev/null; then
+            echo "Qt6 ${QT_VER} ARM64 installed via aqtinstall"
+            echo "CMAKE_PREFIX_PATH=C:/vcpkg/installed/arm64-windows;${QT_DIR}/${QT_VER}/msvc2022_arm64" >> "$GITHUB_ENV"
+          else
+            echo "aqtinstall failed for ARM64, trying vcpkg qtbase (build from source)"
+            vcpkg install qtbase[core]:arm64-windows
+            echo "CMAKE_PREFIX_PATH=C:/vcpkg/installed/arm64-windows" >> "$GITHUB_ENV"
+          fi
           echo "VCPKG_TARGET_TRIPLET=arm64-windows" >> "$GITHUB_ENV"
 
       # ============================================================
