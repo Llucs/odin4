@@ -24,9 +24,6 @@ env:
   QT_VERSION: "6.7.3"
 
 jobs:
-  # ============================================================
-  # Linux x86_64 - AppImage + CLI tarball
-  # ============================================================
   linux_x86_64:
     name: Linux x86_64
     runs-on: ubuntu-24.04
@@ -41,16 +38,16 @@ jobs:
           sudo apt-get install -y \
             cmake ninja-build pkg-config \
             libusb-1.0-0-dev libcrypto++-dev \
+            qt6-base-dev qt6-base-dev-tools \
             libgl1-mesa-dev libgl-dev libglx-dev \
             libxkbcommon-dev libxkbcommon-x11-dev \
             libx11-dev libxcb-cursor-dev libvulkan-dev \
             patchelf wget file
 
-      - name: Install Qt6
+      - name: Install Qt6 (for linuxdeploy)
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
-          modules: qtbase
           cache: true
           cache-key-prefix: install-qt-action-linux-x86_64
           arch: linux_gcc_64
@@ -59,8 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+            -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build --parallel
@@ -99,7 +95,6 @@ jobs:
 
           export PATH="$QT_ROOT_DIR/bin:$PATH"
           export QMAKE="$QT_ROOT_DIR/bin/qmake"
-          export EXTRA_QT_MODULES="Widgets"
 
           ./linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
@@ -140,9 +135,6 @@ jobs:
           path: dist/*
           retention-days: 14
 
-  # ============================================================
-  # Linux ARM64 - AppImage + CLI tarball
-  # ============================================================
   linux_arm64:
     name: Linux ARM64
     runs-on: ubuntu-24.04-arm
@@ -157,17 +149,17 @@ jobs:
           sudo apt-get install -y \
             cmake ninja-build pkg-config \
             libusb-1.0-0-dev libcrypto++-dev \
+            qt6-base-dev qt6-base-dev-tools \
             libgl1-mesa-dev libgl-dev libglx-dev \
             libxkbcommon-dev libxkbcommon-x11-dev \
             libx11-dev libxcb-cursor-dev libvulkan-dev \
             patchelf wget file
 
-      - name: Install Qt6
+      - name: Install Qt6 (for linuxdeploy)
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
           cache: true
-          modules: qtbase
           cache-key-prefix: install-qt-action-linux-arm64
           arch: linux_gcc_arm64
 
@@ -175,8 +167,7 @@ jobs:
         run: |
           set -euo pipefail
           cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+            -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build --parallel
@@ -215,7 +206,6 @@ jobs:
 
           export PATH="$QT_ROOT_DIR/bin:$PATH"
           export QMAKE="$QT_ROOT_DIR/bin/qmake"
-          export EXTRA_QT_MODULES="Widgets"
 
           ./linuxdeploy-aarch64.AppImage \
             --appdir AppDir \
@@ -256,9 +246,6 @@ jobs:
           path: dist/*
           retention-days: 14
 
-  # ============================================================
-  # macOS ARM64 - .app bundle + DMG
-  # ============================================================
   macos_arm64:
     name: macOS ARM64
     runs-on: macos-15
@@ -275,7 +262,6 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
-          modules: qtbase
           cache: true
           cache-key-prefix: install-qt-action-macos-arm64
           arch: clang_64
@@ -306,7 +292,6 @@ jobs:
           fi
 
       - name: Deploy Qt frameworks
-        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
           APP="build/odin4-gui.app"
@@ -320,7 +305,6 @@ jobs:
           VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           mkdir -p dist
-
           APP="build/odin4-gui.app"
           if [ -d "$APP" ]; then
             hdiutil create -volname "Odin4" \
@@ -359,9 +343,6 @@ jobs:
           path: dist/*
           retention-days: 14
 
-  # ============================================================
-  # macOS x86_64 - .app bundle + DMG
-  # ============================================================
   macos_x86_64:
     name: macOS x86_64
     runs-on: macos-15-intel
@@ -378,7 +359,6 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
-          modules: qtbase
           cache: true
           cache-key-prefix: install-qt-action-macos-x86_64
           arch: clang_64
@@ -422,7 +402,6 @@ jobs:
           VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           mkdir -p dist
-
           APP="build/odin4-gui.app"
           if [ -d "$APP" ]; then
             hdiutil create -volname "Odin4" \
@@ -461,9 +440,6 @@ jobs:
           path: dist/*
           retention-days: 14
 
-  # ============================================================
-  # Windows x86_64 - NSIS installer + portable zip
-  # ============================================================
   windows_x86_64:
     name: Windows x86_64
     runs-on: windows-2022
@@ -489,7 +465,6 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
-          modules: qtbase
           cache: true
           cache-key-prefix: install-qt-action-windows-x86_64
           host: windows
@@ -528,7 +503,6 @@ jobs:
           SUFFIX="${{ inputs.suffix }}"
           install_root="$PWD/build/install/odin4"
           rm -rf "$install_root"
-          mkdir -p "$install_root"
           cmake --install build --prefix "$install_root"
           mkdir -p dist
           cd build/install
@@ -541,9 +515,6 @@ jobs:
           path: dist/*
           retention-days: 14
 
-  # ============================================================
-  # Windows ARM64 - NSIS installer + portable zip
-  # ============================================================
   windows_arm64:
     name: Windows ARM64
     runs-on: windows-11-arm
@@ -569,7 +540,6 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
-          modules: qtbase
           cache: true
           cache-key-prefix: install-qt-action-windows-arm64
           host: windows
@@ -620,9 +590,6 @@ jobs:
           path: dist/*
           retention-days: 14
 
-  # ============================================================
-  # Bundle all artifacts into one zip
-  # ============================================================
   bundle:
     name: Bundle all artifacts
     runs-on: ubuntu-24.04
