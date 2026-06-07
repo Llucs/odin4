@@ -33,7 +33,7 @@ cmake --build . --parallel
 
 mkdir -p "$OUT"
 
-INCLUDES="-I../include -I../src"
+INCLUDES="-I../include -I../src -I../lib -I../lib/lz4"
 
 FUZZ_UTILS="../src/fuzz_utils.cpp"
 
@@ -50,6 +50,7 @@ $CXX $CXXFLAGS -fsanitize=fuzzer,address,undefined \
 $CXX $CXXFLAGS -fsanitize=fuzzer,address,undefined \
     -Xclang -dwarf-version=4 \
     $INCLUDES ../tests/fuzz_lz4.cpp \
+    ../build/liblz4_lib.a \
     -o $OUT/fuzz_lz4
 
 $CXX $CXXFLAGS -fsanitize=fuzzer,address,undefined \
