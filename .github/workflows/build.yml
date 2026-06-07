@@ -78,17 +78,29 @@ jobs:
             qt6-base-dev \
             libqt6widgets6 \
             libgl1-mesa-dev \
+            libgl-dev \
+            libglx-dev \
+            libegl-dev \
+            libegl1-mesa-dev \
             libxkbcommon-dev \
             libxkbcommon-x11-dev \
             libx11-dev \
+            libxcb-cursor-dev \
             libvulkan-dev \
             file \
             gcc-16 \
             g++-16
 
-          # Download appimagetool for AppImage packaging
+          # Download appimagetool for AppImage packaging (correct arch)
           sudo apt-get install -y libfuse2 2>/dev/null || true
-          wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage" \
+          ARCH_NAME="$(uname -m)"
+          case "${ARCH_NAME}" in
+            x86_64)  AI_ARCH="x86_64" ;;
+            aarch64) AI_ARCH="aarch64" ;;
+            arm64)   AI_ARCH="aarch64" ;;
+            *)       AI_ARCH="x86_64" ;;
+          esac
+          wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${AI_ARCH}.AppImage" \
             -O /usr/local/bin/appimagetool 2>/dev/null || true
           chmod +x /usr/local/bin/appimagetool 2>/dev/null || true
 
@@ -154,11 +166,11 @@ jobs:
           mkdir -p C:/mingw64/include/cryptopp
           cp C:/cryptopp/*.h C:/mingw64/include/cryptopp/
 
-          # Qt6 for MinGW via MSYS2
-          pacman -S --noconfirm mingw-w64-x86_64-qt6-base 2>/dev/null || \
-          echo "Qt6 not available, GUI will be skipped"
+          # Qt6 for MinGW via aqtinstall (pre-built binaries)
+          pip install aqtinstall
+          aqt install-qt --outputdir "${{ runner.temp }}/qt" windows desktop 6.7.2 win64_mingw
 
-          echo "CMAKE_PREFIX_PATH=C:/mingw64" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=C:/mingw64;${{ runner.temp }}/qt/6.7.2/mingw_64" >> "$GITHUB_ENV"
 
       - name: Install dependencies (Windows arm64)
         if: ${{ matrix.os == 'windows' && matrix.arch == 'arm64' }}
@@ -231,8 +243,12 @@ jobs:
 
           rm -rf build
 
+          # Qt6 from Homebrew is keg-only; set CMAKE_PREFIX_PATH so CMake can find it
+          QT_PREFIX="$(brew --prefix qt@6 2>/dev/null || echo "")"
+
           cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_BUILD_TYPE=Release \
+            ${QT_PREFIX:+-DCMAKE_PREFIX_PATH="${QT_PREFIX}"}
 
           cmake --build build --parallel "$(sysctl -n hw.logicalcpu)"
 
