@@ -56,7 +56,9 @@ jobs:
         run: |
           set -euo pipefail
           cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_BUILD_TYPE=Release \
+            -DOPENGL_opengl_LIBRARY=/usr/lib/x86_64-linux-gnu/libOpenGL.so \
+            -DOPENGL_glx_LIBRARY=/usr/lib/x86_64-linux-gnu/libGLX.so
 
       - name: Build
         run: cmake --build build --parallel
@@ -101,7 +103,7 @@ jobs:
             --plugin qt \
             --output appimage
 
-          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           mv Odin4-*-x86_64.AppImage "Odin4-${VERSION}${SUFFIX}-linux-x86_64.AppImage"
 
@@ -112,7 +114,7 @@ jobs:
           cp build/odin4 dist/cli/bin/
           cp build/libodin4.so dist/cli/lib/
           strip dist/cli/bin/odin4 dist/cli/lib/libodin4.so 2>/dev/null || true
-          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           tar czf "dist/odin4-v${VERSION}${SUFFIX}-linux-x86_64-cli.tar.gz" -C dist cli
 
@@ -124,7 +126,7 @@ jobs:
           cp build/libodin4.so dist/sdk/lib/ 2>/dev/null || true
           cp build/libodin4_static.a dist/sdk/lib/ 2>/dev/null || true
           cp LICENSE dist/sdk/ 2>/dev/null || true
-          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           (cd dist && zip -r "odin4-v${VERSION}${SUFFIX}-sdk-linux.zip" sdk)
 
@@ -167,7 +169,9 @@ jobs:
         run: |
           set -euo pipefail
           cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_BUILD_TYPE=Release \
+            -DOPENGL_opengl_LIBRARY=/usr/lib/aarch64-linux-gnu/libOpenGL.so \
+            -DOPENGL_glx_LIBRARY=/usr/lib/aarch64-linux-gnu/libGLX.so
 
       - name: Build
         run: cmake --build build --parallel
@@ -212,7 +216,7 @@ jobs:
             --plugin qt \
             --output appimage
 
-          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           mv Odin4-*-aarch64.AppImage "Odin4-${VERSION}${SUFFIX}-linux-arm64.AppImage"
 
@@ -223,7 +227,7 @@ jobs:
           cp build/odin4 dist/cli/bin/
           cp build/libodin4.so dist/cli/lib/
           strip dist/cli/bin/odin4 dist/cli/lib/libodin4.so 2>/dev/null || true
-          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           tar czf "dist/odin4-v${VERSION}${SUFFIX}-linux-arm64-cli.tar.gz" -C dist cli
 
@@ -235,7 +239,7 @@ jobs:
           cp build/libodin4.so dist/sdk/lib/ 2>/dev/null || true
           cp build/libodin4_static.a dist/sdk/lib/ 2>/dev/null || true
           cp LICENSE dist/sdk/ 2>/dev/null || true
-          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           (cd dist && zip -r "odin4-v${VERSION}${SUFFIX}-sdk-linux.zip" sdk)
 
@@ -302,7 +306,7 @@ jobs:
       - name: Package DMG
         run: |
           set -euo pipefail
-          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           mkdir -p dist
           APP="build/odin4-gui.app"
@@ -316,7 +320,7 @@ jobs:
       - name: Package CLI tarball
         run: |
           set -euo pipefail
-          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           mkdir -p dist/cli/bin dist/cli/lib
           cp build/odin4 dist/cli/bin/
@@ -327,7 +331,7 @@ jobs:
       - name: Package SDK
         run: |
           set -euo pipefail
-          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           mkdir -p dist/sdk/include/odin4 dist/sdk/lib
           cp include/odin4/odin4.h dist/sdk/include/odin4/
@@ -399,7 +403,7 @@ jobs:
       - name: Package DMG
         run: |
           set -euo pipefail
-          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           mkdir -p dist
           APP="build/odin4-gui.app"
@@ -413,7 +417,7 @@ jobs:
       - name: Package CLI tarball
         run: |
           set -euo pipefail
-          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           mkdir -p dist/cli/bin dist/cli/lib
           cp build/odin4 dist/cli/bin/
@@ -424,7 +428,7 @@ jobs:
       - name: Package SDK
         run: |
           set -euo pipefail
-          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           mkdir -p dist/sdk/include/odin4 dist/sdk/lib
           cp include/odin4/odin4.h dist/sdk/include/odin4/
@@ -458,6 +462,7 @@ jobs:
         run: |
           set -euo pipefail
           choco install ninja -y
+          echo "VCPKG_ROOT=C:\vcpkg" >> "$GITHUB_ENV"
           echo "VCPKG_TARGET_TRIPLET=x64-windows" >> "$GITHUB_ENV"
           vcpkg install libusb:x64-windows cryptopp:x64-windows
 
@@ -490,7 +495,7 @@ jobs:
             cat _CPack_Packages/*/NSIS/NSISOutput.log 2>/dev/null || true
             exit 1
           }
-          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' ../src/odin4.cpp)"
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' ../src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           installer="$(ls -1 *.exe | head -n1)"
           mkdir -p ../dist
@@ -499,7 +504,7 @@ jobs:
       - name: Package portable zip
         run: |
           set -euo pipefail
-          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           install_root="$PWD/build/install/odin4"
           rm -rf "$install_root"
@@ -533,6 +538,7 @@ jobs:
         run: |
           set -euo pipefail
           choco install ninja -y
+          echo "VCPKG_ROOT=C:\vcpkg" >> "$GITHUB_ENV"
           echo "VCPKG_TARGET_TRIPLET=arm64-windows" >> "$GITHUB_ENV"
           vcpkg install libusb:arm64-windows cryptopp:arm64-windows
 
@@ -565,7 +571,7 @@ jobs:
             cat _CPack_Packages/*/NSIS/NSISOutput.log 2>/dev/null || true
             exit 1
           }
-          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' ../src/odin4.cpp)"
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' ../src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           installer="$(ls -1 *.exe | head -n1)"
           mkdir -p ../dist
@@ -574,7 +580,7 @@ jobs:
       - name: Package portable zip
         run: |
           set -euo pipefail
-          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
           install_root="$PWD/build/install/odin4"
           rm -rf "$install_root"
