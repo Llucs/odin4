@@ -33,7 +33,7 @@ cmake --build . --parallel
 
 mkdir -p "$OUT"
 
-INCLUDES="-I../include -I../src -I../lib -I../lib/lz4"
+INCLUDES="-I../include -I../src -I../lib -I../lib/lz4 -I/usr/include/libusb-1.0"
 
 FUZZ_UTILS="../src/fuzz_utils.cpp"
 
