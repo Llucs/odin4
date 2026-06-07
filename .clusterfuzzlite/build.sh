@@ -5,7 +5,7 @@ export CC=clang
 export CXX=clang++
 
 export CXXFLAGS="$CXXFLAGS -std=c++23 -pthread"
-export CFLAGS="$CFLAGS -pthread"
+export CFLAGS="$CFLAGS -pthread -fPIC"
 
 apt-get update || true
 apt-get install -y --no-install-recommends \
@@ -25,6 +25,7 @@ cmake .. -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DODIN4_BUILD_GUI=OFF \
     -DODIN4_BUILD_TESTS=OFF \
+    -DCMAKE_C_FLAGS="$CFLAGS" \
     -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
     -DCMAKE_EXE_LINKER_FLAGS="-pthread"
 
