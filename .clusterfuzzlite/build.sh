@@ -37,23 +37,23 @@ INCLUDES="-I../include -I../src -I../lib -I../lib/lz4 -I/usr/include/libusb-1.0"
 
 FUZZ_UTILS="../src/fuzz_utils.cpp"
 
-$CXX $CXXFLAGS -fsanitize=fuzzer,address,undefined \
+$CXX $CXXFLAGS -fsanitize=fuzzer \
     -Xclang -dwarf-version=4 \
     $INCLUDES ../tests/fuzz_pit.cpp $FUZZ_UTILS \
     -o $OUT/fuzz_pit
 
-$CXX $CXXFLAGS -fsanitize=fuzzer,address,undefined \
+$CXX $CXXFLAGS -fsanitize=fuzzer \
     -Xclang -dwarf-version=4 \
     $INCLUDES ../tests/fuzz_thor.cpp $FUZZ_UTILS \
     -o $OUT/fuzz_thor
 
-$CXX $CXXFLAGS -fsanitize=fuzzer,address,undefined \
+$CXX $CXXFLAGS -fsanitize=fuzzer \
     -Xclang -dwarf-version=4 \
     $INCLUDES ../tests/fuzz_lz4.cpp \
     ../build/liblz4_lib.a \
     -o $OUT/fuzz_lz4
 
-$CXX $CXXFLAGS -fsanitize=fuzzer,address,undefined \
+$CXX $CXXFLAGS -fsanitize=fuzzer \
     -Xclang -dwarf-version=4 \
     $INCLUDES ../tests/fuzz_tar.cpp \
     -o $OUT/fuzz_tar
