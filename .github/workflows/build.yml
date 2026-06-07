@@ -78,10 +78,8 @@ jobs:
             qt6-base-dev \
             libqt6widgets6 \
             libgl1-mesa-dev \
-            libgl-dev \
-            libglx-dev \
-            libegl-dev \
-            libegl1-mesa-dev \
+            libglvnd-dev \
+            mesa-common-dev \
             libxkbcommon-dev \
             libxkbcommon-x11-dev \
             libx11-dev \
