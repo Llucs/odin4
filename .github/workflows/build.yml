@@ -180,24 +180,17 @@ jobs:
 
           choco install cmake ninja zip innosetup -y
 
-          # Install libusb and Crypto++ via vcpkg (MSVC ARM64)
-          vcpkg install libusb[core]:arm64-windows cryptopp:arm64-windows
+          # Install libusb and Crypto++ via vcpkg (MSVC — x64 triplet for x86_64 build compatibility)
+          # Note: native ARM64 Qt6 pre-built binaries are not consistently available;
+          # building from source requires QT_HOST_PATH. We build x86_64 here (runs via Prism emulation).
+          vcpkg install libusb[core]:x64-windows cryptopp:x64-windows
 
-          # Install Qt6 ARM64 — try aqtinstall (pre-built) first, fall back to vcpkg
+          # Install Qt6 via aqtinstall (pre-built x86_64)
           pip install aqtinstall -q
-          QT_VER="6.9.0"
+          QT_VER="6.7.2"
           QT_DIR="${{ runner.temp }}/qt"
-          # ARM64 add-on requires desktop x86_64 base
-          if aqt install-qt --outputdir "${QT_DIR}" windows desktop "${QT_VER}" win64_msvc2019_64 2>/dev/null && \
-             aqt install-qt --outputdir "${QT_DIR}" windows desktop "${QT_VER}" win64_msvc2022_arm64 2>/dev/null; then
-            echo "Qt6 ${QT_VER} ARM64 installed via aqtinstall"
-            echo "CMAKE_PREFIX_PATH=C:/vcpkg/installed/arm64-windows;${QT_DIR}/${QT_VER}/msvc2022_arm64" >> "$GITHUB_ENV"
-          else
-            echo "aqtinstall failed for ARM64, trying vcpkg qtbase (build from source)"
-            vcpkg install qtbase[core]:arm64-windows
-            echo "CMAKE_PREFIX_PATH=C:/vcpkg/installed/arm64-windows" >> "$GITHUB_ENV"
-          fi
-          echo "VCPKG_TARGET_TRIPLET=arm64-windows" >> "$GITHUB_ENV"
+          aqt install-qt --outputdir "${QT_DIR}" windows desktop "${QT_VER}" win64_msvc2019_64
+          echo "CMAKE_PREFIX_PATH=C:/vcpkg/installed/x64-windows;${QT_DIR}/${QT_VER}/msvc2019_64" >> "$GITHUB_ENV"
 
       # ============================================================
       # READ VERSION
@@ -277,7 +270,7 @@ jobs:
         if: ${{ matrix.os == 'windows' && matrix.arch == 'arm64' }}
         shell: cmd
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" arm64
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x86_64
           set VCPKG_ROOT=C:\vcpkg
           if exist build rmdir /s /q build
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
