@@ -8,9 +8,13 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+set(CMAKE_STRIP_EXCLUDE_PATTERNS "")
+
 if(MSVC)
     set(CMAKE_C_FLAGS_RELEASE "/O2 /DNDEBUG")
     set(CMAKE_CXX_FLAGS_RELEASE "/O2 /DNDEBUG")
+    set(CMAKE_C_FLAGS_RELWITHDEBINFO "/O2 /DNDEBUG")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "/O2 /DNDEBUG")
 else()
     set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
     set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
@@ -19,7 +23,6 @@ endif()
 find_package(PkgConfig QUIET)
 
 if(WIN32)
-    # Normalize VCPKG_ROOT to forward slashes to avoid escape issues in find_path/find_library
     file(TO_CMAKE_PATH "$ENV{VCPKG_ROOT}" _VCPKG_ROOT_NORM)
 
     set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a .dll.a)
@@ -42,7 +45,7 @@ if(WIN32)
                   "C:/msys64/usr/lib"
         )
         if(NOT LIBUSB_INCLUDE_DIRS OR NOT LIBUSB_LIBRARIES)
-            message(FATAL_ERROR "libusb not found. Install it via MSYS2 (pacman -S mingw-w64-x86_64-libusb) or vcpkg.")
+            message(FATAL_ERROR "libusb not found.")
         endif()
     else()
         get_target_property(LIBUSB_INCLUDE_DIRS libusb::usb INTERFACE_INCLUDE_DIRECTORIES)
@@ -62,7 +65,7 @@ elseif(APPLE)
             if(PkgConfig_FOUND)
                 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
             else()
-                message(FATAL_ERROR "libusb not found. Install it via Homebrew.")
+                message(FATAL_ERROR "libusb not found.")
             endif()
         endif()
     else()
@@ -87,8 +90,6 @@ else()
 endif()
 
 macro(find_cryptopp_include OUT_VAR)
-    # Normalize backslashes to forward slashes in all arguments
-    # to avoid escape-sequence errors on Windows
     set(_CLEANED_ARGS "")
     foreach(_arg ${ARGN})
         string(REPLACE "\\" "/" _arg "${_arg}")
@@ -146,7 +147,7 @@ elseif(PkgConfig_FOUND)
     set(CRYPTOPP_USE_STATIC OFF)
     pkg_check_modules(CRYPTOPP REQUIRED libcrypto++)
 else()
-    message(FATAL_ERROR "Crypto++ not found. Install it via vcpkg, Homebrew, or your package manager.")
+    message(FATAL_ERROR "Crypto++ not found.")
 endif()
 
 if(WIN32)
@@ -177,9 +178,9 @@ if(WIN32)
 endif()
 
 add_library(odin4_shared SHARED ${ODIN4_CORE_SOURCES})
-set_target_properties(odin4_shared PROPERTIES 
-    OUTPUT_NAME "odin4" 
-    VERSION "${ODIN_VERSION_CLEAN}" 
+set_target_properties(odin4_shared PROPERTIES
+    OUTPUT_NAME "odin4"
+    VERSION "${ODIN_VERSION_CLEAN}"
     SOVERSION "${ODIN_SOVERSION}"
 )
 if(WIN32)
@@ -207,20 +208,12 @@ if(NOT MSVC AND NOT APPLE)
     target_link_options(odin4 PRIVATE "-static-libgcc" "-static-libstdc++")
 endif()
 
-# Optional GUI build
 option(ODIN4_BUILD_GUI "Build Qt6 GUI target" ON)
 set(ODIN4_ALL_TARGETS odin4_static odin4_shared odin4)
 
-# GUI Target
+# Qt6 GUI target
 if(ODIN4_BUILD_GUI)
-    find_package(Qt6 COMPONENTS Widgets QUIET)
-    if(NOT Qt6_FOUND)
-        message(WARNING "Qt6 not found (missing OpenGL or other dependencies). GUI target will not be built.")
-        set(ODIN4_BUILD_GUI OFF)
-    endif()
-endif()
-
-if(ODIN4_BUILD_GUI)
+    find_package(Qt6 REQUIRED COMPONENTS Widgets)
     add_executable(odin4-gui
         src/gui/main.cpp
         src/gui/resources.qrc
@@ -230,8 +223,6 @@ if(ODIN4_BUILD_GUI)
         AUTOMOC ON
         AUTORCC ON
     )
-    target_include_directories(odin4-gui PRIVATE ${CMAKE_SOURCE_DIR}/include)
-    target_link_libraries(odin4-gui PRIVATE odin4_static Qt6::Widgets)
     if(WIN32)
         if(MSVC)
             set_target_properties(odin4-gui PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -240,9 +231,16 @@ if(ODIN4_BUILD_GUI)
     endif()
     if(APPLE)
         set_target_properties(odin4-gui PROPERTIES
-            MACOSX_BUNDLE_GUI_IDENTIFIER com.llucs.odin4
+            MACOSX_BUNDLE TRUE
+            MACOSX_BUNDLE_GUI_IDENTIFIER "com.llucs.odin4"
+            MACOSX_BUNDLE_BUNDLE_NAME "Odin4"
+            MACOSX_BUNDLE_BUNDLE_VERSION "${ODIN_VERSION_CLEAN}"
+            MACOSX_BUNDLE_SHORT_VERSION_STRING "${ODIN_VERSION_CLEAN}"
+            MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/packaging/macos/Info.plist"
         )
     endif()
+    target_include_directories(odin4-gui PRIVATE ${CMAKE_SOURCE_DIR}/include)
+    target_link_libraries(odin4-gui PRIVATE odin4_static Qt6::Widgets)
     if(NOT MSVC AND NOT APPLE)
         target_link_options(odin4-gui PRIVATE "-static-libgcc" "-static-libstdc++")
     endif()
@@ -251,10 +249,8 @@ endif()
 
 # Tests
 option(ODIN4_BUILD_TESTS "Build test suite" ON)
-
 if(ODIN4_BUILD_TESTS)
     enable_testing()
-    
     set(ODIN4_TEST_SOURCES
         tests/main.cpp
         tests/test_framework.h
@@ -262,7 +258,6 @@ if(ODIN4_BUILD_TESTS)
         tests/test_odin_types.cpp
         tests/test_logger.cpp
     )
-    
     add_executable(odin4_tests ${ODIN4_TEST_SOURCES})
     set_target_properties(odin4_tests PROPERTIES OUTPUT_NAME "odin4_tests")
     target_include_directories(odin4_tests PRIVATE ${CMAKE_SOURCE_DIR}/include)
@@ -272,14 +267,11 @@ if(ODIN4_BUILD_TESTS)
     else()
         target_compile_options(odin4_tests PRIVATE -Wall -Wextra -Wno-cast-function-type)
     endif()
-    
     add_test(NAME odin4_tests COMMAND $<TARGET_FILE:odin4_tests>)
     list(APPEND ODIN4_ALL_TARGETS odin4_tests)
 endif()
 
-# Fuzz targets are built in .clusterfuzzlite/build.sh
-# The odin4_fuzz library provides PIT parsing for fuzzing
-
+# Fuzz library
 set(ODIN4_FUZZ_SOURCES
     src/fuzz_utils.cpp
     lib/lz4/lz4.c
@@ -287,7 +279,6 @@ set(ODIN4_FUZZ_SOURCES
     lib/lz4/lz4frame.c
     lib/lz4/xxhash.c
 )
-
 add_library(odin4_fuzz STATIC ${ODIN4_FUZZ_SOURCES})
 target_include_directories(odin4_fuzz PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_include_directories(odin4_fuzz PUBLIC ${CMAKE_SOURCE_DIR}/src)
@@ -311,11 +302,6 @@ foreach(target ${ODIN4_ALL_TARGETS})
     endif()
 endforeach()
 
-# macOS universal build
-if(APPLE)
-    set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Universal build for macOS")
-endif()
-
 # Install rules
 install(TARGETS odin4_static odin4_shared odin4
     RUNTIME DESTINATION bin
@@ -323,7 +309,30 @@ install(TARGETS odin4_static odin4_shared odin4
     ARCHIVE DESTINATION lib
 )
 if(ODIN4_BUILD_GUI)
-    install(TARGETS odin4-gui RUNTIME DESTINATION bin)
+    install(TARGETS odin4-gui
+        RUNTIME DESTINATION bin
+        BUNDLE DESTINATION .
+    )
 endif()
 install(FILES include/odin4/odin4.h DESTINATION include/odin4)
 install(FILES udev/60-odin4.rules DESTINATION share/odin4)
+
+# CPack for Windows installer and macOS DMG
+if(WIN32)
+    set(CPACK_GENERATOR "NSIS")
+    set(CPACK_NSIS_DISPLAY_NAME "Odin4")
+    set(CPACK_NSIS_CONTACT "Llucs")
+    set(CPACK_NSIS_URL_INFO_ABOUT "https://github.com/Llucs/odin4")
+    set(CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES64")
+    set(CPACK_NSIS_MODIFY_PATH ON)
+    set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "")
+    if(EXISTS "${CMAKE_SOURCE_DIR}/packaging/windows/odin4.ico")
+        set(CPACK_NSIS_INSTALL_ICON "${CMAKE_SOURCE_DIR}/packaging/windows/odin4.ico")
+        set(CPACK_NSIS_UNINSTALL_ICON "${CMAKE_SOURCE_DIR}/packaging/windows/odin4.ico")
+    endif()
+endif()
+if(APPLE)
+    set(CPACK_GENERATOR "DragNDrop")
+    set(CPACK_DMG_VOLUME_NAME "Odin4")
+    set(CPACK_DMG_DS_STORE_SETUP_SCRIPT "")
+endif()

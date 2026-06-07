@@ -20,617 +20,622 @@ concurrency:
   group: odin4-build-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  QT_VERSION: "6.7.3"
+
 jobs:
-  build:
-    runs-on: ${{ matrix.runner }}
+  # ============================================================
+  # Linux x86_64 - AppImage + CLI tarball
+  # ============================================================
+  linux_x86_64:
+    name: Linux x86_64
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            runner: ubuntu-22.04
-            os: linux
-          - arch: arm64
-            runner: ubuntu-22.04-arm
-            os: linux
-          - arch: x86_64
-            runner: windows-2022
-            os: windows
-          - arch: arm64
-            runner: windows-11-arm
-            os: windows
-          - arch: x86_64
-            runner: macos-15-intel
-            os: macos
-          - arch: arm64
-            runner: macos-14
-            os: macos
-
     steps:
-      - uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231
+      - uses: actions/checkout@v4
 
-      # ============================================================
-      # INSTALL DEPENDENCIES
-      # ============================================================
-
-      - name: Install dependencies (Linux)
-        if: ${{ matrix.os == 'linux' }}
-        shell: bash
+      - name: Install build dependencies
         run: |
           set -euo pipefail
-
           sudo apt-get update
-          sudo apt-get install -y software-properties-common
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          sudo apt-get update
-
           sudo apt-get install -y \
-            cmake \
-            ninja-build \
-            zip \
-            make \
-            pkg-config \
-            git \
-            libusb-1.0-0-dev \
-            libcrypto++-dev \
-            qt6-base-dev \
-            libqt6widgets6 \
-            libgl1-mesa-dev \
-            libgl-dev \
-            libglx-dev \
-            mesa-common-dev \
-            pkg-config \
-            libxkbcommon-dev \
-            libxkbcommon-x11-dev \
-            libx11-dev \
-            libxcb-cursor-dev \
-            libvulkan-dev \
-            file \
-            gcc-16 \
-            g++-16
+            cmake ninja-build pkg-config \
+            libusb-1.0-0-dev libcrypto++-dev \
+            libgl1-mesa-dev libgl-dev libglx-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libx11-dev libxcb-cursor-dev libvulkan-dev \
+            patchelf wget file
 
-          # Download appimagetool for AppImage packaging (correct arch)
-          sudo apt-get install -y libfuse2 2>/dev/null || true
-          ARCH_NAME="$(uname -m)"
-          case "${ARCH_NAME}" in
-            x86_64)  AI_ARCH="x86_64" ;;
-            aarch64) AI_ARCH="aarch64" ;;
-            arm64)   AI_ARCH="aarch64" ;;
-            *)       AI_ARCH="x86_64" ;;
-          esac
-          wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${AI_ARCH}.AppImage" \
-            -O /usr/local/bin/appimagetool 2>/dev/null || true
-          chmod +x /usr/local/bin/appimagetool 2>/dev/null || true
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          cache: true
+          cache-key-prefix: install-qt-action-linux-x86_64
+          arch: linux_gcc_64
 
-      - name: Ensure Crypto++ static library (Linux)
-        if: ${{ matrix.os == 'linux' }}
-        shell: bash
+      - name: Configure
         run: |
           set -euo pipefail
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
 
-          if ! find /usr /usr/local -name "libcryptopp.a" | grep -q .; then
-            git clone --depth 1 \
-              --branch CRYPTOPP_8_9_0 \
-              https://github.com/weidai11/cryptopp.git \
-              /tmp/cryptopp
+      - name: Build
+        run: cmake --build build --parallel
 
-            cd /tmp/cryptopp
-
-            make -j"$(nproc)"
-
-            sudo make install PREFIX=/usr/local
-
-            sudo ldconfig || true
+      - name: Strip binaries
+        run: |
+          set -euo pipefail
+          strip build/odin4 build/libodin4.so 2>/dev/null || true
+          if [ -f build/odin4-gui ]; then
+            strip build/odin4-gui 2>/dev/null || true
           fi
 
-      - name: Install dependencies (macOS)
-        if: ${{ matrix.os == 'macos' }}
-        shell: bash
-        env:
-          HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
+      - name: Package AppImage
         run: |
           set -euo pipefail
+          rm -rf AppDir
+          cmake --install build --prefix "$PWD/AppDir/usr"
 
-          if [ -d /opt/homebrew ]; then
-            rm -rf /opt/homebrew/Library/Taps/aws 2>/dev/null || true
-            rm -rf /opt/homebrew/Library/Taps/azure 2>/dev/null || true
-            rm -rf /opt/homebrew/Library/Taps/hashicorp 2>/dev/null || true
+          mkdir -p AppDir/usr/lib
+          cp "$(g++ --print-file-name=libstdc++.so.6)" AppDir/usr/lib/ 2>/dev/null || true
+          cp "$(gcc --print-file-name=libgcc_s.so.1)" AppDir/usr/lib/ 2>/dev/null || true
+
+          mkdir -p AppDir/usr/share/applications
+          if [ -f packaging/linux/odin4.desktop ]; then
+            cp packaging/linux/odin4.desktop AppDir/usr/share/applications/
           fi
 
-          brew update
-          brew install cmake ninja pkg-config libusb cryptopp qt@6
+          if [ -f docs/assets/logo.png ]; then
+            mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+            cp docs/assets/logo.png AppDir/usr/share/icons/hicolor/256x256/apps/odin4.png
+          fi
 
-      - name: Install dependencies (Windows x86_64)
-        if: ${{ matrix.os == 'windows' && matrix.arch == 'x86_64' }}
-        shell: bash
-        run: |
-          set -euo pipefail
+          wget -q "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+          wget -q "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
 
-          choco install cmake ninja zip innosetup -y
+          export PATH="$QT_ROOT_DIR/bin:$PATH"
+          export QMAKE="$QT_ROOT_DIR/bin/qmake"
+          export EXTRA_QT_MODULES="Widgets"
 
-          mkdir -p C:/mingw64/include C:/mingw64/lib
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --plugin qt \
+            --output appimage
 
-          # libusb 1.0.27 from MSYS2
-          curl -sL https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-libusb-1.0.27-1-any.pkg.tar.zst -o /tmp/libusb.pkg.tar.zst
-          mkdir -p /tmp/libusb_pkg
-          tar --zstd -xf /tmp/libusb.pkg.tar.zst -C /tmp/libusb_pkg
-          cp -r /tmp/libusb_pkg/mingw64/include/libusb-1.0 C:/mingw64/include/
-          cp /tmp/libusb_pkg/mingw64/lib/libusb-1.0.a C:/mingw64/lib/
-
-          # Crypto++ from source
-          git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git C:/cryptopp
-          mingw32-make -C C:/cryptopp -j$(nproc) static 2>/dev/null || make -C C:/cryptopp -j$(nproc) static
-          cp C:/cryptopp/libcryptopp.a C:/mingw64/lib/
-          mkdir -p C:/mingw64/include/cryptopp
-          cp C:/cryptopp/*.h C:/mingw64/include/cryptopp/
-
-          # Qt6 for MinGW via aqtinstall (pre-built binaries)
-          pip install aqtinstall
-          aqt install-qt --outputdir "${{ runner.temp }}/qt" windows desktop 6.7.2 win64_mingw
-
-          echo "CMAKE_PREFIX_PATH=C:/mingw64;${{ runner.temp }}/qt/6.7.2/mingw_64" >> "$GITHUB_ENV"
-
-      - name: Install dependencies (Windows arm64)
-        if: ${{ matrix.os == 'windows' && matrix.arch == 'arm64' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          choco install cmake ninja zip innosetup -y
-
-          # Install libusb and Crypto++ via vcpkg (MSVC — x64 triplet for x86_64 build compatibility)
-          # Note: native ARM64 Qt6 pre-built binaries are not consistently available;
-          # building from source requires QT_HOST_PATH. We build x86_64 here (runs via Prism emulation).
-          vcpkg install libusb[core]:x64-windows cryptopp:x64-windows
-
-          # Install Qt6 via aqtinstall (pre-built x86_64)
-          pip install aqtinstall -q
-          QT_VER="6.7.2"
-          QT_DIR="${{ runner.temp }}/qt"
-          aqt install-qt --outputdir "${QT_DIR}" windows desktop "${QT_VER}" win64_msvc2019_64
-          echo "CMAKE_PREFIX_PATH=C:/vcpkg/installed/x64-windows;${QT_DIR}/${QT_VER}/msvc2019_64" >> "$GITHUB_ENV"
-
-      # ============================================================
-      # READ VERSION
-      # ============================================================
-
-      - name: Read version
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          VERSION="$(grep -E 'ODIN4_VERSION' src/odin4.cpp | sed -E 's/.*"([^"]+)".*/\1/' | head -n 1)"
-
+          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
+          mv Odin4-*-x86_64.AppImage "Odin4-${VERSION}${SUFFIX}-linux-x86_64.AppImage"
 
-          if [[ -n "$SUFFIX" && "$SUFFIX" != -* ]]; then
-            SUFFIX="-$SUFFIX"
-          fi
-
-          echo "ODIN4_VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "ODIN4_SUFFIX=$SUFFIX" >> "$GITHUB_ENV"
-
-          echo "OUT_BIN=odin4_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
-          echo "OUT_GUI=odin4-gui_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
-          echo "OUT_SO=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
-          echo "OUT_A=libodin4_${{ matrix.arch }}_${VERSION}${SUFFIX}" >> "$GITHUB_ENV"
-
-      # ============================================================
-      # BUILD
-      # ============================================================
-
-      - name: Build (Linux)
-        if: ${{ matrix.os == 'linux' }}
-        shell: bash
+      - name: Package CLI tarball
         run: |
           set -euo pipefail
+          mkdir -p dist/cli/bin dist/cli/lib
+          cp build/odin4 dist/cli/bin/
+          cp build/libodin4.so dist/cli/lib/
+          strip dist/cli/bin/odin4 dist/cli/lib/libodin4.so 2>/dev/null || true
+          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          SUFFIX="${{ inputs.suffix }}"
+          tar czf "dist/odin4-v${VERSION}${SUFFIX}-linux-x86_64-cli.tar.gz" -C dist cli
 
-          rm -rf build
-
-          # Find OpenGL libraries via pkg-config and pass explicitly to CMake
-          OPENGL_GL_LIB="$(pkg-config --libs-only-L gl 2>/dev/null || true)"
-          OPENGL_GLX_LIB="$(pkg-config --libs-only-L glx 2>/dev/null || true)"
-          GL_LIB_PATH=""
-          GLX_LIB_PATH=""
-          for dir in /usr/lib /usr/lib/"$(uname -m)"-linux-gnu; do
-            [ -f "$dir/libGL.so" ] && GL_LIB_PATH="$dir/libGL.so"
-            [ -f "$dir/libGLX.so" ] && GLX_LIB_PATH="$dir/libGLX.so"
-          done
-
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=gcc-16 \
-            -DCMAKE_CXX_COMPILER=g++-16 \
-            ${GL_LIB_PATH:+-DOPENGL_opengl_LIBRARY="${GL_LIB_PATH}"} \
-            ${GLX_LIB_PATH:+-DOPENGL_glx_LIBRARY="${GLX_LIB_PATH}"}
-
-          cmake --build build --parallel "$(nproc)"
-
-      - name: Build (macOS)
-        if: ${{ matrix.os == 'macos' }}
-        shell: bash
+      - name: Package SDK
         run: |
           set -euo pipefail
-
-          rm -rf build
-
-          # Qt6 from Homebrew is keg-only; set CMAKE_PREFIX_PATH so CMake can find it
-          QT_PREFIX="$(brew --prefix qt@6 2>/dev/null || echo "")"
-
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            ${QT_PREFIX:+-DCMAKE_PREFIX_PATH="${QT_PREFIX}"}
-
-          cmake --build build --parallel "$(sysctl -n hw.logicalcpu)"
-
-      - name: Build (Windows x86_64)
-        if: ${{ matrix.os == 'windows' && matrix.arch == 'x86_64' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          rm -rf build
-
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release
-
-          cmake --build build --parallel
-
-      - name: Build (Windows ARM64)
-        if: ${{ matrix.os == 'windows' && matrix.arch == 'arm64' }}
-        shell: cmd
-        run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" amd64
-          set VCPKG_ROOT=C:\vcpkg
-          if exist build rmdir /s /q build
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl.exe -DCMAKE_CXX_COMPILER=cl.exe
-          cmake --build build --parallel
-
-      # ============================================================
-      # PACKAGE (Linux)
-      # ============================================================
-
-      - name: Package (Linux)
-        if: ${{ matrix.os == 'linux' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          VERSION="${ODIN4_VERSION}${ODIN4_SUFFIX}"
-          ARCH="${{ matrix.arch }}"
-          DIST_DIR="${PWD}/dist"
-          BUILD_DIR="${PWD}/build"
-          PKG_DIR="${PWD}/packaging"
-
-          mkdir -p "${DIST_DIR}"
-
-          # --------------------------------------------------
-          # 1. AppImage — full app bundle (CLI + GUI + libs)
-          # --------------------------------------------------
-          APPDIR="${DIST_DIR}/AppDir"
-          mkdir -p "${APPDIR}/usr/bin" "${APPDIR}/usr/lib" "${APPDIR}/usr/share/applications"
-
-          cp "${BUILD_DIR}/odin4"     "${APPDIR}/usr/bin/" 2>/dev/null || true
-          cp "${BUILD_DIR}/odin4-gui" "${APPDIR}/usr/bin/" 2>/dev/null || true
-          cp "${BUILD_DIR}/libodin4.so"        "${APPDIR}/usr/lib/" 2>/dev/null || true
-          cp "${BUILD_DIR}/libodin4_static.a"  "${APPDIR}/usr/lib/" 2>/dev/null || true
-
-          if [ -f "${PKG_DIR}/linux/odin4.desktop" ]; then
-            cp "${PKG_DIR}/linux/odin4.desktop" "${APPDIR}/"
-          fi
-
-          # Use the project logo as icon
-          if [ -f "${PWD}/docs/assets/logo.png" ]; then
-            cp "${PWD}/docs/assets/logo.png" "${APPDIR}/odin4.png"
-            ln -sf "odin4.png" "${APPDIR}/.DirIcon"
-            mkdir -p "${APPDIR}/usr/share/icons/hicolor/256x256/apps"
-            cp "${PWD}/docs/assets/logo.png" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/odin4.png"
-          fi
-
-          # Create AppRun launcher
-          cat > "${APPDIR}/AppRun" << 'RUNEOF'
-          #!/bin/bash
-          HERE="$(dirname "$(readlink -f "${0}")")"
-          export PATH="${HERE}/usr/bin:${PATH}"
-          export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
-          if [ -x "${HERE}/usr/bin/odin4-gui" ]; then
-            exec "${HERE}/usr/bin/odin4-gui" "$@"
-          else
-            exec "${HERE}/usr/bin/odin4" "$@"
-          fi
-          RUNEOF
-          chmod +x "${APPDIR}/AppRun"
-
-          APPIMAGE_OUT="Odin4-${VERSION}-linux-${ARCH}.AppImage"
-          if command -v appimagetool &>/dev/null; then
-            appimagetool "${APPDIR}" "${DIST_DIR}/${APPIMAGE_OUT}" 2>/dev/null || true
-          fi
-
-          # Fallback: if appimagetool failed or not available, just tar the AppDir
-          if [ ! -f "${DIST_DIR}/${APPIMAGE_OUT}" ]; then
-            tar czf "${DIST_DIR}/${APPIMAGE_OUT}.tar.gz" -C "${DIST_DIR}" AppDir 2>/dev/null || true
-          fi
-
-          # --------------------------------------------------
-          # 2. CLI-only tarball (binary + shared lib)
-          # --------------------------------------------------
-          CLI_DIR="${DIST_DIR}/odin4-cli"
-          mkdir -p "${CLI_DIR}/bin" "${CLI_DIR}/lib"
-          cp "${BUILD_DIR}/odin4" "${CLI_DIR}/bin/" 2>/dev/null || true
-          cp "${BUILD_DIR}/libodin4.so" "${CLI_DIR}/lib/" 2>/dev/null || true
-
-          strip "${CLI_DIR}/bin/odin4" 2>/dev/null || true
-          strip "${CLI_DIR}/lib/libodin4.so" 2>/dev/null || true
-
-          CLI_TAR="odin4-v${VERSION}-linux-${ARCH}-cli.tar.gz"
-          tar czf "${DIST_DIR}/${CLI_TAR}" -C "${DIST_DIR}" odin4-cli
-
-          rm -rf "${CLI_DIR}"
-
-          # --------------------------------------------------
-          # 3. SDK (headers + static lib + shared lib)
-          # --------------------------------------------------
-          SDK_DIR="${DIST_DIR}/odin4-sdk"
-          mkdir -p "${SDK_DIR}/include/odin4" "${SDK_DIR}/lib"
-
-          cp "${PWD}/include/odin4/odin4.h" "${SDK_DIR}/include/odin4/" 2>/dev/null || true
-          cp "${BUILD_DIR}/libodin4.so"       "${SDK_DIR}/lib/" 2>/dev/null || true
-          cp "${BUILD_DIR}/libodin4_static.a" "${SDK_DIR}/lib/" 2>/dev/null || true
-          cp "${PWD}/LICENSE" "${SDK_DIR}/" 2>/dev/null || true
-
-          SDK_ZIP="odin4-v${VERSION}-sdk-linux.zip"
-          cd "${DIST_DIR}"
-          zip -r "${SDK_ZIP}" odin4-sdk 2>/dev/null || true
-          cd "${PWD}"
-
-          rm -rf "${SDK_DIR}" "${APPDIR}"
-
-      # ============================================================
-      # PACKAGE (macOS)
-      # ============================================================
-
-      - name: Package (macOS)
-        if: ${{ matrix.os == 'macos' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          VERSION="${ODIN4_VERSION}${ODIN4_SUFFIX}"
-          ARCH="${{ matrix.arch }}"
-          DIST_DIR="${PWD}/dist"
-          BUILD_DIR="${PWD}/build"
-          PKG_DIR="${PWD}/packaging"
-
-          mkdir -p "${DIST_DIR}"
-
-          # --------------------------------------------------
-          # 1. DMG — macOS .app bundle
-          # --------------------------------------------------
-          APP_NAME="Odin4"
-          APP_BUNDLE="${DIST_DIR}/${APP_NAME}.app"
-          mkdir -p "${APP_BUNDLE}/Contents/MacOS"
-          mkdir -p "${APP_BUNDLE}/Contents/Frameworks"
-          mkdir -p "${APP_BUNDLE}/Contents/Resources"
-
-          cp "${BUILD_DIR}/odin4"     "${APP_BUNDLE}/Contents/MacOS/" 2>/dev/null || true
-          cp "${BUILD_DIR}/odin4-gui" "${APP_BUNDLE}/Contents/MacOS/" 2>/dev/null || true
-          cp "${BUILD_DIR}/libodin4.dylib" "${APP_BUNDLE}/Contents/Frameworks/" 2>/dev/null || true
-
-          # Fix library ID and paths in dylib
-          if [ -f "${APP_BUNDLE}/Contents/Frameworks/libodin4.dylib" ]; then
-            install_name_tool -id "@rpath/libodin4.dylib" \
-              "${APP_BUNDLE}/Contents/Frameworks/libodin4.dylib" 2>/dev/null || true
-          fi
-
-          # Copy Info.plist
-          if [ -f "${PKG_DIR}/macos/Info.plist" ]; then
-            cp "${PKG_DIR}/macos/Info.plist" "${APP_BUNDLE}/Contents/"
-          fi
-
-          # Use logo as icon (icns)
-          if [ -f "${PKG_DIR}/macos/odin4.icns" ]; then
-            cp "${PKG_DIR}/macos/odin4.icns" "${APP_BUNDLE}/Contents/Resources/odin4.icns"
-          elif [ -f "${PWD}/docs/assets/logo.png" ]; then
-            ICON_DIR="${DIST_DIR}/Odin4.iconset"
-            mkdir -p "${ICON_DIR}"
-            for SIZE in 16 32 64 128 256 512; do
-              sips -z ${SIZE} ${SIZE} "${PWD}/docs/assets/logo.png" \
-                --out "${ICON_DIR}/icon_${SIZE}x${SIZE}.png" 2>/dev/null || true
-            done
-            iconutil -c icns "${ICON_DIR}" -o "${APP_BUNDLE}/Contents/Resources/odin4.icns" 2>/dev/null || true
-          fi
-
-          DMG_OUT="Odin4-${VERSION}-macos-${ARCH}.dmg"
-          hdiutil create -volname "${APP_NAME}" \
-            -srcfolder "${APP_BUNDLE}" \
-            -ov -format UDZO \
-            "${DIST_DIR}/${DMG_OUT}" 2>/dev/null || true
-
-          rm -rf "${APP_BUNDLE}" "${DIST_DIR}/Odin4.iconset" 2>/dev/null || true
-
-          # --------------------------------------------------
-          # 2. CLI-only tarball
-          # --------------------------------------------------
-          CLI_DIR="${DIST_DIR}/odin4-cli"
-          mkdir -p "${CLI_DIR}/bin" "${CLI_DIR}/lib"
-          cp "${BUILD_DIR}/odin4" "${CLI_DIR}/bin/" 2>/dev/null || true
-          cp "${BUILD_DIR}/libodin4.dylib" "${CLI_DIR}/lib/" 2>/dev/null || true
-
-          strip "${CLI_DIR}/bin/odin4" 2>/dev/null || true
-
-          CLI_TAR="odin4-v${VERSION}-macos-${ARCH}-cli.tar.gz"
-          tar czf "${DIST_DIR}/${CLI_TAR}" -C "${DIST_DIR}" odin4-cli
-
-          rm -rf "${CLI_DIR}"
-
-          # --------------------------------------------------
-          # 3. SDK
-          # --------------------------------------------------
-          SDK_DIR="${DIST_DIR}/odin4-sdk"
-          mkdir -p "${SDK_DIR}/include/odin4" "${SDK_DIR}/lib"
-
-          cp "${PWD}/include/odin4/odin4.h" "${SDK_DIR}/include/odin4/" 2>/dev/null || true
-          cp "${BUILD_DIR}/libodin4.dylib"    "${SDK_DIR}/lib/" 2>/dev/null || true
-          cp "${BUILD_DIR}/libodin4_static.a" "${SDK_DIR}/lib/" 2>/dev/null || true
-          cp "${PWD}/LICENSE" "${SDK_DIR}/" 2>/dev/null || true
-
-          SDK_ZIP="odin4-v${VERSION}-sdk-macos.zip"
-          cd "${DIST_DIR}"
-          zip -r "${SDK_ZIP}" odin4-sdk 2>/dev/null || true
-          cd "${PWD}"
-
-          rm -rf "${SDK_DIR}"
-
-      # ============================================================
-      # PACKAGE (Windows)
-      # ============================================================
-
-      - name: Package (Windows x86_64)
-        if: ${{ matrix.os == 'windows' && matrix.arch == 'x86_64' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          VERSION="${ODIN4_VERSION}${ODIN4_SUFFIX}"
-          ARCH="${{ matrix.arch }}"
-          BUILD_DIR="${PWD}/build"
-          DIST_DIR="${PWD}/dist"
-
-          mkdir -p "${DIST_DIR}"
-
-          # Normalize library filenames for ISS (MinGW uses .a, MSVC uses .lib)
-          if [ -f "${BUILD_DIR}/odin4_static.a" ] && [ ! -f "${BUILD_DIR}/odin4_static.lib" ]; then
-            cp "${BUILD_DIR}/odin4_static.a" "${BUILD_DIR}/odin4_static.lib"
-          fi
-
-          # --------------------------------------------------
-          # 1. Inno Setup installer
-          # --------------------------------------------------
-          # ISS reads directly from build/ so just run iscc from repo root
-          cd "${PWD}"
-
-          if command -v iscc &>/dev/null; then
-            ODIN4_VERSION="${ODIN4_VERSION}" iscc "${PWD}/packaging/windows/setup.iss" \
-              "/dArch=${ARCH}" 2>/dev/null || true
-
-            # Rename to include suffix if needed
-            if [ -f "${DIST_DIR}/Odin4-${ODIN4_VERSION}-windows-${ARCH}-setup.exe" ] && \
-               [ "${ODIN4_VERSION}" != "${VERSION}" ]; then
-              mv "${DIST_DIR}/Odin4-${ODIN4_VERSION}-windows-${ARCH}-setup.exe" \
-                 "${DIST_DIR}/Odin4-${VERSION}-windows-${ARCH}-setup.exe"
-            fi
-          fi
-
-          # --------------------------------------------------
-          # 2. Portable ZIP
-          # --------------------------------------------------
-          PORTABLE_DIR="${DIST_DIR}/odin4-portable"
-          mkdir -p "${PORTABLE_DIR}/bin" "${PORTABLE_DIR}/lib"
-          cp "${BUILD_DIR}/odin4.exe"    "${PORTABLE_DIR}/bin/" 2>/dev/null || true
-          cp "${BUILD_DIR}/odin4-gui.exe" "${PORTABLE_DIR}/bin/" 2>/dev/null || true
-          cp "${BUILD_DIR}/odin4.dll"    "${PORTABLE_DIR}/lib/" 2>/dev/null || true
-          cp "${BUILD_DIR}/odin4_static.lib" "${PORTABLE_DIR}/lib/" 2>/dev/null || true
-
-          PORTABLE_ZIP="odin4-v${VERSION}-windows-${ARCH}-portable.zip"
-          cd "${DIST_DIR}"
-          7z a "${PORTABLE_ZIP}" odin4-portable 2>/dev/null || zip -r "${PORTABLE_ZIP}" odin4-portable
-          cd "${PWD}"
-
-          rm -rf "${PORTABLE_DIR}"
-
-          # --------------------------------------------------
-          # 3. SDK
-          # --------------------------------------------------
-          SDK_DIR="${DIST_DIR}/odin4-sdk"
-          mkdir -p "${SDK_DIR}/include/odin4" "${SDK_DIR}/lib"
-          cp "${PWD}/include/odin4/odin4.h" "${SDK_DIR}/include/odin4/" 2>/dev/null || true
-          cp "${BUILD_DIR}/odin4.dll"    "${SDK_DIR}/lib/" 2>/dev/null || true
-          cp "${BUILD_DIR}/odin4_static.lib" "${SDK_DIR}/lib/" 2>/dev/null || true
-          cp "${PWD}/LICENSE" "${SDK_DIR}/" 2>/dev/null || true
-
-          SDK_ZIP="odin4-v${VERSION}-sdk-windows.zip"
-          cd "${DIST_DIR}"
-          7z a "${SDK_ZIP}" odin4-sdk 2>/dev/null || zip -r "${SDK_ZIP}" odin4-sdk
-          cd "${PWD}"
-
-          rm -rf "${SDK_DIR}"
-
-      - name: Package (Windows ARM64)
-        if: ${{ matrix.os == 'windows' && matrix.arch == 'arm64' }}
-        shell: cmd
-        run: |
-          set VERSION=%ODIN4_VERSION%%ODIN4_SUFFIX%
-          set ARCH=arm64
-          set BUILD_DIR=build
-          set DIST_DIR=dist
-
-          if not exist "%DIST_DIR%" mkdir "%DIST_DIR%"
-
-          rem --------------------------------------------------
-          rem 1. Inno Setup installer
-          rem --------------------------------------------------
-          where iscc >nul 2>&1
-          if %ERRORLEVEL% EQU 0 (
-            iscc packaging\windows\setup.iss "/dArch=%ARCH%" >nul 2>&1
-            if exist "%DIST_DIR%\Odin4-%ODIN4_VERSION%-windows-%ARCH%-setup.exe" (
-              move "%DIST_DIR%\Odin4-%ODIN4_VERSION%-windows-%ARCH%-setup.exe" \
-                   "%DIST_DIR%\Odin4-%VERSION%-windows-%ARCH%-setup.exe" >nul 2>&1
-            )
-          )
-
-          rem --------------------------------------------------
-          rem 2. Portable ZIP
-          rem --------------------------------------------------
-          mkdir "%DIST_DIR%\odin4-portable\bin" "%DIST_DIR%\odin4-portable\lib" 2>nul
-          copy "%BUILD_DIR%\odin4.exe"    "%DIST_DIR%\odin4-portable\bin\" /y >nul 2>&1
-          copy "%BUILD_DIR%\odin4-gui.exe" "%DIST_DIR%\odin4-portable\bin\" /y >nul 2>&1
-          copy "%BUILD_DIR%\odin4.dll"    "%DIST_DIR%\odin4-portable\lib\" /y >nul 2>&1
-          copy "%BUILD_DIR%\odin4_static.lib" "%DIST_DIR%\odin4-portable\lib\" /y >nul 2>&1
-
-          7z a "%DIST_DIR%\odin4-v%VERSION%-windows-%ARCH%-portable.zip" "%DIST_DIR%\odin4-portable\*" >nul 2>&1
-          rmdir /s /q "%DIST_DIR%\odin4-portable" >nul 2>&1
-
-          rem --------------------------------------------------
-          rem 3. SDK
-          rem --------------------------------------------------
-          mkdir "%DIST_DIR%\odin4-sdk\include\odin4" "%DIST_DIR%\odin4-sdk\lib" 2>nul
-          copy "include\odin4\odin4.h" "%DIST_DIR%\odin4-sdk\include\odin4\" /y >nul 2>&1
-          copy "%BUILD_DIR%\odin4.dll"    "%DIST_DIR%\odin4-sdk\lib\" /y >nul 2>&1
-          copy "%BUILD_DIR%\odin4_static.lib" "%DIST_DIR%\odin4-sdk\lib\" /y >nul 2>&1
-          copy "LICENSE" "%DIST_DIR%\odin4-sdk\" /y >nul 2>&1
-
-          7z a "%DIST_DIR%\odin4-v%VERSION%-sdk-windows.zip" "%DIST_DIR%\odin4-sdk\*" >nul 2>&1
-          rmdir /s /q "%DIST_DIR%\odin4-sdk" >nul 2>&1
-
-      # ============================================================
-      # UPLOAD ARTIFACTS
-      # ============================================================
+          mkdir -p dist/sdk/include/odin4 dist/sdk/lib
+          cp include/odin4/odin4.h dist/sdk/include/odin4/
+          cp build/libodin4.so dist/sdk/lib/ 2>/dev/null || true
+          cp build/libodin4_static.a dist/sdk/lib/ 2>/dev/null || true
+          cp LICENSE dist/sdk/ 2>/dev/null || true
+          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          SUFFIX="${{ inputs.suffix }}"
+          (cd dist && zip -r "odin4-v${VERSION}${SUFFIX}-sdk-linux.zip" sdk)
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@v4
         with:
-          name: odin4-${{ matrix.os }}-${{ matrix.arch }}-${{ env.ODIN4_VERSION }}${{ env.ODIN4_SUFFIX }}
+          name: odin4-linux-x86_64
           path: dist/*
           retention-days: 14
 
+  # ============================================================
+  # Linux ARM64 - AppImage + CLI tarball
+  # ============================================================
+  linux_arm64:
+    name: Linux ARM64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build pkg-config \
+            libusb-1.0-0-dev libcrypto++-dev \
+            libgl1-mesa-dev libgl-dev libglx-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libx11-dev libxcb-cursor-dev libvulkan-dev \
+            patchelf wget file
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          cache: true
+          cache-key-prefix: install-qt-action-linux-arm64
+          arch: linux_gcc_arm64
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Strip binaries
+        run: |
+          set -euo pipefail
+          strip build/odin4 build/libodin4.so 2>/dev/null || true
+          if [ -f build/odin4-gui ]; then
+            strip build/odin4-gui 2>/dev/null || true
+          fi
+
+      - name: Package AppImage
+        run: |
+          set -euo pipefail
+          rm -rf AppDir
+          cmake --install build --prefix "$PWD/AppDir/usr"
+
+          mkdir -p AppDir/usr/lib
+          cp "$(g++ --print-file-name=libstdc++.so.6)" AppDir/usr/lib/ 2>/dev/null || true
+          cp "$(gcc --print-file-name=libgcc_s.so.1)" AppDir/usr/lib/ 2>/dev/null || true
+
+          mkdir -p AppDir/usr/share/applications
+          if [ -f packaging/linux/odin4.desktop ]; then
+            cp packaging/linux/odin4.desktop AppDir/usr/share/applications/
+          fi
+
+          if [ -f docs/assets/logo.png ]; then
+            mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+            cp docs/assets/logo.png AppDir/usr/share/icons/hicolor/256x256/apps/odin4.png
+          fi
+
+          wget -q "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-aarch64.AppImage"
+          wget -q "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-aarch64.AppImage"
+          chmod +x linuxdeploy-aarch64.AppImage linuxdeploy-plugin-qt-aarch64.AppImage
+
+          export PATH="$QT_ROOT_DIR/bin:$PATH"
+          export QMAKE="$QT_ROOT_DIR/bin/qmake"
+          export EXTRA_QT_MODULES="Widgets"
+
+          ./linuxdeploy-aarch64.AppImage \
+            --appdir AppDir \
+            --plugin qt \
+            --output appimage
+
+          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          SUFFIX="${{ inputs.suffix }}"
+          mv Odin4-*-aarch64.AppImage "Odin4-${VERSION}${SUFFIX}-linux-arm64.AppImage"
+
+      - name: Package CLI tarball
+        run: |
+          set -euo pipefail
+          mkdir -p dist/cli/bin dist/cli/lib
+          cp build/odin4 dist/cli/bin/
+          cp build/libodin4.so dist/cli/lib/
+          strip dist/cli/bin/odin4 dist/cli/lib/libodin4.so 2>/dev/null || true
+          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          SUFFIX="${{ inputs.suffix }}"
+          tar czf "dist/odin4-v${VERSION}${SUFFIX}-linux-arm64-cli.tar.gz" -C dist cli
+
+      - name: Package SDK
+        run: |
+          set -euo pipefail
+          mkdir -p dist/sdk/include/odin4 dist/sdk/lib
+          cp include/odin4/odin4.h dist/sdk/include/odin4/
+          cp build/libodin4.so dist/sdk/lib/ 2>/dev/null || true
+          cp build/libodin4_static.a dist/sdk/lib/ 2>/dev/null || true
+          cp LICENSE dist/sdk/ 2>/dev/null || true
+          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          SUFFIX="${{ inputs.suffix }}"
+          (cd dist && zip -r "odin4-v${VERSION}${SUFFIX}-sdk-linux.zip" sdk)
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: odin4-linux-arm64
+          path: dist/*
+          retention-days: 14
+
+  # ============================================================
+  # macOS ARM64 - .app bundle + DMG
+  # ============================================================
+  macos_arm64:
+    name: macOS ARM64
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          brew install cmake ninja pkg-config libusb cryptopp
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          cache: true
+          cache-key-prefix: install-qt-action-macos-arm64
+          arch: clang_64
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
+
+      - name: Strip missing AGL framework
+        run: |
+          set -euo pipefail
+          sed -i '' 's/ -framework AGL//g; s/-framework AGL //g' build/build.ninja
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Strip binaries
+        run: |
+          set -euo pipefail
+          strip build/odin4 2>/dev/null || true
+          if [ -f build/odin4-gui.app/Contents/MacOS/odin4-gui ]; then
+            strip build/odin4-gui.app/Contents/MacOS/odin4-gui 2>/dev/null || true
+          fi
+
+      - name: Deploy Qt frameworks
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          APP="build/odin4-gui.app"
+          if [ -d "$APP" ]; then
+            "$QT_ROOT_DIR/bin/macdeployqt" "$APP" -verbose=2
+          fi
+
+      - name: Package DMG
+        run: |
+          set -euo pipefail
+          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          SUFFIX="${{ inputs.suffix }}"
+          mkdir -p dist
+
+          APP="build/odin4-gui.app"
+          if [ -d "$APP" ]; then
+            hdiutil create -volname "Odin4" \
+              -srcfolder "$APP" \
+              -ov -format UDZO \
+              "dist/Odin4-${VERSION}${SUFFIX}-macos-arm64.dmg"
+          fi
+
+      - name: Package CLI tarball
+        run: |
+          set -euo pipefail
+          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          SUFFIX="${{ inputs.suffix }}"
+          mkdir -p dist/cli/bin dist/cli/lib
+          cp build/odin4 dist/cli/bin/
+          cp build/libodin4.dylib dist/cli/lib/
+          strip dist/cli/bin/odin4 2>/dev/null || true
+          tar czf "dist/odin4-v${VERSION}${SUFFIX}-macos-arm64-cli.tar.gz" -C dist cli
+
+      - name: Package SDK
+        run: |
+          set -euo pipefail
+          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          SUFFIX="${{ inputs.suffix }}"
+          mkdir -p dist/sdk/include/odin4 dist/sdk/lib
+          cp include/odin4/odin4.h dist/sdk/include/odin4/
+          cp build/libodin4.dylib dist/sdk/lib/ 2>/dev/null || true
+          cp build/libodin4_static.a dist/sdk/lib/ 2>/dev/null || true
+          cp LICENSE dist/sdk/ 2>/dev/null || true
+          (cd dist && zip -r "odin4-v${VERSION}${SUFFIX}-sdk-macos.zip" sdk)
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: odin4-macos-arm64
+          path: dist/*
+          retention-days: 14
+
+  # ============================================================
+  # macOS x86_64 - .app bundle + DMG
+  # ============================================================
+  macos_x86_64:
+    name: macOS x86_64
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          brew install cmake ninja pkg-config libusb cryptopp
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          cache: true
+          cache-key-prefix: install-qt-action-macos-x86_64
+          arch: clang_64
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+
+      - name: Strip missing AGL framework
+        run: |
+          set -euo pipefail
+          sed -i '' 's/ -framework AGL//g; s/-framework AGL //g' build/build.ninja
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Strip binaries
+        run: |
+          set -euo pipefail
+          strip build/odin4 2>/dev/null || true
+          if [ -f build/odin4-gui.app/Contents/MacOS/odin4-gui ]; then
+            strip build/odin4-gui.app/Contents/MacOS/odin4-gui 2>/dev/null || true
+          fi
+
+      - name: Deploy Qt frameworks
+        run: |
+          set -euo pipefail
+          APP="build/odin4-gui.app"
+          if [ -d "$APP" ]; then
+            "$QT_ROOT_DIR/bin/macdeployqt" "$APP" -verbose=2
+          fi
+
+      - name: Package DMG
+        run: |
+          set -euo pipefail
+          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          SUFFIX="${{ inputs.suffix }}"
+          mkdir -p dist
+
+          APP="build/odin4-gui.app"
+          if [ -d "$APP" ]; then
+            hdiutil create -volname "Odin4" \
+              -srcfolder "$APP" \
+              -ov -format UDZO \
+              "dist/Odin4-${VERSION}${SUFFIX}-macos-x86_64.dmg"
+          fi
+
+      - name: Package CLI tarball
+        run: |
+          set -euo pipefail
+          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          SUFFIX="${{ inputs.suffix }}"
+          mkdir -p dist/cli/bin dist/cli/lib
+          cp build/odin4 dist/cli/bin/
+          cp build/libodin4.dylib dist/cli/lib/
+          strip dist/cli/bin/odin4 2>/dev/null || true
+          tar czf "dist/odin4-v${VERSION}${SUFFIX}-macos-x86_64-cli.tar.gz" -C dist cli
+
+      - name: Package SDK
+        run: |
+          set -euo pipefail
+          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          SUFFIX="${{ inputs.suffix }}"
+          mkdir -p dist/sdk/include/odin4 dist/sdk/lib
+          cp include/odin4/odin4.h dist/sdk/include/odin4/
+          cp build/libodin4.dylib dist/sdk/lib/ 2>/dev/null || true
+          cp build/libodin4_static.a dist/sdk/lib/ 2>/dev/null || true
+          cp LICENSE dist/sdk/ 2>/dev/null || true
+          (cd dist && zip -r "odin4-v${VERSION}${SUFFIX}-sdk-macos.zip" sdk)
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: odin4-macos-x86_64
+          path: dist/*
+          retention-days: 14
+
+  # ============================================================
+  # Windows x86_64 - NSIS installer + portable zip
+  # ============================================================
+  windows_x86_64:
+    name: Windows x86_64
+    runs-on: windows-2022
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          choco install ninja -y
+          vcpkg install libusb:x64-windows cryptopp:x64-windows
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          cache: true
+          cache-key-prefix: install-qt-action-windows-x86_64
+          host: windows
+          arch: win64_msvc2019_64
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          echo "$QT_ROOT_DIR/bin" >> "$GITHUB_PATH"
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            "-DCMAKE_PREFIX_PATH=$QT_ROOT_DIR"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Package installer (NSIS)
+        run: |
+          set -euo pipefail
+          cd build
+          cpack -G NSIS -C Release || {
+            echo "NSIS packaging failed"
+            cat _CPack_Packages/*/NSIS/NSISOutput.log 2>/dev/null || true
+            exit 1
+          }
+          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' ../src/odin4.cpp)"
+          SUFFIX="${{ inputs.suffix }}"
+          installer="$(ls -1 *.exe | head -n1)"
+          mkdir -p ../dist
+          mv "$installer" "../dist/Odin4-${VERSION}${SUFFIX}-windows-x86_64-setup.exe"
+
+      - name: Package portable zip
+        run: |
+          set -euo pipefail
+          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          SUFFIX="${{ inputs.suffix }}"
+          install_root="$PWD/build/install/odin4"
+          rm -rf "$install_root"
+          mkdir -p "$install_root"
+          cmake --install build --prefix "$install_root"
+          mkdir -p dist
+          cd build/install
+          7z a -tzip "$OLDPWD/dist/odin4-v${VERSION}${SUFFIX}-windows-x86_64-portable.zip" odin4/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: odin4-windows-x86_64
+          path: dist/*
+          retention-days: 14
+
+  # ============================================================
+  # Windows ARM64 - NSIS installer + portable zip
+  # ============================================================
+  windows_arm64:
+    name: Windows ARM64
+    runs-on: windows-11-arm
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: arm64
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          choco install ninja -y
+          vcpkg install libusb:arm64-windows cryptopp:arm64-windows
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          cache: true
+          cache-key-prefix: install-qt-action-windows-arm64
+          host: windows
+          arch: win64_msvc2019_arm64
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          echo "$QT_ROOT_DIR/bin" >> "$GITHUB_PATH"
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            "-DCMAKE_PREFIX_PATH=$QT_ROOT_DIR"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Package installer (NSIS)
+        run: |
+          set -euo pipefail
+          cd build
+          cpack -G NSIS -C Release || {
+            echo "NSIS packaging failed"
+            cat _CPack_Packages/*/NSIS/NSISOutput.log 2>/dev/null || true
+            exit 1
+          }
+          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' ../src/odin4.cpp)"
+          SUFFIX="${{ inputs.suffix }}"
+          installer="$(ls -1 *.exe | head -n1)"
+          mkdir -p ../dist
+          mv "$installer" "../dist/Odin4-${VERSION}${SUFFIX}-windows-arm64-setup.exe"
+
+      - name: Package portable zip
+        run: |
+          set -euo pipefail
+          VERSION="$(grep -oP 'ODIN4_VERSION\s+"\K[^"]+' src/odin4.cpp)"
+          SUFFIX="${{ inputs.suffix }}"
+          install_root="$PWD/build/install/odin4"
+          rm -rf "$install_root"
+          cmake --install build --prefix "$install_root"
+          mkdir -p dist
+          cd build/install
+          7z a -tzip "$OLDPWD/dist/odin4-v${VERSION}${SUFFIX}-windows-arm64-portable.zip" odin4/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: odin4-windows-arm64
+          path: dist/*
+          retention-days: 14
+
+  # ============================================================
+  # Bundle all artifacts into one zip
+  # ============================================================
   bundle:
-    runs-on: ubuntu-22.04
+    name: Bundle all artifacts
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
-    needs: build
+    needs:
+      - linux_x86_64
+      - linux_arm64
+      - macos_arm64
+      - macos_x86_64
+      - windows_x86_64
+      - windows_arm64
     if: ${{ inputs.bundle }}
 
     steps:
-      - uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
 
       - name: Create release bundle
-        shell: bash
         run: |
           set -euo pipefail
-
           mkdir -p bundle
           find artifacts -type f \( -name "*.AppImage" -o -name "*.dmg" -o -name "*.exe" -o -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} bundle/ \;
 
@@ -639,16 +644,13 @@ jobs:
           VERSUFFIX="$(echo "${BASE}" | sed -E 's/^[^0-9]+([0-9]+\.[0-9]+\.[0-9]+[^.-]*).*/\1/')"
 
           OUT="odin4-all-${VERSUFFIX}.zip"
-
           cd bundle
           zip "../${OUT}" ./*
-          cd ..
 
           echo "OUT=${OUT}" >> "$GITHUB_ENV"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@v4
         with:
           name: odin4-all
-          path: |
-            ${{ env.OUT }}
+          path: ${{ env.OUT }}
           retention-days: 14
