@@ -4,7 +4,7 @@ set -euxo pipefail
 export CC=clang
 export CXX=clang++
 
-export CXXFLAGS="-O1 -g -std=c++23 -stdlib=libc++ -pthread"
+export CXXFLAGS="-O1 -g -std=c++23 -pthread"
 export CFLAGS="-O1 -g -pthread"
 
 apt-get update || true
@@ -28,7 +28,7 @@ cmake .. -G Ninja \
     -DODIN4_BUILD_GUI=OFF \
     -DODIN4_BUILD_TESTS=OFF \
     -DCMAKE_C_FLAGS="-O1 -g" \
-    -DCMAKE_CXX_FLAGS="-O1 -g -std=c++23 -stdlib=libc++" \
+    -DCMAKE_CXX_FLAGS="-O1 -g -std=c++23" \
     -DCMAKE_EXE_LINKER_FLAGS="-pthread"
 
 cmake --build . --parallel
