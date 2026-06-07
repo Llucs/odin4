@@ -19,6 +19,7 @@ if(WIN32)
         find_path(LIBUSB_INCLUDE_DIRS libusb.h
             PATHS "$ENV{VCPKG_ROOT}/installed/$ENV{VCPKG_TARGET_TRIPLET}/include"
                   "$ENV{CONAN_PREFIX}/include"
+                  "C:/mingw64/include"
                   "C:/msys64/mingw64/include"
                   "C:/msys64/usr/include"
         )
@@ -26,6 +27,7 @@ if(WIN32)
             NAMES libusb-1.0 usb-1.0
             PATHS "$ENV{VCPKG_ROOT}/installed/$ENV{VCPKG_TARGET_TRIPLET}/lib"
                   "$ENV{CONAN_PREFIX}/lib"
+                  "C:/mingw64/lib"
                   "C:/msys64/mingw64/lib"
                   "C:/msys64/usr/lib"
         )
@@ -85,6 +87,7 @@ if(WIN32)
     find_cryptopp_include(CRYPTOPP_INCLUDE_DIR
         PATHS "$ENV{VCPKG_ROOT}/installed/$ENV{VCPKG_TARGET_TRIPLET}/include"
               "$ENV{CONAN_PREFIX}/include"
+              "C:/mingw64/include"
               "C:/msys64/mingw64/include"
         PATH_SUFFIXES cryptopp crypto++
     )
@@ -93,6 +96,7 @@ if(WIN32)
         NAMES cryptopp libcryptopp cryptopp-static
         PATHS "$ENV{VCPKG_ROOT}/installed/$ENV{VCPKG_TARGET_TRIPLET}/lib"
               "$ENV{CONAN_PREFIX}/lib"
+              "C:/mingw64/lib"
               "C:/msys64/mingw64/lib"
     )
 elseif(APPLE)
