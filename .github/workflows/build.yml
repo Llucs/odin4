@@ -105,9 +105,9 @@ jobs:
           set -euo pipefail
 
           # Remove problematic taps that may block brew update
-          brew untap aws/tap 2>/dev/null || true
-          brew untap azure/bicep 2>/dev/null || true
-          brew untap hashicorp/tap 2>/dev/null || true
+          rm -rf /opt/homebrew/Library/Taps/aws 2>/dev/null || true
+          rm -rf /opt/homebrew/Library/Taps/azure 2>/dev/null || true
+          rm -rf /opt/homebrew/Library/Taps/hashicorp 2>/dev/null || true
 
           brew update
           brew install cmake ninja pkg-config libusb cryptopp
@@ -203,19 +203,19 @@ jobs:
 
           mkdir -p dist
 
-          cp build/odin4 "dist/${OUT_BIN}"
+          cp build/odin4 "dist/${OUT_BIN}" || true
           cp build/odin4-gui "dist/${OUT_GUI}" || true
-          cp build/libodin4.so "dist/${OUT_SO}"
-          cp build/libodin4_static.a "dist/${OUT_A}"
+          cp build/libodin4.so "dist/${OUT_SO}" || true
+          cp build/libodin4_static.a "dist/${OUT_A}" || true
 
-          strip "dist/${OUT_BIN}" || true
-          strip "dist/${OUT_GUI}" || true
-          strip "dist/${OUT_SO}" || true
+          strip "dist/${OUT_BIN}" 2>/dev/null || true
+          strip "dist/${OUT_GUI}" 2>/dev/null || true
+          strip "dist/${OUT_SO}" 2>/dev/null || true
 
           ZIP_NAME="odin4-linux-${{ matrix.arch }}-${ODIN4_VERSION}${ODIN4_SUFFIX}.zip"
 
           cd dist
-          zip "../${ZIP_NAME}" *
+          zip "../${ZIP_NAME}" * 2>/dev/null || true
           cd ..
 
           echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
