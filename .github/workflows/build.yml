@@ -121,17 +121,16 @@ jobs:
           choco install cmake ninja zip -y
 
           # Build libusb from source (pre-built MinGW64 package only provides import libraries)
-          # Use MSYS2 MINGW64 bash to avoid path-with-spaces issues in autotools/libtool
-          MSYSTEM=MINGW64 C:/msys64/usr/bin/bash.exe --login -c '
-            set -euo pipefail
-            # Download release tarball (has pre-generated configure script)
-            curl -sL https://github.com/libusb/libusb/releases/download/v1.0.27/libusb-1.0.27.tar.bz2 -o /tmp/libusb.tar.bz2
-            tar -xjf /tmp/libusb.tar.bz2 -C /tmp
-            cd /tmp/libusb-1.0.27
-            ./configure --enable-static --disable-shared --prefix=/c/mingw64
-            make -j$(nproc)
-            make install
-          '
+          # The autotools/libtool build breaks when the shell path contains spaces
+          # (C:/Program Files/Git/usr/bin/sh). Fix by using MSYS2 bash which has no spaces.
+          curl -sL https://github.com/libusb/libusb/releases/download/v1.0.27/libusb-1.0.27.tar.bz2 -o /tmp/libusb.tar.bz2
+          tar -xjf /tmp/libusb.tar.bz2 -C /tmp
+          cd /tmp/libusb-1.0.27
+          export SHELL="C:/msys64/usr/bin/bash.exe"
+          export CONFIG_SHELL="C:/msys64/usr/bin/bash.exe"
+          ./configure --enable-static --disable-shared --prefix=C:/mingw64
+          make -j$(nproc)
+          make install
 
           # Build Crypto++ from source
           git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git C:/cryptopp
