@@ -39,6 +39,12 @@ jobs:
             runner: windows-2022
             os: windows
           - arch: arm64
+            runner: windows-11-arm
+            os: windows
+          - arch: x86_64
+            runner: macos-15-intel
+            os: macos
+          - arch: arm64
             runner: macos-14
             os: macos
 
@@ -104,16 +110,18 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Remove problematic taps that may block brew update
-          rm -rf /opt/homebrew/Library/Taps/aws 2>/dev/null || true
-          rm -rf /opt/homebrew/Library/Taps/azure 2>/dev/null || true
-          rm -rf /opt/homebrew/Library/Taps/hashicorp 2>/dev/null || true
+          # Homebrew path differs between Intel (/usr/local) and ARM (/opt/homebrew)
+          if [ -d /opt/homebrew ]; then
+            rm -rf /opt/homebrew/Library/Taps/aws 2>/dev/null || true
+            rm -rf /opt/homebrew/Library/Taps/azure 2>/dev/null || true
+            rm -rf /opt/homebrew/Library/Taps/hashicorp 2>/dev/null || true
+          fi
 
           brew update
           brew install cmake ninja pkg-config libusb cryptopp
 
-      - name: Install dependencies (Windows)
-        if: ${{ matrix.os == 'windows' }}
+      - name: Install dependencies (Windows x86_64)
+        if: ${{ matrix.os == 'windows' && matrix.arch == 'x86_64' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -138,6 +146,25 @@ jobs:
           cp C:/cryptopp/*.h C:/mingw64/include/cryptopp/
 
           echo "CMAKE_PREFIX_PATH=C:/mingw64" >> "$GITHUB_ENV"
+
+      - name: Install dependencies (Windows arm64)
+        if: ${{ matrix.os == 'windows' && matrix.arch == 'arm64' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          choco install cmake ninja zip -y
+
+          # Install libusb via vcpkg (MSVC ARM64)
+          vcpkg install libusb[core]:arm64-windows
+
+          # Build Crypto++ 8.9.0 from source (MSVC ARM64)
+          git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git C:/cryptopp
+          cmake -S C:/cryptopp -B C:/cryptopp/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=C:/deps
+          cmake --build C:/cryptopp/build
+          cmake --install C:/cryptopp/build
+
+          echo "CMAKE_PREFIX_PATH=C:/vcpkg/installed/arm64-windows;C:/deps" >> "$GITHUB_ENV"
 
       - name: Read version
         shell: bash
