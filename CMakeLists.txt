@@ -14,6 +14,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 find_package(PkgConfig QUIET)
 
 if(WIN32)
+    set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a .dll.a)
     find_package(libusb CONFIG QUIET)
     if(NOT libusb_FOUND)
         find_path(LIBUSB_INCLUDE_DIRS libusb.h
@@ -22,6 +23,7 @@ if(WIN32)
                   "C:/mingw64/include"
                   "C:/msys64/mingw64/include"
                   "C:/msys64/usr/include"
+            PATH_SUFFIXES libusb-1.0
         )
         find_library(LIBUSB_LIBRARIES
             NAMES libusb-1.0 usb-1.0
@@ -179,7 +181,7 @@ add_executable(odin4 src/cli/main.cpp)
 set_target_properties(odin4 PROPERTIES OUTPUT_NAME "odin4")
 target_include_directories(odin4 PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(odin4 PRIVATE odin4_static)
-if(NOT MSVC)
+if(NOT MSVC AND NOT APPLE)
     target_link_options(odin4 PRIVATE "-static-libgcc" "-static-libstdc++")
 endif()
 
@@ -204,7 +206,7 @@ if(ODIN4_BUILD_GUI)
     )
     target_include_directories(odin4-gui PRIVATE ${CMAKE_SOURCE_DIR}/include)
     target_link_libraries(odin4-gui PRIVATE odin4_static Qt6::Widgets)
-    if(NOT MSVC)
+    if(NOT MSVC AND NOT APPLE)
         target_link_options(odin4-gui PRIVATE "-static-libgcc" "-static-libstdc++")
     endif()
     list(APPEND ODIN4_ALL_TARGETS odin4-gui)

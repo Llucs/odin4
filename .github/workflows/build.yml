@@ -122,8 +122,13 @@ jobs:
 
           # Download and extract pre-built libusb
           curl -L --fail -o /tmp/libusb.7z https://github.com/libusb/libusb/releases/download/v1.0.27/libusb-1.0.27.7z
-          7z x /tmp/libusb.7z -oC:/libusb
-          cp -r C:/libusb/MinGW64/ C:/mingw64/
+          7z x /tmp/libusb.7z -oC:/libusb -y
+          # The archive contains MinGW64/{dll,static,include}/...
+          # Copy files to where CMake and the linker can find them
+          mkdir -p C:/mingw64/lib C:/mingw64/include
+          cp -r C:/libusb/MinGW64/static/*.a C:/mingw64/lib/
+          cp -r C:/libusb/MinGW64/dll/*.dll C:/mingw64/bin/ 2>/dev/null || true
+          cp -r C:/libusb/MinGW64/include/* C:/mingw64/include/
 
           # Build Crypto++ from source
           git clone --depth 1 --branch CRYPTOPP_8_9_0 https://github.com/weidai11/cryptopp.git C:/cryptopp
