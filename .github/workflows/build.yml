@@ -121,8 +121,8 @@ jobs:
           choco install cmake ninja zip -y
 
           # Build libusb from source (pre-built MinGW64 package only provides import libraries)
-          # Use MSYS2 bash --login to avoid path-with-spaces issues in autotools/libtool
-          C:/msys64/usr/bin/bash.exe --login -c '
+          # Use MSYS2 MINGW64 bash to avoid path-with-spaces issues in autotools/libtool
+          MSYSTEM=MINGW64 C:/msys64/usr/bin/bash.exe --login -c '
             set -euo pipefail
             # Download release tarball (has pre-generated configure script)
             curl -sL https://github.com/libusb/libusb/releases/download/v1.0.27/libusb-1.0.27.tar.bz2 -o /tmp/libusb.tar.bz2
