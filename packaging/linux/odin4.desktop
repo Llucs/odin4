@@ -6,3 +6,4 @@ Exec=odin4-gui
 Icon=odin4
 Categories=Utility;
 Terminal=false
+StartupNotify=false

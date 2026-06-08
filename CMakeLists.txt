@@ -224,9 +224,7 @@ if(ODIN4_BUILD_GUI)
         AUTORCC ON
     )
     if(WIN32)
-        if(MSVC)
-            set_target_properties(odin4-gui PROPERTIES WIN32_EXECUTABLE TRUE)
-        endif()
+        set_target_properties(odin4-gui PROPERTIES WIN32_EXECUTABLE TRUE)
         target_sources(odin4-gui PRIVATE src/gui/app.rc)
     endif()
     if(APPLE)
@@ -244,6 +242,85 @@ if(ODIN4_BUILD_GUI)
     if(NOT MSVC AND NOT APPLE)
         target_link_options(odin4-gui PRIVATE "-static-libgcc" "-static-libstdc++")
     endif()
+
+    # ── macOS: strip frameworks the SDK no longer ships ────────────────
+    # macOS 14+/15+ SDK removed AGL.framework. Qt's imported targets and
+    # .prl files may still reference it. Walk EVERY imported target and
+    # surgically remove entries that mention a missing framework.
+    # -------------------------------------------------------------------
+    if(APPLE)
+        set(_ODIN4_MISSING_FW "")
+        foreach(_fw IN ITEMS AGL)
+            find_library(_odin4_probe_${_fw} ${_fw})
+            if(NOT _odin4_probe_${_fw})
+                list(APPEND _ODIN4_MISSING_FW ${_fw})
+                message(STATUS "${_fw}.framework not in SDK -- stripping from all imported targets")
+            endif()
+            unset(_odin4_probe_${_fw} CACHE)
+        endforeach()
+
+        if(_ODIN4_MISSING_FW)
+            function(_odin4_strip_fw tgt)
+                if(NOT TARGET ${tgt})
+                    return()
+                endif()
+                foreach(prop IN ITEMS INTERFACE_LINK_LIBRARIES INTERFACE_LINK_OPTIONS)
+                    get_target_property(_val ${tgt} ${prop})
+                    if(NOT _val)
+                        continue()
+                    endif()
+                    set(_orig "${_val}")
+                    foreach(_fw IN LISTS _ODIN4_MISSING_FW)
+                        string(REPLACE ";-framework ${_fw}" "" _val "${_val}")
+                        string(REPLACE "-framework ${_fw};" "" _val "${_val}")
+                        string(REPLACE "-framework ${_fw}"  "" _val "${_val}")
+                        string(REPLACE ";-framework;${_fw}" "" _val "${_val}")
+                        string(REPLACE "-framework;${_fw};" "" _val "${_val}")
+                        string(REPLACE "-framework;${_fw}"  "" _val "${_val}")
+                    endforeach()
+                    if(NOT "${_val}" STREQUAL "${_orig}")
+                        message(STATUS "  stripped missing framework(s) from ${tgt}::${prop}")
+                    endif()
+                    set_target_properties(${tgt} PROPERTIES ${prop} "${_val}")
+                endforeach()
+            endfunction()
+
+            get_property(_all_imported DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY IMPORTED_TARGETS)
+            foreach(_tgt IN LISTS _all_imported)
+                _odin4_strip_fw(${_tgt})
+            endforeach()
+        endif()
+    endif()
+    # ── end macOS framework fixup ──────────────────────────────────────
+
+    # ── Windows: deploy Qt DLLs via windeployqt ────────────────────────
+    if(WIN32)
+        set(ODIN4_WINDOWS_ARM64 OFF)
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(ARM64|AARCH64|arm64|aarch64)$"
+           OR CMAKE_VS_PLATFORM_NAME STREQUAL "ARM64")
+            set(ODIN4_WINDOWS_ARM64 ON)
+        endif()
+
+        if(ODIN4_WINDOWS_ARM64)
+            message(STATUS "Skipping post-build windeployqt on Windows ARM64; install-time Qt deployment will be used instead.")
+        else()
+            get_target_property(_qmake_exec Qt6::qmake IMPORTED_LOCATION)
+            get_filename_component(_qt_bin_dir "${_qmake_exec}" DIRECTORY)
+            find_program(WINDEPLOYQT_EXEC windeployqt HINTS "${_qt_bin_dir}")
+        endif()
+
+        if(NOT ODIN4_WINDOWS_ARM64 AND WINDEPLOYQT_EXEC)
+            add_custom_command(TARGET odin4-gui POST_BUILD
+                COMMAND "${WINDEPLOYQT_EXEC}"
+                ARGS --no-translations --no-compiler-runtime "$<TARGET_FILE:odin4-gui>"
+                COMMENT "Running windeployqt to deploy Qt libraries..."
+            )
+        elseif(NOT ODIN4_WINDOWS_ARM64)
+            message(WARNING "windeployqt not found! You will need to copy DLLs manually.")
+        endif()
+    endif()
+    # ── end windeployqt ────────────────────────────────────────────────
+
     list(APPEND ODIN4_ALL_TARGETS odin4-gui)
 endif()
 
@@ -309,6 +386,14 @@ install(TARGETS odin4_static odin4_shared odin4
     ARCHIVE DESTINATION lib
 )
 if(ODIN4_BUILD_GUI)
+    if(APPLE)
+        qt_generate_deploy_app_script(
+            TARGET odin4-gui
+            FILENAME_VARIABLE deploy_script
+            NO_UNSUPPORTED_PLATFORM_ERROR
+        )
+        install(SCRIPT ${deploy_script})
+    endif()
     install(TARGETS odin4-gui
         RUNTIME DESTINATION bin
         BUNDLE DESTINATION .
@@ -322,15 +407,47 @@ set(CPACK_PACKAGE_NAME "Odin4")
 set(CPACK_PACKAGE_VERSION "${ODIN_VERSION_CLEAN}")
 if(WIN32)
     set(CPACK_GENERATOR "NSIS")
+    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
     set(CPACK_NSIS_DISPLAY_NAME "Odin4")
     set(CPACK_NSIS_CONTACT "Llucs")
     set(CPACK_NSIS_URL_INFO_ABOUT "https://github.com/Llucs/odin4")
     set(CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES64")
     set(CPACK_NSIS_MODIFY_PATH ON)
+    set(CPACK_NSIS_MANIFEST_DPI_AWARE TRUE)
+    set(CPACK_PACKAGE_EXECUTABLES "odin4-gui" "Odin4")
+    set(CPACK_NSIS_INSTALLED_ICON_NAME "bin/odin4-gui.exe")
     set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "")
     if(EXISTS "${CMAKE_SOURCE_DIR}/packaging/windows/odin4.ico")
+        set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/packaging/windows/odin4.ico")
+        set(CPACK_NSIS_MUI_UNIICON "${CMAKE_SOURCE_DIR}/packaging/windows/odin4.ico")
         set(CPACK_NSIS_INSTALL_ICON "${CMAKE_SOURCE_DIR}/packaging/windows/odin4.ico")
         set(CPACK_NSIS_UNINSTALL_ICON "${CMAKE_SOURCE_DIR}/packaging/windows/odin4.ico")
+    endif()
+
+    # Bundle VC++ Redistributable
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(ARM64|AARCH64|arm64|aarch64)$"
+       OR CMAKE_VS_PLATFORM_NAME STREQUAL "ARM64")
+        set(_vcredist_name "vc_redist.arm64.exe")
+    elseif(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(_vcredist_name "vc_redist.x64.exe")
+    else()
+        set(_vcredist_name "vc_redist.x86.exe")
+    endif()
+
+    if(DEFINED ENV{VCToolsRedistDir})
+        file(TO_CMAKE_PATH "$ENV{VCToolsRedistDir}" _vcredist_dir)
+        set(_vcredist_path "${_vcredist_dir}/${_vcredist_name}")
+        if(EXISTS "${_vcredist_path}")
+            message(STATUS "Found vcredist: ${_vcredist_path}")
+            install(FILES "${_vcredist_path}" DESTINATION redist)
+            set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "
+                ExecWait '\\\"\\$INSTDIR\\\\redist\\\\${_vcredist_name}\\\" /install /quiet /norestart'
+                SetOutPath '\\$INSTDIR'
+                RMDir /r /REBOOTOK '\\$INSTDIR\\redist'
+            ")
+        else()
+            message(WARNING "VCToolsRedistDir set but ${_vcredist_name} not found at: ${_vcredist_path}")
+        endif()
     endif()
 endif()
 if(APPLE)
@@ -338,4 +455,8 @@ if(APPLE)
     set(CPACK_DMG_VOLUME_NAME "Odin4")
     set(CPACK_DMG_DS_STORE_SETUP_SCRIPT "")
 endif()
+set(CPACK_PACKAGE_FILE_NAME
+    "Odin4-${ODIN_VERSION_CLEAN}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"
+)
+set(CPACK_VERBATIM_VARIABLES TRUE)
 include(CPack)
