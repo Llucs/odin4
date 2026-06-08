@@ -20,7 +20,6 @@
 #include <iostream>
 #include <vector>
 #include <cstdlib>
-#include <unistd.h>
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -30,9 +29,14 @@
 #include <sstream>
 #include <limits>
 #include <format>
-#include <print>
 #include <filesystem>
 #include <lz4frame.h>
+
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
 #include <cryptopp/md5.h>
@@ -919,17 +923,30 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
                     file.seekg(static_cast<std::streamoff>(data_start));
                     std::error_code fs_ec;
                     auto tmp_dir = std::filesystem::temp_directory_path();
-                    auto tmp_pattern = tmp_dir / "odin4_XXXXXX";
-                    std::string tmpl = tmp_pattern.string();
-                    std::vector<char> buf(tmpl.begin(), tmpl.end());
-                    buf.push_back('\0');
-                    int fd = mkstemp(buf.data());
-                    if (fd == -1) {
+                    std::filesystem::path temp_path;
+#if defined(_WIN32)
+                    char win_path[MAX_PATH];
+                    DWORD ret = GetTempFileNameA(tmp_dir.string().c_str(), "od4", 0, win_path);
+                    if (ret == 0) {
                         log_error("Failed to create temporary file");
                         return ExitCode::Firmware;
                     }
-                    close(fd);
-                    std::filesystem::path temp_path(std::string(buf.data()));
+                    temp_path = std::filesystem::path(win_path);
+#else
+                    {
+                        auto tmpl = tmp_dir / "odin4_XXXXXX";
+                        std::string tstr = tmpl.string();
+                        std::vector<char> buf(tstr.begin(), tstr.end());
+                        buf.push_back('\0');
+                        int fd = mkstemp(buf.data());
+                        if (fd == -1) {
+                            log_error("Failed to create temporary file");
+                            return ExitCode::Firmware;
+                        }
+                        close(fd);
+                        temp_path = std::filesystem::path(std::string(buf.data()));
+                    }
+#endif
                     if (!decompress_lz4_to_file(file, data_size, temp_path.string())) {
                         std::filesystem::remove(temp_path, fs_ec);
                         return ExitCode::Firmware;

@@ -15,7 +15,7 @@
  */
 
 #include <iostream>
-#include <print>
+#include <format>
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -23,59 +23,64 @@
 #include "odin4/odin4.h"
 
 static void print_usage() {
-    std::println("Usage: odin4 [options]");
-    std::println("Samsung firmware flashing tool for Linux. Version: {}", odin4_get_version());
-    std::println("");
-    std::println("Options:");
-    std::println("  -h                  Show this help message");
-    std::println("  -v                  Show version");
-    std::println("  -w                  Show license");
-    std::println("  -l                  List detected Download Mode devices");
-    std::println("  -d <path>            Select a specific USB device path (e.g. /dev/bus/usb/001/002)");
-    std::println("  -b <file>            Bootloader archive (.tar or .tar.md5)");
-    std::println("  -a <file>            AP archive (.tar or .tar.md5)");
-    std::println("  -c <file>            CP archive (.tar or .tar.md5)");
-    std::println("  -s <file>            CSC archive (.tar or .tar.md5)");
-    std::println("  -u <file>            UMS archive (.tar or .tar.md5)");
-    std::println("  --check-only         Validate PIT + archives and exit without flashing");
-    std::println("  --allow-unknown      Allow archive entries without a PIT match (disabled by default)");
-    std::println("  --reboot             Reboot device after flashing");
-    std::println("  --redownload         Reboot into download mode if supported");
-    std::println("  --efs-clear          Clear EFS partition during flash (repair IMEI/calibration)");
-    std::println("  --bl-update          Signal bootloader update to device");
-    std::println("");
-    std::println("Logging:");
-    std::println("  --quiet              Only print errors");
-    std::println("  --verbose            More detailed logs");
-    std::println("  --debug              Debug logs (includes USB packet hexdumps)");
-    std::println("");
-    std::println("USB selection overrides (optional):");
-    std::println("  --vid <hex>          Override USB vendor ID (hex, e.g. 04e8)");
-    std::println("  --pid <hex>          Override USB product ID (hex)");
-    std::println("  --usb-interface <n>  Force a specific USB interface number");
-    std::println("");
-    std::println("Linux permissions:");
-    std::println("  If you get LIBUSB_ERROR_ACCESS, install the provided udev rule:");
-    std::println("    udev/60-odin4.rules -> /etc/udev/rules.d/60-odin4.rules");
+    std::cout << std::format("Usage: odin4 [options]\nSamsung firmware flashing tool. Version: {}\n", odin4_get_version());
+    std::cout << "\nOptions:\n"
+              << "  -h                  Show this help message\n"
+              << "  -v                  Show version\n"
+              << "  -w                  Show license\n"
+              << "  -l                  List detected Download Mode devices\n"
+#if defined(_WIN32)
+              << "  -d <path>            Select a specific USB device path (e.g. bus-port)\n"
+#else
+              << "  -d <path>            Select a specific USB device path\n"
+#endif
+              << "  -b <file>            Bootloader archive (.tar or .tar.md5)\n"
+              << "  -a <file>            AP archive (.tar or .tar.md5)\n"
+              << "  -c <file>            CP archive (.tar or .tar.md5)\n"
+              << "  -s <file>            CSC archive (.tar or .tar.md5)\n"
+              << "  -u <file>            UMS archive (.tar or .tar.md5)\n"
+              << "  --check-only         Validate PIT + archives and exit without flashing\n"
+              << "  --allow-unknown      Allow archive entries without a PIT match (disabled by default)\n"
+              << "  --reboot             Reboot device after flashing\n"
+              << "  --redownload         Reboot into download mode if supported\n"
+              << "  --efs-clear          Clear EFS partition during flash (repair IMEI/calibration)\n"
+              << "  --bl-update          Signal bootloader update to device\n"
+              << "\nLogging:\n"
+              << "  --quiet              Only print errors\n"
+              << "  --verbose            More detailed logs\n"
+              << "  --debug              Debug logs (includes USB packet hexdumps)\n"
+              << "\nUSB selection overrides (optional):\n"
+              << "  --vid <hex>          Override USB vendor ID (hex, e.g. 04e8)\n"
+              << "  --pid <hex>          Override USB product ID (hex)\n"
+              << "  --usb-interface <n>  Force a specific USB interface number\n"
+              << "\n"
+#if defined(__linux__)
+              << "Permissions:\n"
+              << "  If you get LIBUSB_ERROR_ACCESS, install the provided udev rule:\n"
+              << "    udev/60-odin4.rules -> /etc/udev/rules.d/60-odin4.rules\n"
+#elif defined(_WIN32)
+              << "Permissions:\n"
+              << "  If you get LIBUSB_ERROR_ACCESS, use Zadig to install a WinUSB driver.\n"
+#elif defined(__APPLE__)
+              << "Permissions:\n"
+              << "  If you get LIBUSB_ERROR_ACCESS, check System Settings > Privacy & Security > USB.\n"
+#endif
+        ;
 }
 
 static void print_version() {
-    std::println("odin4 version {}", odin4_get_version());
+    std::cout << std::format("odin4 version {}\n", odin4_get_version());
 }
 
 static void print_license() {
-    std::println("odin4 — Open Odin Reimplementation");
-    std::println("");
-    std::println("Copyright (c) 2026 Llucs");
-    std::println("");
-    std::println("Licensed under the Apache License, Version 2.0 (the \"License\");");
-    std::println("you may not use this software except in compliance with the License.");
-    std::println("You may obtain a copy of the License at:");
-    std::println("");
-    std::println("  http://www.apache.org/licenses/LICENSE-2.0");
-    std::println("");
-    std::println("This software is provided \"AS IS\", WITHOUT WARRANTIES OR CONDITIONS");
-    std::println("OF ANY KIND, either express or implied.");
+    std::cout << "odin4 \xe2\x80\x94 Open Odin Reimplementation\n\n"
+              << "Copyright (c) 2026 Llucs\n\n"
+              << "Licensed under the Apache License, Version 2.0 (the \"License\");\n"
+              << "you may not use this software except in compliance with the License.\n"
+              << "You may obtain a copy of the License at:\n\n"
+              << "  http://www.apache.org/licenses/LICENSE-2.0\n\n"
+              << "This software is provided \"AS IS\", WITHOUT WARRANTIES OR CONDITIONS\n"
+              << "OF ANY KIND, either express or implied.\n";
 }
 
 static auto parse_hex_u16(const std::string& s, uint16_t& out) -> bool {
@@ -214,7 +219,7 @@ auto main(int argc, char** argv) -> int {
         if (arg == "--vid") {
             uint16_t v = 0;
             if (!take_value_u16hex(v)) {
-                std::println(std::cerr, "Error: --vid requires a hex value");
+                std::cerr << "Error: --vid requires a hex value\n";
                 return 1;
             }
             cfg.has_vid = true;
@@ -224,7 +229,7 @@ auto main(int argc, char** argv) -> int {
         if (arg == "--pid") {
             uint16_t p = 0;
             if (!take_value_u16hex(p)) {
-                std::println(std::cerr, "Error: --pid requires a hex value");
+                std::cerr << "Error: --pid requires a hex value\n";
                 return 1;
             }
             cfg.has_pid = true;
@@ -234,7 +239,7 @@ auto main(int argc, char** argv) -> int {
         if (arg == "--usb-interface") {
             int n = 0;
             if (!take_value_int(n) || n < 0 || n > 255) {
-                std::println(std::cerr, "Error: --usb-interface requires an integer in the range 0..255");
+                std::cerr << "Error: --usb-interface requires an integer in the range 0..255\n";
                 return 1;
             }
             cfg.has_usb_interface = true;
@@ -246,10 +251,10 @@ auto main(int argc, char** argv) -> int {
             odin4_init(cfg);
             const std::vector<std::string> devices = odin4_list_devices(cfg);
             if (devices.empty()) {
-                std::println("No devices detected in Download Mode.");
+                std::cout << "No devices detected in Download Mode.\n";
             } else {
                 for (const auto& path : devices) {
-                    std::println("{}", path);
+                    std::cout << path << '\n';
                 }
             }
             return 0;
@@ -258,7 +263,7 @@ auto main(int argc, char** argv) -> int {
         if (arg == "-b" || arg == "-a" || arg == "-c" || arg == "-s" || arg == "-u" || arg == "-d") {
             std::string value;
             if (!take_value(value)) {
-                std::println(std::cerr, "Error: Option requires an argument: {}", arg);
+                std::cerr << std::format("Error: Option requires an argument: {}\n", arg);
                 return 1;
             }
             if (arg == "-b") {
@@ -278,7 +283,7 @@ auto main(int argc, char** argv) -> int {
         }
 
         if (!arg.empty() && arg.starts_with('-')) {
-            std::println(std::cerr, "Error: Unknown option: {}", arg);
+            std::cerr << std::format("Error: Unknown option: {}\n", arg);
             return 1;
         }
     }
@@ -286,7 +291,7 @@ auto main(int argc, char** argv) -> int {
     odin4_init(cfg);
 
     if (cfg.dry_run && !has_any_firmware_files(cfg)) {
-        std::println(std::cerr, "Error: --check-only requires at least one firmware archive (-b/-a/-c/-s/-u)");
+        std::cerr << "Error: --check-only requires at least one firmware archive (-b/-a/-c/-s/-u)\n";
         return 1;
     }
 
@@ -297,7 +302,7 @@ auto main(int argc, char** argv) -> int {
 
     for (const auto& path : {cfg.bootloader, cfg.ap, cfg.cp, cfg.csc, cfg.ums}) {
         if (!path.empty() && !std::filesystem::exists(path)) {
-            std::println(std::cerr, "Error: Firmware file not found: {}", path);
+            std::cerr << std::format("Error: Firmware file not found: {}\n", path);
             return 5; // Firmware error
         }
     }

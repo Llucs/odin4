@@ -42,7 +42,7 @@ REGISTER_TEST(OdinProtocol, Endian16_SwapTwice);
 void test_OdinProtocol_Endian32_Swap() {
     uint32_t val = 0x12345678;
     uint32_t swapped = test_swap32(val);
-    EXPECT_EQ(swapped, 0x78563412);
+    EXPECT_EQ(swapped, 0x78563412U);
 }
 REGISTER_TEST(OdinProtocol, Endian32_Swap);
 
@@ -57,7 +57,7 @@ REGISTER_TEST(OdinProtocol, Endian32_SwapTwice);
 void test_OdinProtocol_Endian64_Swap() {
     uint64_t val = 0x0123456789ABCDEF;
     uint64_t swapped = test_swap64(val);
-    EXPECT_EQ(swapped, 0xEFCDAB8967452301);
+    EXPECT_EQ(swapped, 0xEFCDAB8967452301ULL);
 }
 REGISTER_TEST(OdinProtocol, Endian64_Swap);
 
@@ -86,7 +86,7 @@ REGISTER_TEST(OdinProtocol, HToLe16);
 void test_OdinProtocol_Le32ToH() {
     uint32_t little = 0x78563412;
     uint32_t host = le32toh(little);
-    EXPECT_EQ(host, 0x78563412);
+    EXPECT_EQ(host, 0x78563412U);
 }
 REGISTER_TEST(OdinProtocol, Le32ToH);
 
@@ -138,8 +138,8 @@ REGISTER_TEST(OdinProtocol, ControlType_Values);
 
 void test_OdinProtocol_MakeRequest_SetsIdAndData() {
     OdinRequestBox rq = make_request(OdinCommandType::RQT_INIT, OdinCommandParam::RQT_INIT_TARGET);
-    EXPECT_EQ(static_cast<uint32_t>(le32_to_h(static_cast<uint32_t>(rq.id))), 0x64);
-    EXPECT_EQ(static_cast<uint32_t>(le32_to_h(static_cast<uint32_t>(rq.data))), 0);
+    EXPECT_EQ(static_cast<uint32_t>(le32_to_h(static_cast<uint32_t>(rq.id))), 0x64U);
+    EXPECT_EQ(static_cast<uint32_t>(le32_to_h(static_cast<uint32_t>(rq.data))), 0U);
 }
 REGISTER_TEST(OdinProtocol, MakeRequest_SetsIdAndData);
 

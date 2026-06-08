@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Odin4
+Comment=Firmware flashing tool for Samsung devices
+Exec=odin4-gui
+Icon=odin4
+Categories=Utility;
+Terminal=false
+StartupNotify=false

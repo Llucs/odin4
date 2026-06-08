@@ -16,9 +16,32 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <cstring>
 #include "protocol/thor_protocol.h"
 #include "firmware/firmware_package.h"
 #include "odin4/fuzz_utils.h"
+
+static void fuzz_parse_tar_header(const uint8_t* data, size_t size) {
+    if (size < 512) return;
+    char name[101]{};
+    std::memcpy(name, data, 100);
+    for (int i = 0; i < 100; ++i) {
+        if (name[i] == '\0') break;
+        if (name[i] < 32) name[i] = '.';
+    }
+    name[100] = '\0';
+    unsigned int checksum = 0;
+    for (int i = 0; i < 512; ++i) checksum += data[i];
+    (void)checksum;
+}
+
+static void fuzz_detect_md5_trailer(const uint8_t* data, size_t size) {
+    if (size < 32) return;
+    for (size_t i = size - 32; i < size; ++i) {
+        char c = static_cast<char>(data[i]);
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) return;
+    }
+}
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     try {

@@ -17,8 +17,21 @@
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
+#include <vector>
 #include <lz4frame.h>
 #include "lz4/lz4.h"
+
+static void fuzz_lz4_decompress(const uint8_t* data, size_t size) {
+    LZ4F_dctx* dctx = nullptr;
+    LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
+    if (!dctx) return;
+
+    std::vector<char> buf(size * 4);
+    size_t dst_size = buf.size();
+    size_t src_size = size;
+    LZ4F_decompress(dctx, buf.data(), &dst_size, data, &src_size, nullptr);
+    LZ4F_freeDecompressionContext(dctx);
+}
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     try {
