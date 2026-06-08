@@ -386,7 +386,7 @@ install(TARGETS odin4_static odin4_shared odin4
     ARCHIVE DESTINATION lib
 )
 if(ODIN4_BUILD_GUI)
-    if(APPLE)
+    if(APPLE OR WIN32)
         qt_generate_deploy_app_script(
             TARGET odin4-gui
             FILENAME_VARIABLE deploy_script
