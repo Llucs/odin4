@@ -496,8 +496,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ -f "build/odin4-gui.exe" ]; then
-            echo "$QT_ROOT_DIR/bin" >> "$GITHUB_PATH"
-            windeployqt --no-translations --no-compiler-runtime build/odin4-gui.exe
+            DEPLOY_QT_DIR="${QT_ROOT_DIR}/bin"
+            if [ -n "${QT_HOST_PATH:-}" ]; then
+              DEPLOY_QT_DIR="${QT_HOST_PATH}/bin"
+            fi
+            echo "$DEPLOY_QT_DIR" >> "$GITHUB_PATH"
+            "$DEPLOY_QT_DIR/windeployqt" --no-translations --no-compiler-runtime build/odin4-gui.exe
+          else
+            echo "No GUI binary found, skipping windeployqt"
           fi
 
       - name: Package installer (NSIS)
@@ -579,8 +585,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ -f "build/odin4-gui.exe" ]; then
-            echo "$QT_ROOT_DIR/bin" >> "$GITHUB_PATH"
-            windeployqt --no-translations --no-compiler-runtime build/odin4-gui.exe
+            DEPLOY_QT_DIR="${QT_ROOT_DIR}/bin"
+            if [ -n "${QT_HOST_PATH:-}" ]; then
+              DEPLOY_QT_DIR="${QT_HOST_PATH}/bin"
+            fi
+            echo "$DEPLOY_QT_DIR" >> "$GITHUB_PATH"
+            "$DEPLOY_QT_DIR/windeployqt" --no-translations --no-compiler-runtime build/odin4-gui.exe
+          else
+            echo "No GUI binary found, skipping windeployqt"
           fi
 
       - name: Package installer (NSIS)
