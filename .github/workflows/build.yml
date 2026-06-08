@@ -42,7 +42,7 @@ jobs:
             libgl1-mesa-dev libgl-dev libglx-dev \
             libxkbcommon-dev libxkbcommon-x11-dev \
             libx11-dev libxcb-cursor-dev libvulkan-dev \
-            patchelf wget file
+            patchelf wget file imagemagick
 
       - name: Install Qt6 (for linuxdeploy)
         uses: jurplel/install-qt-action@v4
@@ -88,7 +88,8 @@ jobs:
 
           if [ -f docs/assets/logo.png ]; then
             mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
-            cp docs/assets/logo.png AppDir/usr/share/icons/hicolor/256x256/apps/odin4.png
+            convert docs/assets/logo.png -resize 256x256! \
+              AppDir/usr/share/icons/hicolor/256x256/apps/odin4.png
           fi
 
           wget -q "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
@@ -173,7 +174,7 @@ jobs:
             libgl1-mesa-dev libgl-dev libglx-dev \
             libxkbcommon-dev libxkbcommon-x11-dev \
             libx11-dev libxcb-cursor-dev libvulkan-dev \
-            patchelf wget file
+            patchelf wget file imagemagick
 
       - name: Install Qt6 (for linuxdeploy)
         uses: jurplel/install-qt-action@v4
@@ -219,7 +220,8 @@ jobs:
 
           if [ -f docs/assets/logo.png ]; then
             mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
-            cp docs/assets/logo.png AppDir/usr/share/icons/hicolor/256x256/apps/odin4.png
+            convert docs/assets/logo.png -resize 256x256! \
+              AppDir/usr/share/icons/hicolor/256x256/apps/odin4.png
           fi
 
           wget -q "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-aarch64.AppImage"
