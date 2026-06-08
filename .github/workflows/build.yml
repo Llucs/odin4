@@ -98,10 +98,25 @@ jobs:
           export PATH="$QT_ROOT_DIR/bin:$PATH"
           export QMAKE="$QT_ROOT_DIR/bin/qmake"
 
-          ./linuxdeploy-x86_64.AppImage \
-            --appdir AppDir \
-            --plugin qt \
-            --output appimage
+          GUI_BIN="AppDir/usr/bin/odin4-gui"
+          DESKTOP_FILE="AppDir/usr/share/applications/odin4.desktop"
+          ICON_FILE="AppDir/usr/share/icons/hicolor/256x256/apps/odin4.png"
+
+          if [ -f "$GUI_BIN" ]; then
+            ./linuxdeploy-x86_64.AppImage \
+              --appdir AppDir \
+              -e "$GUI_BIN" \
+              -d "$DESKTOP_FILE" \
+              -i "$ICON_FILE" \
+              --plugin qt \
+              --output appimage
+          else
+            ./linuxdeploy-x86_64.AppImage \
+              --appdir AppDir \
+              -e AppDir/usr/bin/odin4 \
+              --plugin qt \
+              --output appimage
+          fi
 
           VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
@@ -214,10 +229,25 @@ jobs:
           export PATH="$QT_ROOT_DIR/bin:$PATH"
           export QMAKE="$QT_ROOT_DIR/bin/qmake"
 
-          ./linuxdeploy-aarch64.AppImage \
-            --appdir AppDir \
-            --plugin qt \
-            --output appimage
+          GUI_BIN="AppDir/usr/bin/odin4-gui"
+          DESKTOP_FILE="AppDir/usr/share/applications/odin4.desktop"
+          ICON_FILE="AppDir/usr/share/icons/hicolor/256x256/apps/odin4.png"
+
+          if [ -f "$GUI_BIN" ]; then
+            ./linuxdeploy-aarch64.AppImage \
+              --appdir AppDir \
+              -e "$GUI_BIN" \
+              -d "$DESKTOP_FILE" \
+              -i "$ICON_FILE" \
+              --plugin qt \
+              --output appimage
+          else
+            ./linuxdeploy-aarch64.AppImage \
+              --appdir AppDir \
+              -e AppDir/usr/bin/odin4 \
+              --plugin qt \
+              --output appimage
+          fi
 
           VERSION="$(awk -F'"' '/ODIN4_VERSION/ {print $2}' src/odin4.cpp)"
           SUFFIX="${{ inputs.suffix }}"
@@ -624,18 +654,16 @@ jobs:
           mkdir -p bundle
           find artifacts -type f \( -name "*.AppImage" -o -name "*.dmg" -o -name "*.exe" -o -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} bundle/ \;
 
-          SAMPLE="$(find bundle -type f | head -n 1)"
-          BASE="$(basename "$SAMPLE")"
-          VERSUFFIX="$(echo "${BASE}" | sed -E 's/^[^0-9]+([0-9]+\.[0-9]+\.[0-9]+[^.-]*).*/\1/')"
+          VERSION="$(echo bundle/* | grep -oP '\d+\.\d+\.\d+' | head -1)"
 
-          OUT="odin4-all-${VERSUFFIX}.zip"
+          mkdir -p dist
           cd bundle
-          zip "../${OUT}" ./*
+          zip "../dist/odin4-all-${VERSION}.zip" ./*
 
-          echo "OUT=${OUT}" >> "$GITHUB_ENV"
+          echo "OUT=dist/odin4-all-${VERSION}.zip" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
         with:
           name: odin4-all
-          path: ${{ env.OUT }}
+          path: dist/*.zip
           retention-days: 14
