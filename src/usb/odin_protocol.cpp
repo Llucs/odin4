@@ -253,6 +253,18 @@ auto UsbDevice::send_control(uint32_t control_type) -> bool {
 }
 
 auto UsbDevice::odin_handshake() -> bool {
+    // On Linux, some Samsung Download Mode boards (CDC-ACM composite) NAK the first
+    // bulk-OUT transfer on a freshly-claimed interface until the device is reset on
+    // the host side. Heimdall applies the same workaround in InitialiseProtocol
+    // (gated on IsUbuntu); we apply it on Linux because the failure mode is not
+    // distribution-specific. The reset is best-effort: if it fails, the subsequent
+    // bulk_write_all will surface the underlying error.
+#if defined(__linux__)
+    if (handle != nullptr) {
+        log_verbose("Handshake: resetting device before ODIN preamble (Linux libusb workaround)");
+        (void) libusb_reset_device(handle);
+    }
+#endif
     const char preamble[4] = {'O', 'D', 'I', 'N'};
     if (!bulk_write_all(preamble, sizeof(preamble), USB_TIMEOUT_CONTROL)) return false;
 
