@@ -254,13 +254,29 @@ auto UsbDevice::send_control(uint32_t control_type) -> bool {
 
 auto UsbDevice::odin_handshake() -> bool {
     const char preamble[4] = {'O', 'D', 'I', 'N'};
-    if (!bulk_write_all(preamble, sizeof(preamble), USB_TIMEOUT_CONTROL)) return false;
+    log_verbose("Handshake: sending ODIN preamble");
+    if (!bulk_write_all(preamble, sizeof(preamble), USB_TIMEOUT_CONTROL)) {
+        log_error("Handshake failed: could not send ODIN preamble on bulk OUT");
+        return false;
+    }
 
     unsigned char reply[512] = {0};
     int actual = 0;
-    if (!bulk_read_once(reply, sizeof(reply), &actual, USB_TIMEOUT_CONTROL)) return false;
-    if (actual < 4) return false;
-    if (reply[0] != 'L' || reply[1] != 'O' || reply[2] != 'K' || reply[3] != 'E') return false;
+    log_verbose("Handshake: waiting for LOKE reply");
+    if (!bulk_read_once(reply, sizeof(reply), &actual, USB_TIMEOUT_CONTROL)) {
+        log_error("Handshake failed: no LOKE reply on bulk IN");
+        return false;
+    }
+    if (actual < 4) {
+        log_error(std::format("Handshake failed: short reply ({} bytes, expected at least 4)", actual));
+        return false;
+    }
+    if (reply[0] != 'L' || reply[1] != 'O' || reply[2] != 'K' || reply[3] != 'E') {
+        log_error(std::format(
+            "Handshake failed: unexpected reply magic 0x{:02X}{:02X}{:02X}{:02X}, expected 'LOKE'",
+            reply[0], reply[1], reply[2], reply[3]));
+        return false;
+    }
     return true;
 }
 
