@@ -50,7 +50,7 @@ jobs:
             qt6-base-dev
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@eda5730a8bfb740e03a28087a958444c646e5842 # v4
+        uses: github/codeql-action/init@a16f4a497336b68eeff8ef72868ea4bab1c672bb # v4
         with:
           languages: ${{ matrix.language }}
 
@@ -66,4 +66,4 @@ jobs:
           cmake --build build
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@eda5730a8bfb740e03a28087a958444c646e5842 # v4
+        uses: github/codeql-action/analyze@a16f4a497336b68eeff8ef72868ea4bab1c672bb # v4
