@@ -50,7 +50,7 @@ jobs:
             qt6-base-dev
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@f133996fb588ff4e83f1e1d4911404720ac9cb17 # v4
+        uses: github/codeql-action/init@29d5e4cb18634f778f46da6ba2921f99b75823fe # v4
         with:
           languages: ${{ matrix.language }}
 
