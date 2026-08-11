@@ -191,7 +191,8 @@ static auto find_best_interface(libusb_device* dev, const UsbSelectionCriteria& 
 
 static auto find_cdc_comm_interface(libusb_device* dev) -> int {
     libusb_config_descriptor* config = nullptr;
-    if (libusb_get_active_config_descriptor(dev, &config) != 0 || (config == nullptr)) return -1;
+    if (libusb_get_active_config_descriptor(dev, &config) != 0 || (config == nullptr))
+        return -1;
 
     int comm_interface = -1;
     for (int i = 0; i < config->bNumInterfaces && comm_interface < 0; ++i) {
@@ -370,7 +371,8 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
 }
 
 void UsbDevice::release_cdc_comm_interface() {
-    if (handle == nullptr) return;
+    if (handle == nullptr)
+        return;
     if (cdc_comm_claimed) {
         libusb_release_interface(handle, cdc_comm_interface);
         cdc_comm_claimed = false;
@@ -386,7 +388,8 @@ void UsbDevice::initialize_cdc_acm() {
     // serial host (or Windows Odin's CDC driver) would: set a line coding and raise
     // DTR/RTS on the communications interface before talking on the data interface.
     // Idempotent: safe to call again after a USB reset (claims are kept across it).
-    if (cdc_comm_interface < 0) return;
+    if (cdc_comm_interface < 0)
+        return;
 
     if (cdc_comm_interface != interface_number && !cdc_comm_claimed) {
         const int drv = libusb_kernel_driver_active(handle, cdc_comm_interface);
@@ -408,8 +411,8 @@ void UsbDevice::initialize_cdc_acm() {
 
     unsigned char line_coding[sizeof(kCdcDefaultLineCoding)];
     std::memcpy(line_coding, kCdcDefaultLineCoding, sizeof(line_coding));
-    const int lc_err = libusb_control_transfer(handle, bm_request_type, kCdcReqSetLineCoding, 0, w_index,
-                                               line_coding, sizeof(line_coding), 1000);
+    const int lc_err = libusb_control_transfer(handle, bm_request_type, kCdcReqSetLineCoding, 0, w_index, line_coding,
+                                               sizeof(line_coding), 1000);
     if (lc_err < 0)
         log_verbose(std::format("CDC SET_LINE_CODING not accepted (non-fatal, error: {})", lc_err));
 
@@ -481,7 +484,8 @@ auto UsbDevice::receive_packet(void* data, size_t size, int* actual_length, bool
 }
 
 auto UsbDevice::reset_and_reinit() -> bool {
-    if (handle == nullptr) return false;
+    if (handle == nullptr)
+        return false;
 
     const int reset_err = libusb_reset_device(handle);
     if (reset_err == LIBUSB_ERROR_NOT_FOUND || reset_err == LIBUSB_ERROR_NO_DEVICE) {

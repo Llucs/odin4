@@ -135,7 +135,7 @@ constexpr std::size_t kPitChunkSize = 500;
 // devices (e.g. SM-A055M, PID 0x685D) enumerate as a CDC ACM modem and their
 // bootloader ignores bulk traffic until the host "opens the port" by asserting
 // DTR via SET_CONTROL_LINE_STATE, exactly like a serial terminal would.
-constexpr uint8_t kCdcReqSetLineCoding       = 0x20;
+constexpr uint8_t kCdcReqSetLineCoding = 0x20;
 constexpr uint8_t kCdcReqSetControlLineState = 0x22;
 constexpr uint16_t kCdcControlLineDtr = 0x0001;
 constexpr uint16_t kCdcControlLineRts = 0x0002;

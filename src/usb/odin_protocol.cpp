@@ -256,8 +256,8 @@ auto UsbDevice::odin_handshake_attempt(int read_timeout_ms) -> bool {
     const unsigned char preamble[4] = {'O', 'D', 'I', 'N'};
 
     int actual = 0;
-    int err = libusb_bulk_transfer(handle, endpoint_out, const_cast<unsigned char*>(preamble),
-                                   sizeof(preamble), &actual, 2000);
+    int err = libusb_bulk_transfer(handle, endpoint_out, const_cast<unsigned char*>(preamble), sizeof(preamble),
+                                   &actual, 2000);
     if (err != 0 || actual != sizeof(preamble)) {
         log_verbose(std::format("Handshake write failed (error: {}, sent: {})", err, actual));
         return false;
@@ -274,10 +274,7 @@ auto UsbDevice::odin_handshake_attempt(int read_timeout_ms) -> bool {
     if (actual < 4)
         return false;
 
-    if (reply[0] != 'L' ||
-        reply[1] != 'O' ||
-        reply[2] != 'K' ||
-        reply[3] != 'E')
+    if (reply[0] != 'L' || reply[1] != 'O' || reply[2] != 'K' || reply[3] != 'E')
         return false;
 
     return true;
