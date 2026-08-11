@@ -17,6 +17,14 @@ Before any data transfer, the host performs a handshake to confirm the device bo
 *   **Host to Device**: Sends the ASCII string `ODIN` (4 bytes).
 *   **Device to Host**: Responds with the ASCII string `LOKE` (4 bytes).
 
+#### 2.1.1. CDC ACM Port Open and One-Shot Handshake (newer devices)
+
+The Download Mode function is a composite CDC ACM modem: interface 0 is the Communications class (`0x02`) control interface and interface 1 is the CDC Data (`0x0A`) interface carrying the bulk endpoints. Windows hosts talk to it through a CDC serial driver, which "opens the port" (SET_LINE_CODING + SET_CONTROL_LINE_STATE with DTR/RTS) before any data flows. odin4 replicates this on open so it presents the same host behavior a working Windows Odin session does.
+
+Newer bootloaders — observed and verified on the MediaTek-based SM-A055M (PID `0x685D`) — additionally answer the `ODIN`/`LOKE` handshake **exactly once per USB connection**. Any earlier traffic on the data pipe (a previous failed or completed session, or a host service such as ModemManager probing the `ttyACM` port) leaves the bootloader silently ignoring bulk transfers: `ODIN` writes are ACKed at the USB layer but no `LOKE` ever arrives. A USB port reset restores the handshake state. odin4 therefore attempts the handshake once with a short timeout and, if the device stays silent, resets the port and retries. The reset is not performed unconditionally because a small number of older devices are known to stop handshaking after a reset (see Heimdall PR #478).
+
+These bootloaders also answer `RQT_CLOSE` commands with `id = -1` and `ack = 0` on success; only a negative `ack` indicates a real failure for close commands.
+
 ## 3. Packet Structures
 
 After the handshake, all command communication uses two fixed-size structures: the request box and the response box. Raw data transfers bypass this structure and use the negotiated packet size directly.

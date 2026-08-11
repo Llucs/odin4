@@ -131,6 +131,18 @@ constexpr std::size_t kLokeResponseSize     = 4;
 // PIT download chunk size (used for legacy protocol)
 constexpr std::size_t kPitChunkSize = 500;
 
+// CDC ACM class requests (USB CDC PSTN 1.2, section 6.3). Newer Download Mode
+// devices (e.g. SM-A055M, PID 0x685D) enumerate as a CDC ACM modem and their
+// bootloader ignores bulk traffic until the host "opens the port" by asserting
+// DTR via SET_CONTROL_LINE_STATE, exactly like a serial terminal would.
+constexpr uint8_t kCdcReqSetLineCoding       = 0x20;
+constexpr uint8_t kCdcReqSetControlLineState = 0x22;
+constexpr uint16_t kCdcControlLineDtr = 0x0001;
+constexpr uint16_t kCdcControlLineRts = 0x0002;
+
+// 115200 baud, 1 stop bit, no parity, 8 data bits (dwDTERate LE + bCharFormat + bParityType + bDataBits)
+constexpr unsigned char kCdcDefaultLineCoding[7] = {0x00, 0xC2, 0x01, 0x00, 0x00, 0x00, 0x08};
+
 // Control types for send_control
 enum OdinControlType : uint32_t {
     ODIN_CONTROL_REBOOT = 0x0001,

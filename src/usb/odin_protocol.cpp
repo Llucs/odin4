@@ -252,16 +252,53 @@ auto UsbDevice::send_control(uint32_t control_type) -> bool {
     return true;
 }
 
-auto UsbDevice::odin_handshake() -> bool {
-    const char preamble[4] = {'O', 'D', 'I', 'N'};
-    if (!bulk_write_all(preamble, sizeof(preamble), USB_TIMEOUT_CONTROL)) return false;
+auto UsbDevice::odin_handshake_attempt(int read_timeout_ms) -> bool {
+    const unsigned char preamble[4] = {'O', 'D', 'I', 'N'};
+
+    int actual = 0;
+    int err = libusb_bulk_transfer(handle, endpoint_out, const_cast<unsigned char*>(preamble),
+                                   sizeof(preamble), &actual, 2000);
+    if (err != 0 || actual != sizeof(preamble)) {
+        log_verbose(std::format("Handshake write failed (error: {}, sent: {})", err, actual));
+        return false;
+    }
 
     unsigned char reply[512] = {0};
-    int actual = 0;
-    if (!bulk_read_once(reply, sizeof(reply), &actual, USB_TIMEOUT_CONTROL)) return false;
-    if (actual < 4) return false;
-    if (reply[0] != 'L' || reply[1] != 'O' || reply[2] != 'K' || reply[3] != 'E') return false;
+    actual = 0;
+    err = libusb_bulk_transfer(handle, endpoint_in, reply, sizeof(reply), &actual, read_timeout_ms);
+    if (err != 0) {
+        log_verbose(std::format("Handshake read failed (error: {})", err));
+        return false;
+    }
+
+    if (actual < 4)
+        return false;
+
+    if (reply[0] != 'L' ||
+        reply[1] != 'O' ||
+        reply[2] != 'K' ||
+        reply[3] != 'E')
+        return false;
+
     return true;
+}
+
+auto UsbDevice::odin_handshake() -> bool {
+    if (odin_handshake_attempt(3000))
+        return true;
+
+    // Newer Download Mode bootloaders (observed on the MTK-based SM-A055M, PID 0x685D)
+    // answer the ODIN/LOKE handshake exactly once per USB connection. Any prior traffic
+    // on the CDC data pipe — an earlier failed or completed run, or a host service
+    // probing the modem port — leaves the bootloader silently ignoring bulk transfers.
+    // A USB port reset restores the handshake state, so reset and try again before
+    // giving up. The reset is deliberately not done up front: a small number of older
+    // devices are known to stop handshaking after a reset (see Heimdall PR #478).
+    log_info("No handshake response; resetting USB device and retrying");
+    if (!reset_and_reinit())
+        return false;
+
+    return odin_handshake_attempt(5000);
 }
 
 auto UsbDevice::odin_command(uint32_t cmd, uint32_t subcmd, const void* payload, size_t payload_size,
@@ -412,22 +449,41 @@ auto UsbDevice::odin_begin_session() -> bool {
     return true;
 }
 
+// Some newer bootloaders (observed on the MTK-based SM-A055M) answer RQT_CLOSE
+// commands with id = -1 (BOOTLOADER_FAIL) but ack = 0; the zero ack means the close
+// succeeded, so only a negative ack is treated as a real failure for these commands.
+auto UsbDevice::odin_close_fail_check(const std::vector<unsigned char>& rsp, const std::string& context) -> bool {
+    if (rsp.size() >= 8) {
+        int32_t id = 0;
+        int32_t code = 0;
+        std::memcpy(&id, rsp.data(), sizeof(id));
+        std::memcpy(&code, rsp.data() + 4, sizeof(code));
+        id = static_cast<int32_t>(le32toh(static_cast<uint32_t>(id)));
+        code = static_cast<int32_t>(le32toh(static_cast<uint32_t>(code)));
+        if (id == BOOTLOADER_FAIL && code == 0) {
+            log_verbose(context + ": bootloader answered with id=-1, ack=0; treating as success");
+            return true;
+        }
+    }
+    return odin_fail_check(rsp, context, false);
+}
+
 auto UsbDevice::odin_end_session() -> bool {
     std::vector<unsigned char> rsp;
     if (!odin_command(0x67, 0x00, nullptr, 0, rsp, USB_TIMEOUT_CONTROL)) return false;
-    return odin_fail_check(rsp, "EndSession", false);
+    return odin_close_fail_check(rsp, "EndSession");
 }
 
 auto UsbDevice::odin_reboot() -> bool {
     std::vector<unsigned char> rsp;
     if (!odin_command(0x67, 0x01, nullptr, 0, rsp, USB_TIMEOUT_CONTROL)) return false;
-    return odin_fail_check(rsp, "Reboot", false);
+    return odin_close_fail_check(rsp, "Reboot");
 }
 
 auto UsbDevice::odin_reboot_to_odin() -> bool {
     std::vector<unsigned char> rsp;
     if (!odin_command(0x67, 0x02, nullptr, 0, rsp, USB_TIMEOUT_CONTROL)) return false;
-    return odin_fail_check(rsp, "RebootToOdin", false);
+    return odin_close_fail_check(rsp, "RebootToOdin");
 }
 
 auto UsbDevice::odin_request_device_type(std::string& out_type) -> bool {
