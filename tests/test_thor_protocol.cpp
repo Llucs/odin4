@@ -180,7 +180,10 @@ void test_OdinProtocol_CdcAcmRequests() {
     EXPECT_EQ(kCdcDefaultLineCoding[0], 0x00);
     EXPECT_EQ(kCdcDefaultLineCoding[1], 0xC2);
     EXPECT_EQ(kCdcDefaultLineCoding[2], 0x01);
-    EXPECT_EQ(kCdcDefaultLineCoding[6], 0x08);
+    EXPECT_EQ(kCdcDefaultLineCoding[3], 0x00);
+    EXPECT_EQ(kCdcDefaultLineCoding[4], 0x00); // bCharFormat: 1 stop bit
+    EXPECT_EQ(kCdcDefaultLineCoding[5], 0x00); // bParityType: none
+    EXPECT_EQ(kCdcDefaultLineCoding[6], 0x08); // bDataBits: 8
 }
 REGISTER_TEST(OdinProtocol, CdcAcmRequests);
 

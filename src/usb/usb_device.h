@@ -88,7 +88,9 @@ class UsbDevice {
     void initialize_cdc_acm();
     void release_cdc_comm_interface();
     auto reset_and_reinit() -> bool;
-    auto odin_handshake_attempt(int read_timeout_ms) -> bool;
+
+    enum class HandshakeResult { Success, SilentTimeout, Failure };
+    auto odin_handshake_attempt(int read_timeout_ms) -> HandshakeResult;
 
     auto bulk_write_all(const void* data, size_t size, int timeout_ms) -> bool;
     auto bulk_read_once(void* data, size_t size, int* actual_length, int timeout_ms) -> bool;

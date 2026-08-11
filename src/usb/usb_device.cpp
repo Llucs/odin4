@@ -189,25 +189,53 @@ static auto find_best_interface(libusb_device* dev, const UsbSelectionCriteria& 
     return best;
 }
 
-static auto find_cdc_comm_interface(libusb_device* dev) -> int {
+// Resolves the CDC Communications interface paired with `data_interface_number`
+// by parsing the CDC Union Functional Descriptor (CDC 1.2 section 5.2.3.8),
+// a class-specific descriptor embedded in the Communications interface's
+// "extra" descriptor bytes: bLength, bDescriptorType (0x24, CS_INTERFACE),
+// bDescriptorSubtype (0x06, Union), bMasterInterface, bSlaveInterface0, ...
+// This correctly pairs control/data interfaces on composite devices that
+// expose more than one CDC function. Devices without a well-formed union
+// descriptor fall back to the first Communications-class interface found.
+static auto find_cdc_comm_interface(libusb_device* dev, int data_interface_number) -> int {
     libusb_config_descriptor* config = nullptr;
     if (libusb_get_active_config_descriptor(dev, &config) != 0 || (config == nullptr))
         return -1;
 
-    int comm_interface = -1;
-    for (int i = 0; i < config->bNumInterfaces && comm_interface < 0; ++i) {
+    int fallback_comm_interface = -1;
+
+    for (int i = 0; i < config->bNumInterfaces; ++i) {
         const libusb_interface* inter = &config->interface[i];
         for (int j = 0; j < inter->num_altsetting; ++j) {
             const libusb_interface_descriptor* id = &inter->altsetting[j];
-            if (id->bInterfaceClass == LIBUSB_CLASS_COMM) {
-                comm_interface = id->bInterfaceNumber;
-                break;
+            if (id->bInterfaceClass != LIBUSB_CLASS_COMM) continue;
+            if (fallback_comm_interface < 0) fallback_comm_interface = id->bInterfaceNumber;
+
+            const unsigned char* p = id->extra;
+            int remaining = id->extra_length;
+            while (remaining >= 2) {
+                const auto desc_len = static_cast<int>(p[0]);
+                const auto desc_type = p[1];
+                if (desc_len < 2 || desc_len > remaining) break;
+
+                if (desc_type == 0x24 && desc_len >= 5 && p[2] == 0x06) {
+                    const uint8_t master = p[3];
+                    for (int s = 4; s < desc_len; ++s) {
+                        if (p[s] == data_interface_number && master == id->bInterfaceNumber) {
+                            libusb_free_config_descriptor(config);
+                            return id->bInterfaceNumber;
+                        }
+                    }
+                }
+
+                p += desc_len;
+                remaining -= desc_len;
             }
         }
     }
 
     libusb_free_config_descriptor(config);
-    return comm_interface;
+    return fallback_comm_interface;
 }
 
 auto UsbDevice::open_device(const std::string& specific_path) -> bool {
@@ -303,7 +331,7 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
     interface_number = chosen_if.interface_number;
     alt_setting = chosen_if.alt_setting;
     kernel_driver_detached = false;
-    cdc_comm_interface = find_cdc_comm_interface(target);
+    cdc_comm_interface = find_cdc_comm_interface(target, chosen_if.interface_number);
     cdc_comm_claimed = false;
     cdc_comm_driver_detached = false;
 
@@ -497,10 +525,23 @@ auto UsbDevice::reset_and_reinit() -> bool {
         return false;
     }
 
-    // Interfaces claimed through this handle survive a successful reset, but the
-    // device-side CDC state (line coding, DTR) does not — re-open the port.
+    // libusb only says the system "attempts" to restore the previous configuration
+    // and claimed interfaces after a reset — it is not guaranteed, so re-claim the
+    // data interface explicitly and fail rather than proceed without ownership of
+    // it. The CDC communications interface is best-effort: initialize_cdc_acm()
+    // already falls back to device-recipient control transfers if it cannot be
+    // claimed, so a failure there is not fatal to the retry.
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    (void) libusb_claim_interface(handle, interface_number);
+
+    const int claim_err = libusb_claim_interface(handle, interface_number);
+    if (claim_err < 0) {
+        log_warn(std::format("Failed to re-claim USB data interface after reset (error: {})", claim_err));
+        return false;
+    }
+
+    // The CDC claim state may not have survived the reset either; make
+    // initialize_cdc_acm() re-evaluate and re-claim it rather than assume.
+    cdc_comm_claimed = false;
     initialize_cdc_acm();
     return true;
 }

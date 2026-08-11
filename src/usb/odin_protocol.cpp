@@ -252,7 +252,7 @@ auto UsbDevice::send_control(uint32_t control_type) -> bool {
     return true;
 }
 
-auto UsbDevice::odin_handshake_attempt(int read_timeout_ms) -> bool {
+auto UsbDevice::odin_handshake_attempt(int read_timeout_ms) -> HandshakeResult {
     const unsigned char preamble[4] = {'O', 'D', 'I', 'N'};
 
     int actual = 0;
@@ -260,7 +260,7 @@ auto UsbDevice::odin_handshake_attempt(int read_timeout_ms) -> bool {
                                    &actual, 2000);
     if (err != 0 || actual != sizeof(preamble)) {
         log_verbose(std::format("Handshake write failed (error: {}, sent: {})", err, actual));
-        return false;
+        return HandshakeResult::Failure;
     }
 
     unsigned char reply[512] = {0};
@@ -268,21 +268,30 @@ auto UsbDevice::odin_handshake_attempt(int read_timeout_ms) -> bool {
     err = libusb_bulk_transfer(handle, endpoint_in, reply, sizeof(reply), &actual, read_timeout_ms);
     if (err != 0) {
         log_verbose(std::format("Handshake read failed (error: {})", err));
-        return false;
+        // Only a timeout with zero bytes transferred is the "bootloader never
+        // answered" case a reset can fix; a timeout that delivered a partial
+        // reply, or any other libusb error, is a different failure and
+        // resetting the port would not help (and could make things worse).
+        if (err == LIBUSB_ERROR_TIMEOUT && actual == 0)
+            return HandshakeResult::SilentTimeout;
+        return HandshakeResult::Failure;
     }
 
     if (actual < 4)
-        return false;
+        return HandshakeResult::Failure;
 
     if (reply[0] != 'L' || reply[1] != 'O' || reply[2] != 'K' || reply[3] != 'E')
-        return false;
+        return HandshakeResult::Failure;
 
-    return true;
+    return HandshakeResult::Success;
 }
 
 auto UsbDevice::odin_handshake() -> bool {
-    if (odin_handshake_attempt(3000))
+    const HandshakeResult first = odin_handshake_attempt(3000);
+    if (first == HandshakeResult::Success)
         return true;
+    if (first != HandshakeResult::SilentTimeout)
+        return false;
 
     // Newer Download Mode bootloaders (observed on the MTK-based SM-A055M, PID 0x685D)
     // answer the ODIN/LOKE handshake exactly once per USB connection. Any prior traffic
@@ -295,7 +304,7 @@ auto UsbDevice::odin_handshake() -> bool {
     if (!reset_and_reinit())
         return false;
 
-    return odin_handshake_attempt(5000);
+    return odin_handshake_attempt(5000) == HandshakeResult::Success;
 }
 
 auto UsbDevice::odin_command(uint32_t cmd, uint32_t subcmd, const void* payload, size_t payload_size,
