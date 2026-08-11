@@ -742,7 +742,6 @@ auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
     uint64_t total_sent = 0;
     std::vector<unsigned char> part(static_cast<size_t>(odin_flash_packet_size), 0);
 
-    uint32_t expected_index = 0;
     for (uint32_t i = 0; i < sequences; ++i) {
         const bool last = (i + 1 == sequences);
         uint32_t real_size = last ? last_sequence : static_cast<uint32_t>(sequence_bytes);
@@ -758,6 +757,9 @@ auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
 
         if (!odin_request_sequence_flash(aligned_size)) return false;
 
+        // The device acks each file part with its index within the current
+        // sequence, restarting at 0 after every RequestSequenceFlash.
+        uint32_t expected_index = 0;
         const uint32_t parts = aligned_size / static_cast<uint32_t>(odin_flash_packet_size);
         for (uint32_t j = 0; j < parts; ++j) {
             std::fill(part.begin(), part.end(), 0);
@@ -933,13 +935,14 @@ auto UsbDevice::flash_partition_stream_compressed(std::istream& stream, uint64_t
     std::vector<unsigned char> buf(static_cast<size_t>(odin_flash_packet_size), 0);
 
     uint64_t prev_decomp = 0;
-    uint32_t expected_index = 0;
     for (uint32_t i = 0; i < sequences; ++i) {
         const bool last = (i + 1 == sequences);
         const uint32_t seq_size = last ? static_cast<uint32_t>(last_seq64) : static_cast<uint32_t>(sequence_bytes);
 
         if (!odin_request_sequence_flash_compressed(seq_size)) return false;
 
+        // Per-sequence part index; the device restarts its counter each sequence.
+        uint32_t expected_index = 0;
         uint64_t remaining = seq_size;
         while (remaining > 0) {
             const size_t to_read = static_cast<size_t>(std::min<uint64_t>(remaining, buf.size()));
