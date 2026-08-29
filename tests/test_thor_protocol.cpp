@@ -169,6 +169,24 @@ void test_OdinProtocol_HandshakeStringSize() {
 }
 REGISTER_TEST(OdinProtocol, HandshakeStringSize);
 
+void test_OdinProtocol_CdcAcmRequests() {
+    // USB CDC PSTN 1.2 section 6.3: these open the ACM "port" so newer CDC-class
+    // Download Mode bootloaders (e.g. SM-A055M) start servicing bulk transfers.
+    EXPECT_EQ(kCdcReqSetLineCoding, 0x20);
+    EXPECT_EQ(kCdcReqSetControlLineState, 0x22);
+    EXPECT_EQ(static_cast<uint16_t>(kCdcControlLineDtr | kCdcControlLineRts), 0x0003);
+    EXPECT_EQ(sizeof(kCdcDefaultLineCoding), 7u);
+    // dwDTERate little-endian 115200, 1 stop bit, no parity, 8 data bits
+    EXPECT_EQ(kCdcDefaultLineCoding[0], 0x00);
+    EXPECT_EQ(kCdcDefaultLineCoding[1], 0xC2);
+    EXPECT_EQ(kCdcDefaultLineCoding[2], 0x01);
+    EXPECT_EQ(kCdcDefaultLineCoding[3], 0x00);
+    EXPECT_EQ(kCdcDefaultLineCoding[4], 0x00); // bCharFormat: 1 stop bit
+    EXPECT_EQ(kCdcDefaultLineCoding[5], 0x00); // bParityType: none
+    EXPECT_EQ(kCdcDefaultLineCoding[6], 0x08); // bDataBits: 8
+}
+REGISTER_TEST(OdinProtocol, CdcAcmRequests);
+
 void test_OdinProtocol_MakeRequest_WithInts() {
     std::vector<int32_t> ints = {5, 10};
     OdinRequestBox rq = make_request(OdinCommandType::RQT_INIT, OdinCommandParam::RQT_INIT_PACKETSIZE, ints);

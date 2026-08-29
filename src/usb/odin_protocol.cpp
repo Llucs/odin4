@@ -252,16 +252,59 @@ auto UsbDevice::send_control(uint32_t control_type) -> bool {
     return true;
 }
 
-auto UsbDevice::odin_handshake() -> bool {
-    const char preamble[4] = {'O', 'D', 'I', 'N'};
-    if (!bulk_write_all(preamble, sizeof(preamble), USB_TIMEOUT_CONTROL)) return false;
+auto UsbDevice::odin_handshake_attempt(int read_timeout_ms) -> HandshakeResult {
+    const unsigned char preamble[4] = {'O', 'D', 'I', 'N'};
 
+    // Route through bulk_write_all() for uniform partial-write/retry behavior.
+    if (!bulk_write_all(preamble, sizeof(preamble), 2000)) {
+        log_verbose("Handshake write failed");
+        return HandshakeResult::Failure;
+    }
+
+    // The reply path uses raw libusb since only actual == 0 matters for the
+    // timeout classification (silent vs partial).
     unsigned char reply[512] = {0};
     int actual = 0;
-    if (!bulk_read_once(reply, sizeof(reply), &actual, USB_TIMEOUT_CONTROL)) return false;
-    if (actual < 4) return false;
-    if (reply[0] != 'L' || reply[1] != 'O' || reply[2] != 'K' || reply[3] != 'E') return false;
-    return true;
+    int err = libusb_bulk_transfer(handle, endpoint_in, reply, sizeof(reply), &actual, read_timeout_ms);
+    if (err != 0) {
+        log_verbose(std::format("Handshake read failed (error: {})", err));
+        // Only a timeout with zero bytes transferred is the "bootloader never
+        // answered" case a reset can fix; a timeout that delivered a partial
+        // reply, or any other libusb error, is a different failure and
+        // resetting the port would not help (and could make things worse).
+        if (err == LIBUSB_ERROR_TIMEOUT && actual == 0)
+            return HandshakeResult::SilentTimeout;
+        return HandshakeResult::Failure;
+    }
+
+    if (actual < 4)
+        return HandshakeResult::Failure;
+
+    if (reply[0] != 'L' || reply[1] != 'O' || reply[2] != 'K' || reply[3] != 'E')
+        return HandshakeResult::Failure;
+
+    return HandshakeResult::Success;
+}
+
+auto UsbDevice::odin_handshake() -> bool {
+    const HandshakeResult first = odin_handshake_attempt(3000);
+    if (first == HandshakeResult::Success)
+        return true;
+    if (first != HandshakeResult::SilentTimeout)
+        return false;
+
+    // Newer Download Mode bootloaders (observed on the MTK-based SM-A055M, PID 0x685D)
+    // answer the ODIN/LOKE handshake exactly once per USB connection. Any prior traffic
+    // on the CDC data pipe — an earlier failed or completed run, or a host service
+    // probing the modem port — leaves the bootloader silently ignoring bulk transfers.
+    // A USB port reset restores the handshake state, so reset and try again before
+    // giving up. The reset is deliberately not done up front: a small number of older
+    // devices are known to stop handshaking after a reset (see Heimdall PR #478).
+    log_info("No handshake response; resetting USB device and retrying");
+    if (!reset_and_reinit())
+        return false;
+
+    return odin_handshake_attempt(5000) == HandshakeResult::Success;
 }
 
 auto UsbDevice::odin_command(uint32_t cmd, uint32_t subcmd, const void* payload, size_t payload_size,
@@ -412,22 +455,41 @@ auto UsbDevice::odin_begin_session() -> bool {
     return true;
 }
 
+// Some newer bootloaders (observed on the MTK-based SM-A055M) answer RQT_CLOSE
+// commands with id = -1 (BOOTLOADER_FAIL) but ack = 0; the zero ack means the close
+// succeeded, so only a negative ack is treated as a real failure for these commands.
+auto UsbDevice::odin_close_fail_check(const std::vector<unsigned char>& rsp, const std::string& context) -> bool {
+    if (rsp.size() >= 8) {
+        int32_t id = 0;
+        int32_t code = 0;
+        std::memcpy(&id, rsp.data(), sizeof(id));
+        std::memcpy(&code, rsp.data() + 4, sizeof(code));
+        id = static_cast<int32_t>(le32toh(static_cast<uint32_t>(id)));
+        code = static_cast<int32_t>(le32toh(static_cast<uint32_t>(code)));
+        if (id == BOOTLOADER_FAIL && code == 0) {
+            log_verbose(context + ": bootloader answered with id=-1, ack=0; treating as success");
+            return true;
+        }
+    }
+    return odin_fail_check(rsp, context, false);
+}
+
 auto UsbDevice::odin_end_session() -> bool {
     std::vector<unsigned char> rsp;
     if (!odin_command(0x67, 0x00, nullptr, 0, rsp, USB_TIMEOUT_CONTROL)) return false;
-    return odin_fail_check(rsp, "EndSession", false);
+    return odin_close_fail_check(rsp, "EndSession");
 }
 
 auto UsbDevice::odin_reboot() -> bool {
     std::vector<unsigned char> rsp;
     if (!odin_command(0x67, 0x01, nullptr, 0, rsp, USB_TIMEOUT_CONTROL)) return false;
-    return odin_fail_check(rsp, "Reboot", false);
+    return odin_close_fail_check(rsp, "Reboot");
 }
 
 auto UsbDevice::odin_reboot_to_odin() -> bool {
     std::vector<unsigned char> rsp;
     if (!odin_command(0x67, 0x02, nullptr, 0, rsp, USB_TIMEOUT_CONTROL)) return false;
-    return odin_fail_check(rsp, "RebootToOdin", false);
+    return odin_close_fail_check(rsp, "RebootToOdin");
 }
 
 auto UsbDevice::odin_request_device_type(std::string& out_type) -> bool {
@@ -686,7 +748,6 @@ auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
     uint64_t total_sent = 0;
     std::vector<unsigned char> part(static_cast<size_t>(odin_flash_packet_size), 0);
 
-    uint32_t expected_index = 0;
     for (uint32_t i = 0; i < sequences; ++i) {
         const bool last = (i + 1 == sequences);
         uint32_t real_size = last ? last_sequence : static_cast<uint32_t>(sequence_bytes);
@@ -702,6 +763,9 @@ auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
 
         if (!odin_request_sequence_flash(aligned_size)) return false;
 
+        // The device acks each file part with its index within the current
+        // sequence, restarting at 0 after every RequestSequenceFlash.
+        uint32_t expected_index = 0;
         const uint32_t parts = aligned_size / static_cast<uint32_t>(odin_flash_packet_size);
         for (uint32_t j = 0; j < parts; ++j) {
             std::fill(part.begin(), part.end(), 0);
@@ -877,13 +941,14 @@ auto UsbDevice::flash_partition_stream_compressed(std::istream& stream, uint64_t
     std::vector<unsigned char> buf(static_cast<size_t>(odin_flash_packet_size), 0);
 
     uint64_t prev_decomp = 0;
-    uint32_t expected_index = 0;
     for (uint32_t i = 0; i < sequences; ++i) {
         const bool last = (i + 1 == sequences);
         const uint32_t seq_size = last ? static_cast<uint32_t>(last_seq64) : static_cast<uint32_t>(sequence_bytes);
 
         if (!odin_request_sequence_flash_compressed(seq_size)) return false;
 
+        // Per-sequence part index; the device restarts its counter each sequence.
+        uint32_t expected_index = 0;
         uint64_t remaining = seq_size;
         while (remaining > 0) {
             const size_t to_read = static_cast<size_t>(std::min<uint64_t>(remaining, buf.size()));

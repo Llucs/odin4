@@ -39,6 +39,10 @@ class UsbDevice {
     int alt_setting = -1;
     bool kernel_driver_detached = false;
 
+    int cdc_comm_interface = -1;
+    bool cdc_comm_claimed = false;
+    bool cdc_comm_driver_detached = false;
+
     size_t max_chunk_bytes = 1048576;
     uint16_t endpoint_out_max_packet = 512;
 
@@ -79,6 +83,14 @@ class UsbDevice {
                       std::vector<unsigned char>& rsp, int timeout_ms) -> bool;
     static auto odin_fail_check(const std::vector<unsigned char>& rsp, const std::string& context,
                                 bool allow_progress, int32_t expected_id = -1) -> bool;
+    static auto odin_close_fail_check(const std::vector<unsigned char>& rsp, const std::string& context) -> bool;
+
+    void initialize_cdc_acm();
+    void release_cdc_comm_interface();
+    auto reset_and_reinit() -> bool;
+
+    enum class HandshakeResult { Success, SilentTimeout, Failure };
+    auto odin_handshake_attempt(int read_timeout_ms) -> HandshakeResult;
 
     auto bulk_write_all(const void* data, size_t size, int timeout_ms) -> bool;
     auto bulk_read_once(void* data, size_t size, int* actual_length, int timeout_ms) -> bool;
