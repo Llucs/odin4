@@ -387,6 +387,23 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
         return false;
     }
 
+    if (alt_setting > 0) {
+        const int alt_err = libusb_set_interface_alt_setting(handle, interface_number, alt_setting);
+        if (alt_err < 0) {
+            last_open_libusb_err = alt_err;
+            last_open_error = UsbOpenError::Other;
+            log_error("Failed to activate alternate setting", alt_err);
+            libusb_release_interface(handle, interface_number);
+            if (kernel_driver_detached) {
+                (void) libusb_attach_kernel_driver(handle, interface_number);
+                kernel_driver_detached = false;
+            }
+            libusb_close(handle);
+            handle = nullptr;
+            return false;
+        }
+    }
+
     initialize_cdc_acm();
 
     std::ostringstream oss;
@@ -537,6 +554,14 @@ auto UsbDevice::reset_and_reinit() -> bool {
     if (claim_err < 0) {
         log_warn(std::format("Failed to re-claim USB data interface after reset (error: {})", claim_err));
         return false;
+    }
+
+    if (alt_setting > 0) {
+        const int alt_err = libusb_set_interface_alt_setting(handle, interface_number, alt_setting);
+        if (alt_err < 0) {
+            log_warn(std::format("Failed to restore alternate setting after reset (error: {})", alt_err));
+            return false;
+        }
     }
 
     // The CDC claim state may not have survived the reset either; make
