@@ -548,12 +548,29 @@ auto UsbDevice::reset_and_reinit() -> bool {
     // it. The CDC communications interface is best-effort: initialize_cdc_acm()
     // already falls back to device-recipient control transfers if it cannot be
     // claimed, so a failure there is not fatal to the retry.
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
+    //
+    // On Linux, libusb_reset_device()'s internal reconnect can re-claim previously
+    // claimed interfaces automatically, so our explicit claim may return
+    // LIBUSB_ERROR_INVALID_PARAM (already claimed by us) or LIBUSB_ERROR_BUSY
+    // (kernel re-bound cdc_acm). In those cases the interface is usable; only
+    // other errors are fatal.
     const int claim_err = libusb_claim_interface(handle, interface_number);
-    if (claim_err < 0) {
+    if (claim_err < 0 && claim_err != LIBUSB_ERROR_INVALID_PARAM && claim_err != LIBUSB_ERROR_BUSY) {
         log_warn(std::format("Failed to re-claim USB data interface after reset (error: {})", claim_err));
         return false;
+    }
+    if (claim_err == LIBUSB_ERROR_BUSY) {
+        // Kernel re-bound; try detaching it
+        if (libusb_detach_kernel_driver(handle, interface_number) == 0) {
+            kernel_driver_detached = true;
+            if (libusb_claim_interface(handle, interface_number) < 0) {
+                log_warn("Failed to claim interface after detaching kernel driver post-reset");
+                return false;
+            }
+        } else {
+            log_warn("Interface busy after reset and kernel driver detach failed");
+            return false;
+        }
     }
 
     if (alt_setting > 0) {

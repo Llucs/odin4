@@ -255,17 +255,17 @@ auto UsbDevice::send_control(uint32_t control_type) -> bool {
 auto UsbDevice::odin_handshake_attempt(int read_timeout_ms) -> HandshakeResult {
     const unsigned char preamble[4] = {'O', 'D', 'I', 'N'};
 
-    int actual = 0;
-    int err = libusb_bulk_transfer(handle, endpoint_out, const_cast<unsigned char*>(preamble), sizeof(preamble),
-                                   &actual, 2000);
-    if (err != 0 || actual != sizeof(preamble)) {
-        log_verbose(std::format("Handshake write failed (error: {}, sent: {})", err, actual));
+    // Route through bulk_write_all() for uniform partial-write/retry behavior.
+    if (!bulk_write_all(preamble, sizeof(preamble), 2000)) {
+        log_verbose("Handshake write failed");
         return HandshakeResult::Failure;
     }
 
+    // The reply path uses raw libusb since only actual == 0 matters for the
+    // timeout classification (silent vs partial).
     unsigned char reply[512] = {0};
-    actual = 0;
-    err = libusb_bulk_transfer(handle, endpoint_in, reply, sizeof(reply), &actual, read_timeout_ms);
+    int actual = 0;
+    int err = libusb_bulk_transfer(handle, endpoint_in, reply, sizeof(reply), &actual, read_timeout_ms);
     if (err != 0) {
         log_verbose(std::format("Handshake read failed (error: {})", err));
         // Only a timeout with zero bytes transferred is the "bootloader never
