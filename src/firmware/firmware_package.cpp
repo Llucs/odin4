@@ -851,6 +851,22 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
         const std::string base_name_sanitized = to_lower_copy(sanitize_filename(basename));
         const std::string filename_lower = to_lower_copy(filename);
 
+        // Samsung firmware archives may contain package metadata alongside
+        // partition images. FOTA metadata and a root-level PIT describe the
+        // package/layout; neither is a flashable partition payload unless an
+        // explicit repartition flow is requested (which this tool does not
+        // expose). Keep every other unknown archive entry rejected by default.
+        const bool is_root_pit = filename.find('/') == std::string::npos &&
+                                 ends_with_case_insensitive(filename_lower, ".pit");
+        if (filename_lower == "meta-data/fota.zip" || is_root_pit) {
+            log_verbose("Skipping Samsung package metadata entry: " + filename);
+            ec = skip_entry_data(data_size);
+            if (ec != ExitCode::Success) {
+                return ec;
+            }
+            continue;
+        }
+
         const PitEntry* pit_entry = nullptr;
         std::string partition_name;
 
