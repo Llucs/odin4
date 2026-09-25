@@ -22,24 +22,26 @@
 
 namespace tar_md5 {
 
+/// Returns true for an ASCII hex digit (0-9, a-f, A-F).
 inline auto is_hex_char(unsigned char c) -> bool {
     return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 }
 
+/// Position of a .tar.md5 trailer within the tail buffer passed to locate_trailer().
 struct TrailerPos {
-    // Offset of the 32 hex digits within the tail buffer, or -1 if none was found.
+    /// Offset of the 32 hex digits within the tail buffer, or -1 if none was found.
     int64_t md5_pos = -1;
-    // Offset within the tail buffer where the trailer line starts (== end of TAR content).
+    /// Offset within the tail buffer where the trailer line starts (== end of TAR content).
     int64_t trailer_start = -1;
 };
 
-// Locates the MD5 trailer of a Samsung .tar.md5 file ("<md5>  <name>\n" appended after the TAR).
-// `tail` holds the last `tail_len` bytes of the file; `tail_offset` is the absolute file offset of tail[0].
-//
-// A TAR archive always ends on a 512-byte boundary, so a block-aligned MD5 is the trailer start as-is.
-// Scanning back for '\n' from there would walk into binary TAR payload (e.g. lz4 images contain 0x0A)
-// and truncate the content range. The newline scan is kept only for the non-aligned fallback, and even
-// then it never crosses the preceding 512-byte boundary, since the TAR content cannot end before it.
+/// Locates the MD5 trailer of a Samsung .tar.md5 file ("<md5>  <name>\n" appended after the TAR).
+/// `tail` holds the last `tail_len` bytes of the file; `tail_offset` is the absolute file offset of tail[0].
+///
+/// A TAR archive always ends on a 512-byte boundary, so a block-aligned MD5 is the trailer start as-is.
+/// Scanning back for '\n' from there would walk into binary TAR payload (e.g. lz4 images contain 0x0A)
+/// and truncate the content range. The newline scan is kept only for the non-aligned fallback, and even
+/// then it never crosses the preceding 512-byte boundary, since the TAR content cannot end before it.
 inline auto locate_trailer(const char* tail, size_t tail_len, uint64_t tail_offset) -> TrailerPos {
     auto hex_at = [&](int64_t i) { return is_hex_char(static_cast<unsigned char>(tail[static_cast<size_t>(i)])); };
 

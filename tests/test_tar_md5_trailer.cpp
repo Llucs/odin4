@@ -25,25 +25,25 @@ namespace {
 
 const std::string kMd5 = "2eeb1bd4db54e49dae48120c359db629";
 
-// Builds "<content><md5>  <name>\n", mirroring a Samsung .tar.md5 file.
-auto make_file(const std::vector<char>& content) -> std::vector<char> {
+/// Builds "<content><md5>  <name>\n", mirroring a Samsung .tar.md5 file.
+auto make_file(const std::vector<char>& content, const std::string& md5 = kMd5) -> std::vector<char> {
     std::vector<char> file = content;
-    const std::string trailer = kMd5 + "  BL_TEST.tar\n";
+    const std::string trailer = md5 + "  BL_TEST.tar\n";
     file.insert(file.end(), trailer.begin(), trailer.end());
     return file;
 }
 
-// Returns the absolute content end computed from the last `max_tail` bytes, as detect_tar_md5_info() does.
+/// Returns the absolute content end computed from the last `max_tail` bytes, as detect_tar_md5_info() does.
 auto content_end_of(const std::vector<char>& file, size_t max_tail = 65536) -> int64_t {
     const size_t tail_len = std::min(file.size(), max_tail);
     const uint64_t tail_offset = file.size() - tail_len;
     const auto pos = tar_md5::locate_trailer(file.data() + tail_offset, tail_len, tail_offset);
     if (pos.md5_pos < 0)
-        return -1;
+        return -1; // no trailer found
     return static_cast<int64_t>(tail_offset) + pos.trailer_start;
 }
 
-// Binary TAR-like payload that contains 0x0A bytes, as lz4 images do.
+/// Binary TAR-like payload that contains 0x0A bytes, as lz4 images do.
 auto binary_payload(size_t size) -> std::vector<char> {
     std::vector<char> v(size);
     uint32_t x = 0x12345678;
@@ -59,25 +59,28 @@ auto binary_payload(size_t size) -> std::vector<char> {
 
 } // namespace
 
-// Regression for #279: newlines in the payload must not pull content_end into the TAR data.
+/// Regression for #279: newlines in the payload must not pull content_end into the TAR data.
 void test_TarMd5Trailer_aligned_payload_with_newlines() {
     const auto content = binary_payload(512 * 300);
     const auto file = make_file(content);
     EXPECT_EQ(content_end_of(file), static_cast<int64_t>(content.size()));
 }
 
+/// Same as above when only the last 4 KiB of a larger file is scanned (tail_offset != 0).
 void test_TarMd5Trailer_aligned_tail_offset_nonzero() {
     const auto content = binary_payload(512 * 1024);
     const auto file = make_file(content);
     EXPECT_EQ(content_end_of(file, 4096), static_cast<int64_t>(content.size()));
 }
 
+/// Zero-filled payload (no 0x0A at all): content_end is the TAR size.
 void test_TarMd5Trailer_aligned_payload_without_newlines() {
     std::vector<char> content(512 * 4, '\0');
     const auto file = make_file(content);
     EXPECT_EQ(content_end_of(file), static_cast<int64_t>(content.size()));
 }
 
+/// md5_pos points at the 32 hex digits of the trailer.
 void test_TarMd5Trailer_md5_position() {
     const auto content = binary_payload(512 * 8);
     const auto file = make_file(content);
@@ -86,7 +89,7 @@ void test_TarMd5Trailer_md5_position() {
     EXPECT_TRUE(std::string(file.data() + pos.md5_pos, 32) == kMd5);
 }
 
-// Non-aligned fallback: a newline right before the MD5 still marks the trailer start.
+/// Non-aligned fallback: a newline right before the MD5 still marks the trailer start.
 void test_TarMd5Trailer_unaligned_newline_before_md5() {
     std::vector<char> content(512 * 4 + 100, '\0');
     content.back() = '\n';
@@ -94,7 +97,7 @@ void test_TarMd5Trailer_unaligned_newline_before_md5() {
     EXPECT_EQ(content_end_of(file), static_cast<int64_t>(content.size()));
 }
 
-// Non-aligned fallback: the newline scan must not cross the preceding 512-byte boundary.
+/// Non-aligned fallback: the newline scan must not cross the preceding 512-byte boundary.
 void test_TarMd5Trailer_unaligned_scan_bounded_by_block() {
     auto content = binary_payload(512 * 4 + 100);
     std::fill(content.end() - 100, content.end(), 'x');
@@ -103,15 +106,32 @@ void test_TarMd5Trailer_unaligned_scan_bounded_by_block() {
     EXPECT_EQ(content_end_of(file), static_cast<int64_t>(content.size()));
 }
 
+/// No 32-hex run in the tail: md5_pos is -1.
 void test_TarMd5Trailer_no_md5() {
     std::vector<char> file(2048, 'z');
     EXPECT_EQ(content_end_of(file), -1);
 }
 
+/// Tail shorter than an MD5: nothing is read past the buffer, md5_pos is -1.
 void test_TarMd5Trailer_tail_too_short() {
     const std::string s = "abc";
     const auto pos = tar_md5::locate_trailer(s.data(), s.size(), 0);
     EXPECT_EQ(pos.md5_pos, -1);
+}
+
+/// Upper-case hex digits are accepted as a trailer.
+void test_TarMd5Trailer_uppercase_md5() {
+    const auto content = binary_payload(512 * 8);
+    const auto file = make_file(content, "2EEB1BD4DB54E49DAE48120C359DB629");
+    EXPECT_EQ(content_end_of(file), static_cast<int64_t>(content.size()));
+}
+
+/// File holding only the trailer: MD5 found at offset 0, content_end is 0 (rejected later by verify_tar_md5()).
+void test_TarMd5Trailer_trailer_only() {
+    const auto file = make_file({});
+    const auto pos = tar_md5::locate_trailer(file.data(), file.size(), 0);
+    EXPECT_EQ(pos.md5_pos, 0);
+    EXPECT_EQ(pos.trailer_start, 0);
 }
 
 REGISTER_TEST(TarMd5Trailer, aligned_payload_with_newlines);
@@ -122,3 +142,5 @@ REGISTER_TEST(TarMd5Trailer, unaligned_newline_before_md5);
 REGISTER_TEST(TarMd5Trailer, unaligned_scan_bounded_by_block);
 REGISTER_TEST(TarMd5Trailer, no_md5);
 REGISTER_TEST(TarMd5Trailer, tail_too_short);
+REGISTER_TEST(TarMd5Trailer, uppercase_md5);
+REGISTER_TEST(TarMd5Trailer, trailer_only);

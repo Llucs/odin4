@@ -118,6 +118,8 @@ auto read_exact(std::ifstream& file, void* buf, size_t len) -> bool {
     return static_cast<size_t>(file.gcount()) == len;
 }
 
+/// Reads the MD5 trailer of a .tar.md5 file into `info`: the expected hash and `content_end`, the size of
+/// the TAR data the hash covers. Files without the .tar.md5 suffix get `content_end = file size`, no MD5.
 auto detect_tar_md5_info(const std::string& file_path, TarMd5Info& info) -> ExitCode {
     info = TarMd5Info{};
 
