@@ -15,6 +15,7 @@
  */
 
 #include "firmware/firmware_package.h"
+#include "firmware/tar_md5_trailer.h"
 #include "core/logger.h"
 
 #include <iostream>
@@ -45,9 +46,7 @@ struct TarMd5Info {
     std::string expected_md5;
 };
 
-auto is_hex_char(unsigned char c) -> bool {
-    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-}
+using tar_md5::is_hex_char;
 
 auto is_hex32(const std::string& s) -> bool {
     return s.size() == 32 && std::ranges::all_of(s, [](unsigned char c) { return is_hex_char(c); });
@@ -156,36 +155,8 @@ auto detect_tar_md5_info(const std::string& file_path, TarMd5Info& info) -> Exit
         return ExitCode::Firmware;
     }
 
-    auto find_md5_in_tail = [&](bool require_block_aligned) -> int64_t {
-        for (int64_t pos = static_cast<int64_t>(tail.size()) - 32; pos >= 0; --pos) {
-            if (require_block_aligned) {
-                uint64_t abs_pos = (file_size - tail_len) + static_cast<uint64_t>(pos);
-                if (abs_pos % 512 != 0) continue;
-            }
-
-            bool ok = true;
-            for (int i = 0; i < 32; ++i) {
-                if (!is_hex_char(static_cast<unsigned char>(tail[static_cast<size_t>(pos + i)]))) {
-                    ok = false;
-                    break;
-                }
-            }
-            if (!ok) continue;
-
-            const bool left_ok = (pos == 0) || !is_hex_char(static_cast<unsigned char>(tail[static_cast<size_t>(pos - 1)]));
-            const bool right_ok = (static_cast<size_t>(pos + 32) >= tail.size()) ||
-                                  !is_hex_char(static_cast<unsigned char>(tail[static_cast<size_t>(pos + 32)]));
-            if (!left_ok || !right_ok) continue;
-
-            return pos;
-        }
-        return -1;
-    };
-
-    int64_t best_pos = find_md5_in_tail(true);
-    if (best_pos < 0) {
-        best_pos = find_md5_in_tail(false);
-    }
+    const tar_md5::TrailerPos trailer = tar_md5::locate_trailer(tail.data(), tail.size(), file_size - tail_len);
+    const int64_t best_pos = trailer.md5_pos;
 
     if (best_pos < 0) {
         std::string last32(tail.end() - 32, tail.end());
@@ -205,14 +176,7 @@ auto detect_tar_md5_info(const std::string& file_path, TarMd5Info& info) -> Exit
         return ExitCode::Firmware;
     }
 
-    int64_t line_start = best_pos;
-    for (int64_t p = best_pos - 1; p >= 0; --p) {
-        if (tail[static_cast<size_t>(p)] == '\n') {
-            line_start = p + 1;
-            break;
-        }
-    }
-
+    const int64_t line_start = trailer.trailer_start;
     const uint64_t trailer_start = (file_size - tail_len) + static_cast<uint64_t>(line_start);
     if (trailer_start >= file_size) {
         log_error(std::format("Invalid MD5 trailer position in: {}", file_path));
