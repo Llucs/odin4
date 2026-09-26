@@ -113,6 +113,7 @@ if(ODIN4_BUILD_TESTS)
         tests/test_thor_protocol.cpp
         tests/test_odin_types.cpp
         tests/test_logger.cpp
+        tests/test_tar_md5_trailer.cpp
     )
     
     add_executable(odin4_tests ${ODIN4_TEST_SOURCES})
