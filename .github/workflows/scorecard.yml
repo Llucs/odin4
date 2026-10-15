@@ -30,7 +30,7 @@ jobs:
           persist-credentials: false
 
       - name: Run OpenSSF Scorecard
-        uses: ossf/scorecard-action@e8e61e86ea0a152be84d03729c02a7300065c17d # v2.4.3
+        uses: ossf/scorecard-action@365df9f035d4b5177b9cd57330f8c3dfa6134420 # v2.4.3
         with:
           results_file: results.sarif
           results_format: sarif
