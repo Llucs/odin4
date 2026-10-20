@@ -14,6 +14,9 @@
 #define USB_RETRY_COUNT 5
 #define USB_TIMEOUT_BULK 120000
 #define USB_TIMEOUT_CONTROL 10000
+// Command boxes are fixed-size and are always an exact multiple of the endpoint packet size,
+// so appending a ZLP only makes sense if the device acknowledges it quickly.
+#define USB_TIMEOUT_ZLP 500
 
 static constexpr std::array<uint16_t, 6> SAMSUNG_DOWNLOAD_PIDS{{0x6601, 0x685D, 0x68C3, 0x68EF, 0x4EEE, 0x4EEF}};
 
