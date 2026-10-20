@@ -432,7 +432,9 @@ auto UsbDevice::odin_reboot_to_odin() -> bool {
 
 auto UsbDevice::odin_request_device_type(std::string& out_type) -> bool {
     std::vector<unsigned char> rsp;
-    if (!odin_command(0x64, 0x01, nullptr, 0, rsp, USB_TIMEOUT_CONTROL)) return false;
+    // Best-effort metadata query. Not every bootloader answers it (it shares command 0x64/0x01
+    // with ResetFlashCount), so use a short timeout to avoid stalling the session.
+    if (!odin_command(0x64, 0x01, nullptr, 0, rsp, USB_TIMEOUT_ZLP)) return false;
     if (rsp.size() < 12) return false;
 
     int32_t id = 0;

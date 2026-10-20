@@ -91,8 +91,12 @@ auto UsbDevice::bulk_write_all(const void* data, size_t size, int timeout_ms) ->
             if (actual_length <= 0) break;
         }
         if (offset == size) {
+            // A ZLP terminates transfers whose size is a multiple of the endpoint packet size.
+            // Command boxes are always such a multiple, and many bootloaders do not acknowledge
+            // the ZLP, so use a short timeout instead of stalling for the full command timeout.
             if (odin_supports_zlp && endpoint_out_max_packet != 0 && (size % endpoint_out_max_packet) == 0) {
-                if (!send_zlp(timeout_ms)) odin_supports_zlp = false;
+                const int zlp_timeout = std::min(timeout_ms, USB_TIMEOUT_ZLP);
+                if (!send_zlp(zlp_timeout)) odin_supports_zlp = false;
             }
             return true;
         }
