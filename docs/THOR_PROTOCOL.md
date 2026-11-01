@@ -241,7 +241,7 @@ Before the end-sequence command, the host sends an empty bulk transfer (USB ZLP)
 
 ### 6.5. Large Partitions
 
-Partitions named `SYSTEM`, `USERDATA`, or `SUPER` have their real sizes rounded up to the next 512-byte boundary for the end-sequence reporting.
+Partitions named `SYSTEM`, `USERDATA`, or `SUPER` have their real sizes rounded up to the next 512-byte boundary for the end-sequence reporting on compressed transfers. Uncompressed transfers report the exact size, because padding it fails on sparse images (Write, code -4).
 
 ### 6.6. Compressed Transfers
 
