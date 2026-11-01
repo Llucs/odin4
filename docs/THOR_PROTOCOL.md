@@ -82,13 +82,13 @@ Negotiates protocol version and detects device capabilities.
 *   **Version 0 or 1**: 30,000 ms timeout, 131,072 bytes (128 KiB) packet size, maximum 240 packets per sequence.
 *   **Version >= 2**: 120,000 ms timeout, 1,048,576 bytes (1 MiB) packet size, maximum 30 packets per sequence. Additionally, the host sends `0x64`, command `0x05`, to set the file part size.
 
-#### 4.1.2. Device Type Query (Command `0x01`)
+#### 4.1.2. Reset Flash Count (Command `0x01`)
 
-Requests the device model identifier.
+Resets the device flash counter. Sent after each flashed file, never before BeginSession (Heimdall and Thor don't either).
 
 **Request:** `id` = `0x64`, `data` = `0x01`
 
-**Response:** `ack` contains an integer model code. The host formats it as `"SM-<code>"`.
+**Response:** 8 bytes, checked for failure only.
 
 #### 4.1.3. Total Size Configuration (Command `0x02`)
 
@@ -289,7 +289,7 @@ USB bulk transfers include up to 5 retries with exponential backoff (100 ms init
 
 ## 7. Device Information
 
-The device type is queried via `0x64`, command `0x01`. The response code is formatted as `"SM-<code>"` for display purposes.
+The protocol has no device type query that odin4 uses. Compatibility comes from matching archive entries against the PIT.
 
 ## 8. Error Handling
 

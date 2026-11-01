@@ -440,27 +440,6 @@ auto UsbDevice::odin_reboot_to_odin() -> bool {
     return odin_fail_check(rsp, "RebootToOdin", false);
 }
 
-auto UsbDevice::odin_request_device_type(std::string& out_type) -> bool {
-    std::vector<unsigned char> rsp;
-    if (!odin_command(0x64, 0x01, nullptr, 0, rsp, USB_TIMEOUT_CONTROL)) return false;
-    if (rsp.size() < 12) return false;
-
-    int32_t id = 0;
-    std::memcpy(&id, rsp.data(), sizeof(id));
-    id = static_cast<int32_t>(le32toh(static_cast<uint32_t>(id)));
-    if (id == BOOTLOADER_FAIL) {
-        log_error("DeviceType query failed with BOOTLOADER_FAIL");
-        return false;
-    }
-
-    uint32_t type_raw = 0;
-    std::memcpy(&type_raw, rsp.data() + 8, sizeof(type_raw));
-    type_raw = le32toh(type_raw);
-
-    out_type = "SM-" + std::to_string(type_raw);
-    return true;
-}
-
 auto UsbDevice::odin_set_total_bytes(uint64_t total_bytes) -> bool {
     std::vector<unsigned char> rsp;
     uint64_t le_total = h_to_le64(total_bytes);

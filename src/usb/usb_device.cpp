@@ -422,15 +422,6 @@ auto UsbDevice::handshake() -> bool {
     return odin_handshake();
 }
 
-auto UsbDevice::request_device_type() -> bool {
-    if (!odin_request_device_type(device_type_str)) {
-        log_warn("Device type query failed; continuing without type info.");
-        device_type_str.clear();
-        return true;
-    }
-    return true;
-}
-
 auto UsbDevice::list_download_devices() -> std::vector<std::string> {
     UsbSelectionCriteria criteria;
     return list_download_devices(criteria);

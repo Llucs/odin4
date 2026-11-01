@@ -42,7 +42,6 @@ class UsbDevice {
     size_t max_chunk_bytes = 1048576;
     uint16_t endpoint_out_max_packet = 512;
 
-    std::string device_type_str;
     UsbOpenError last_open_error = UsbOpenError::None;
     int last_open_libusb_err = 0;
 
@@ -57,7 +56,6 @@ class UsbDevice {
     auto odin_end_session() -> bool;
     auto odin_reboot() -> bool;
     auto odin_reboot_to_odin() -> bool;
-    auto odin_request_device_type(std::string& out_type) -> bool;
     auto odin_set_total_bytes(uint64_t total_bytes) -> bool;
     auto odin_reset_flash_count() -> bool;
     auto odin_request_file_flash() -> bool;
@@ -100,7 +98,6 @@ class UsbDevice {
     auto receive_packet(void* data, size_t size, int* actual_length, bool is_control = false, size_t min_size = 0,
                         int timeout_override_ms = 0) -> bool;
     auto handshake() -> bool;
-    auto request_device_type() -> bool;
     auto begin_session() -> bool;
     auto end_session() -> bool;
     auto reset_link() -> bool;
@@ -115,7 +112,6 @@ class UsbDevice {
     auto send_control(uint32_t control_type) -> bool;
     auto notify_total_bytes(uint64_t total) -> bool;
 
-    [[nodiscard]] auto get_device_type() const -> const std::string& { return device_type_str; }
     [[nodiscard]] auto supports_compressed() const -> bool { return odin_supports_compressed; }
 
     static auto list_download_devices() -> std::vector<std::string>;
