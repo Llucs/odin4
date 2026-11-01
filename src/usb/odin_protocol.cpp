@@ -515,8 +515,8 @@ auto UsbDevice::odin_end_sequence_flash_compressed(const PitEntry& pit_entry, ui
         w32(4, compressed_size);
         w32(8, pit_entry.binary_type);
         w32(12, pit_entry.device_type);
-        w32(16, 0U);
-        w32(20, (is_last != 0U) ? 1U : 0U);
+        w32(16, (is_last != 0U) ? 1U : 0U);
+        w32(20, 0U);
         w32(24, 0U);
         w32(28, 0U);
     } else {
@@ -576,8 +576,8 @@ auto UsbDevice::odin_end_sequence_flash(const PitEntry& pit_entry, uint32_t real
         w32(4, real_size);
         w32(8, pit_entry.binary_type);
         w32(12, pit_entry.device_type);
-        w32(16, 0U);
-        w32(20, (is_last != 0U) ? 1U : 0U);
+        w32(16, (is_last != 0U) ? 1U : 0U);
+        w32(20, 0U);
         w32(24, 0U);
         w32(28, 0U);
     } else {

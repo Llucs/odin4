@@ -219,8 +219,8 @@ Signals the end of a sequence. Payload varies by partition type (CP/modem vs AP/
 | 0x04   | 4 bytes | Actual size of the sequence in bytes.               |
 | 0x08   | 4 bytes | Binary type (from PIT).                             |
 | 0x0C   | 4 bytes | Device type (from PIT).                             |
-| 0x10   | 4 bytes | Reserved (`0`).                                     |
-| 0x14   | 4 bytes | Last sequence flag (`1` = yes, `0` = no).           |
+| 0x10   | 4 bytes | Last sequence flag (`1` = yes, `0` = no).           |
+| 0x14   | 4 bytes | Reserved (`0`).                                     |
 | 0x18   | 4 bytes | Reserved (`0`).                                     |
 | 0x1C   | 4 bytes | Reserved (`0`).                                     |
 
