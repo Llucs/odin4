@@ -256,7 +256,7 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
         if (cand.score < 0) continue;
 
         const bool pid_known = is_known_download_pid(pid);
-        const bool cdc_data = (cand.interface_class == 0x0A);
+        const bool cdc_data = (cand.interface_class == 0x0A) && pid != SAMSUNG_NORMAL_MODE_PID;
 
         if (!criteria.has_pid && !criteria.has_vid) {
             if (!pid_known && !cdc_data) continue;
@@ -462,7 +462,7 @@ auto UsbDevice::list_download_devices(const UsbSelectionCriteria& criteria) -> s
         if (cand.score < 0) continue;
 
         const bool pid_known = is_known_download_pid(pid);
-        const bool cdc_data = (cand.interface_class == 0x0A);
+        const bool cdc_data = (cand.interface_class == 0x0A) && pid != SAMSUNG_NORMAL_MODE_PID;
         if (!criteria.has_pid && !criteria.has_vid) {
             if (!pid_known && !cdc_data) continue;
         }

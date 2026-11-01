@@ -16,6 +16,7 @@
 #define USB_TIMEOUT_CONTROL 10000
 #define USB_TIMEOUT_ZLP 100
 
+static constexpr uint16_t SAMSUNG_NORMAL_MODE_PID = 0x6860;
 static constexpr std::array<uint16_t, 6> SAMSUNG_DOWNLOAD_PIDS{{0x6601, 0x685D, 0x68C3, 0x68EF, 0x4EEE, 0x4EEF}};
 
 struct UsbSelectionCriteria {
