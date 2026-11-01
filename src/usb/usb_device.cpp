@@ -92,7 +92,9 @@ auto UsbDevice::bulk_write_all(const void* data, size_t size, int timeout_ms) ->
         }
         if (offset == size) {
             if (odin_supports_zlp && endpoint_out_max_packet != 0 && (size % endpoint_out_max_packet) == 0) {
-                if (!send_zlp(timeout_ms)) odin_supports_zlp = false;
+                // The S5 bootloader won't take a ZLP right after a command, so don't wait long for it.
+                if (!send_zlp(USB_TIMEOUT_ZLP))
+                    odin_supports_zlp = false;
             }
             return true;
         }
@@ -254,7 +256,7 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
         if (cand.score < 0) continue;
 
         const bool pid_known = is_known_download_pid(pid);
-        const bool cdc_data = (cand.interface_class == 0x0A);
+        const bool cdc_data = (cand.interface_class == 0x0A) && pid != SAMSUNG_NORMAL_MODE_PID;
 
         if (!criteria.has_pid && !criteria.has_vid) {
             if (!pid_known && !cdc_data) continue;
@@ -422,15 +424,6 @@ auto UsbDevice::handshake() -> bool {
     return odin_handshake();
 }
 
-auto UsbDevice::request_device_type() -> bool {
-    if (!odin_request_device_type(device_type_str)) {
-        log_warn("Device type query failed; continuing without type info.");
-        device_type_str.clear();
-        return true;
-    }
-    return true;
-}
-
 auto UsbDevice::list_download_devices() -> std::vector<std::string> {
     UsbSelectionCriteria criteria;
     return list_download_devices(criteria);
@@ -469,7 +462,7 @@ auto UsbDevice::list_download_devices(const UsbSelectionCriteria& criteria) -> s
         if (cand.score < 0) continue;
 
         const bool pid_known = is_known_download_pid(pid);
-        const bool cdc_data = (cand.interface_class == 0x0A);
+        const bool cdc_data = (cand.interface_class == 0x0A) && pid != SAMSUNG_NORMAL_MODE_PID;
         if (!criteria.has_pid && !criteria.has_vid) {
             if (!pid_known && !cdc_data) continue;
         }
