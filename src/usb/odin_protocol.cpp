@@ -705,7 +705,10 @@ auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
             total_sent += static_cast<uint64_t>(to_read);
         }
 
-        if (!odin_end_sequence_flash(pit_entry, real_size, last ? 1U : 0U, efs_clear, boot_update)) return false;
+        if (!odin_end_sequence_flash(pit_entry, real_size, last ? 1U : 0U, efs_clear, boot_update)) {
+            log_error(std::format("Sequence {} of {} failed ({} bytes)", i + 1, sequences, real_size));
+            return false;
+        }
     }
 
     return odin_reset_flash_count();

@@ -162,6 +162,10 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
             }
             ExitCode rc = process_tar_file(item.second, usb, pit, !cfg.dry_run, cfg.allow_unknown, cfg.efs_clear, cfg.boot_update);
             if (rc != ExitCode::Success) {
+                if (!cfg.dry_run && rc == ExitCode::Protocol) {
+                    log_error("Flash stopped. The bootloader refuses all writes after a failed flash, "
+                              "so restart the phone into Download Mode before trying again.");
+                }
                 usb.end_session();
                 return static_cast<OdinExitCode>(rc);
             }
