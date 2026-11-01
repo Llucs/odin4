@@ -93,6 +93,16 @@ auto UsbDevice::end_session() -> bool {
     return odin_end_session();
 }
 
+// After EndSession the bootloader ignores everything until the USB link is reset.
+auto UsbDevice::reset_link() -> bool {
+    int err = libusb_reset_device(handle);
+    if (err != 0) {
+        log_warn(std::format("USB reset failed: {}", err));
+        return false;
+    }
+    return true;
+}
+
 static auto parse_pit_bytes(PitTable& pit_table, const std::vector<unsigned char>& pit_data) -> bool {
     if (pit_data.size() < 28) {
         log_error(std::format("PIT data too small: {}", pit_data.size()));

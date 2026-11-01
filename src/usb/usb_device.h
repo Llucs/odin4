@@ -103,6 +103,7 @@ class UsbDevice {
     auto request_device_type() -> bool;
     auto begin_session() -> bool;
     auto end_session() -> bool;
+    auto reset_link() -> bool;
     auto request_pit(PitTable& pit_table) -> bool;
     auto send_pit(const std::vector<unsigned char>& pit_data) -> bool;
     auto receive_pit_table(PitTable& pit_table) -> bool;

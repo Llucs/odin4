@@ -232,6 +232,11 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
             log_error("Failed to end session.");
             return OdinExitCode::Protocol;
         }
+
+        // The device stays in Download Mode after a check, so leave it able to take the next run.
+        if (cfg.dry_run) {
+            usb.reset_link();
+        }
     }
 
     if (!cfg.dry_run) {
