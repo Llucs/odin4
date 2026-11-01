@@ -92,7 +92,9 @@ auto UsbDevice::bulk_write_all(const void* data, size_t size, int timeout_ms) ->
         }
         if (offset == size) {
             if (odin_supports_zlp && endpoint_out_max_packet != 0 && (size % endpoint_out_max_packet) == 0) {
-                if (!send_zlp(timeout_ms)) odin_supports_zlp = false;
+                // The S5 bootloader won't take a ZLP right after a command, so don't wait long for it.
+                if (!send_zlp(USB_TIMEOUT_ZLP))
+                    odin_supports_zlp = false;
             }
             return true;
         }

@@ -51,7 +51,7 @@ The bootloader signals failure by setting `id` to `0xFFFFFFFF` (`BOOTLOADER_FAIL
 
 ### 3.4. Zero-Length Packets (ZLP)
 
-After bulk writes that are multiples of the endpoint's `wMaxPacketSize`, the host sends a zero-length packet (ZLP) to signal transfer completion. If the device does not support ZLP, the feature is disabled for the remainder of the session.
+After bulk writes that are multiples of the endpoint's `wMaxPacketSize`, the host sends a zero-length packet (ZLP) to signal transfer completion. If the device does not support ZLP, the feature is disabled for the remainder of the session. The ZLP gets a 100 ms timeout, because the Galaxy S5 bootloader rejects the first one by timing out.
 
 ## 4. Session Management
 
