@@ -168,10 +168,20 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
     }
     log_info("Handshake successful.");
 
-    // Phase 3: query identity/capability information used by later compatibility checks.
+    // Phase 3: begin the session before any other command. The bootloader ignores (and never
+    // answers) commands that arrive before BeginSession, so querying metadata first only
+    // produces bulk-read timeouts.
+    if (has_any_firmware_files(cfg)) {
+        if (!usb.begin_session()) {
+            log_error("Failed to begin session.");
+            return OdinExitCode::Protocol;
+        }
+    }
+
+    // Phase 4: query identity/capability information used by later compatibility checks.
+    // This is advisory only: an unknown device type must not abort the session.
     if (!usb.request_device_type()) {
-        log_error("Failed to query device type.");
-        return OdinExitCode::Protocol;
+        log_warn("Failed to query device type; continuing without type info.");
     }
 
     const std::string device_type = usb.get_device_type();
@@ -182,13 +192,6 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
     if (has_any_firmware_files(cfg)) {
         if (!verify_firmware_compatibility(cfg, device_type)) {
             return OdinExitCode::Pit;
-        }
-    }
-
-    if (has_any_firmware_files(cfg)) {
-        if (!usb.begin_session()) {
-            log_error("Failed to begin session.");
-            return OdinExitCode::Protocol;
         }
 
         PitTable pit;
