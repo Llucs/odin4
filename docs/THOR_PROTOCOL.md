@@ -51,7 +51,7 @@ The bootloader signals failure by setting `id` to `0xFFFFFFFF` (`BOOTLOADER_FAIL
 
 ### 3.4. Zero-Length Packets (ZLP)
 
-After bulk writes that are multiples of the endpoint's `wMaxPacketSize`, the host sends a zero-length packet (ZLP) to signal transfer completion. If the device does not support ZLP, the feature is disabled for the remainder of the session.
+After bulk writes that are multiples of the endpoint's `wMaxPacketSize`, the host sends a zero-length packet (ZLP) to signal transfer completion. If the device does not support ZLP, the feature is disabled for the remainder of the session. The ZLP gets a 100 ms timeout, because the Galaxy S5 bootloader rejects the first one by timing out.
 
 ## 4. Session Management
 
@@ -82,13 +82,13 @@ Negotiates protocol version and detects device capabilities.
 *   **Version 0 or 1**: 30,000 ms timeout, 131,072 bytes (128 KiB) packet size, maximum 240 packets per sequence.
 *   **Version >= 2**: 120,000 ms timeout, 1,048,576 bytes (1 MiB) packet size, maximum 30 packets per sequence. Additionally, the host sends `0x64`, command `0x05`, to set the file part size.
 
-#### 4.1.2. Device Type Query (Command `0x01`)
+#### 4.1.2. Reset Flash Count (Command `0x01`)
 
-Requests the device model identifier.
+Resets the device flash counter. Sent after each flashed file, never before BeginSession (Heimdall and Thor don't either).
 
 **Request:** `id` = `0x64`, `data` = `0x01`
 
-**Response:** `ack` contains an integer model code. The host formats it as `"SM-<code>"`.
+**Response:** 8 bytes, checked for failure only.
 
 #### 4.1.3. Total Size Configuration (Command `0x02`)
 
@@ -219,8 +219,8 @@ Signals the end of a sequence. Payload varies by partition type (CP/modem vs AP/
 | 0x04   | 4 bytes | Actual size of the sequence in bytes.               |
 | 0x08   | 4 bytes | Binary type (from PIT).                             |
 | 0x0C   | 4 bytes | Device type (from PIT).                             |
-| 0x10   | 4 bytes | Reserved (`0`).                                     |
-| 0x14   | 4 bytes | Last sequence flag (`1` = yes, `0` = no).           |
+| 0x10   | 4 bytes | Last sequence flag (`1` = yes, `0` = no).           |
+| 0x14   | 4 bytes | Reserved (`0`).                                     |
 | 0x18   | 4 bytes | Reserved (`0`).                                     |
 | 0x1C   | 4 bytes | Reserved (`0`).                                     |
 
@@ -241,7 +241,7 @@ Before the end-sequence command, the host sends an empty bulk transfer (USB ZLP)
 
 ### 6.5. Large Partitions
 
-Partitions named `SYSTEM`, `USERDATA`, or `SUPER` have their real sizes rounded up to the next 512-byte boundary for the end-sequence reporting.
+Partitions named `SYSTEM`, `USERDATA`, or `SUPER` have their real sizes rounded up to the next 512-byte boundary for the end-sequence reporting on compressed transfers. Uncompressed transfers report the exact size, because padding it fails on sparse images (Write, code -4).
 
 ### 6.6. Compressed Transfers
 
@@ -289,7 +289,7 @@ USB bulk transfers include up to 5 retries with exponential backoff (100 ms init
 
 ## 7. Device Information
 
-The device type is queried via `0x64`, command `0x01`. The response code is formatted as `"SM-<code>"` for display purposes.
+The protocol has no device type query that odin4 uses. Compatibility comes from matching archive entries against the PIT.
 
 ## 8. Error Handling
 

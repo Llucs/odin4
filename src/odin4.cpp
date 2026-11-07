@@ -83,50 +83,6 @@ static auto has_any_firmware_files(const OdinConfig& cfg) -> bool {
     return !cfg.bootloader.empty() || !cfg.ap.empty() || !cfg.cp.empty() || !cfg.csc.empty() || !cfg.ums.empty();
 }
 
-static auto verify_firmware_compatibility(const OdinConfig& cfg, const std::string& device_type) -> bool {
-    if (device_type.empty()) {
-        log_verbose("Device type is empty; skipping filename compatibility checks.");
-        return true;
-    }
-
-    std::string dt = device_type;
-    std::erase_if(dt, [](unsigned char c) { return (std::isspace(c) != 0) || c == '\\' || c == '/' || c == '-'; });
-
-    std::ranges::transform(dt, dt.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-
-    if (dt.starts_with("SM")) {
-        dt = dt.substr(2);
-    }
-
-    auto file_matches = [&](const std::string& path) -> bool {
-        if (path.empty()) {
-            return true;
-        }
-        std::string fname = std::filesystem::path(path).filename().string();
-        std::string f;
-        f.reserve(fname.size());
-        for (unsigned char c : fname) {
-            if (std::isalnum(c) != 0) {
-                f.push_back(static_cast<char>(std::toupper(c)));
-            }
-        }
-        return f.find(dt) != std::string::npos;
-    };
-
-    for (const std::string& p : {cfg.bootloader, cfg.ap, cfg.cp, cfg.csc, cfg.ums}) {
-        if (p.empty()) {
-            continue;
-        }
-        if (!file_matches(p)) {
-            log_error(std::format("Firmware file name does not appear to match device type: {} vs {}",
-                                  std::filesystem::path(p).filename().string(), device_type));
-            return false;
-        }
-    }
-
-    return true;
-}
-
 static void print_access_hint() {
     log_error("Permission denied while opening the USB device. This usually means udev rules are missing.");
     log_info("Install the udev rule shipped with odin4: udev/60-odin4.rules");
@@ -139,7 +95,7 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
      *
      * Flow:
      *  1) Select and open a compatible USB device (or report actionable open failures).
-     *  2) Establish protocol readiness (USB handshake and device-type query).
+     *  2) Establish protocol readiness (USB handshake).
      *  3) Continue with firmware validation/transfer steps and return a mapped exit code.
      *
      * This function intentionally centralizes user-facing diagnostics so callers only need
@@ -167,23 +123,6 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
         return OdinExitCode::Protocol;
     }
     log_info("Handshake successful.");
-
-    // Phase 3: query identity/capability information used by later compatibility checks.
-    if (!usb.request_device_type()) {
-        log_error("Failed to query device type.");
-        return OdinExitCode::Protocol;
-    }
-
-    const std::string device_type = usb.get_device_type();
-    if (!device_type.empty()) {
-        log_info(std::format("Device type: {}", device_type));
-    }
-
-    if (has_any_firmware_files(cfg)) {
-        if (!verify_firmware_compatibility(cfg, device_type)) {
-            return OdinExitCode::Pit;
-        }
-    }
 
     if (has_any_firmware_files(cfg)) {
         if (!usb.begin_session()) {
@@ -223,6 +162,10 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
             }
             ExitCode rc = process_tar_file(item.second, usb, pit, !cfg.dry_run, cfg.allow_unknown, cfg.efs_clear, cfg.boot_update);
             if (rc != ExitCode::Success) {
+                if (!cfg.dry_run && rc == ExitCode::Protocol) {
+                    log_error("Flash stopped. The bootloader refuses all writes after a failed flash, "
+                              "so restart the phone into Download Mode before trying again.");
+                }
                 usb.end_session();
                 return static_cast<OdinExitCode>(rc);
             }
@@ -231,6 +174,11 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
         if (!usb.end_session()) {
             log_error("Failed to end session.");
             return OdinExitCode::Protocol;
+        }
+
+        // The device stays in Download Mode after a check, so leave it able to take the next run.
+        if (cfg.dry_run) {
+            usb.reset_link();
         }
     }
 
