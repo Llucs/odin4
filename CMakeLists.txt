@@ -78,7 +78,7 @@ endforeach()
 
 add_executable(odin4 src/cli/main.cpp)
 set_target_properties(odin4 PROPERTIES OUTPUT_NAME "odin4")
-target_include_directories(odin4 PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(odin4 PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(odin4 PRIVATE odin4_static -static-libgcc -static-libstdc++)
 
 # Optional GUI build

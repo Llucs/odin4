@@ -71,9 +71,8 @@ auto parse_lz4_frame_header(std::istream& stream) -> Lz4FrameInfo {
     uint64_t cs = 0;
     std::memcpy(&cs, content_size_bytes, 8);
     info.content_size = cs;
-
-    if (info.content_size > max_block_size)
-        return info;
+    // Note: the content size is the total decompressed size of the frame (e.g. several GiB for
+    // super.img.lz4); it is not bounded by the block size.
 
     unsigned char hc{};
     if (!read_exact_from_stream(stream, &hc, 1))
@@ -253,19 +252,21 @@ auto UsbDevice::send_control(uint32_t control_type) -> bool {
 }
 
 auto UsbDevice::odin_handshake() -> bool {
+    // Same sequence as Heimdall (BridgeManager::InitialiseProtocol): send "ODIN", expect "LOKE".
+    // Heimdall waits one second for the reply; waiting minutes here only delays the error.
     const char preamble[4] = {'O', 'D', 'I', 'N'};
-    if (!bulk_write_all(preamble, sizeof(preamble), USB_TIMEOUT_CONTROL)) return false;
+    if (!bulk_write_all(preamble, sizeof(preamble), USB_TIMEOUT_HANDSHAKE)) return false;
 
     unsigned char reply[512] = {0};
     int actual = 0;
-    if (!bulk_read_once(reply, sizeof(reply), &actual, USB_TIMEOUT_CONTROL)) return false;
+    if (!bulk_read_once(reply, sizeof(reply), &actual, USB_TIMEOUT_HANDSHAKE, 2, /*log_failures=*/false)) return false;
     if (actual < 4) return false;
     if (reply[0] != 'L' || reply[1] != 'O' || reply[2] != 'K' || reply[3] != 'E') return false;
     return true;
 }
 
 auto UsbDevice::odin_command(uint32_t cmd, uint32_t subcmd, const void* payload, size_t payload_size,
-                             std::vector<unsigned char>& rsp, int timeout_ms) -> bool {
+                             std::vector<unsigned char>& rsp, int timeout_ms, int read_attempts) -> bool {
     std::vector<unsigned char> buf(1024, 0);
     uint32_t le_cmd = h_to_le32(cmd);
     uint32_t le_sub = h_to_le32(subcmd);
@@ -282,7 +283,7 @@ auto UsbDevice::odin_command(uint32_t cmd, uint32_t subcmd, const void* payload,
 
     rsp.assign(512, 0);
     int read_len = 0;
-    if (!bulk_read_once(rsp.data(), rsp.size(), &read_len, timeout_ms)) return false;
+    if (!bulk_read_once(rsp.data(), rsp.size(), &read_len, timeout_ms, read_attempts)) return false;
     if (read_len < 8) {
         log_error(std::format("Odin response size mismatch: {}", read_len));
         return false;
@@ -432,7 +433,8 @@ auto UsbDevice::odin_reboot_to_odin() -> bool {
 
 auto UsbDevice::odin_request_device_type(std::string& out_type) -> bool {
     std::vector<unsigned char> rsp;
-    if (!odin_command(0x64, 0x01, nullptr, 0, rsp, USB_TIMEOUT_CONTROL)) return false;
+    // Older bootloaders do not implement this query; do not stall for a minute waiting for it.
+    if (!odin_command(0x64, 0x01, nullptr, 0, rsp, USB_TIMEOUT_QUERY, 1)) return false;
     if (rsp.size() < 12) return false;
 
     int32_t id = 0;
@@ -447,7 +449,9 @@ auto UsbDevice::odin_request_device_type(std::string& out_type) -> bool {
     std::memcpy(&type_raw, rsp.data() + 8, sizeof(type_raw));
     type_raw = le32toh(type_raw);
 
-    out_type = "SM-" + std::to_string(type_raw);
+    // The bootloader returns a numeric code, not a model name; keep it numeric so it is never
+    // mistaken for a model string (e.g. when matching firmware file names).
+    out_type = std::to_string(type_raw);
     return true;
 }
 
@@ -460,7 +464,12 @@ auto UsbDevice::odin_set_total_bytes(uint64_t total_bytes) -> bool {
 
 auto UsbDevice::odin_reset_flash_count() -> bool {
     std::vector<unsigned char> rsp;
-    if (!odin_command(0x64, 0x01, nullptr, 0, rsp, USB_TIMEOUT_CONTROL)) return false;
+    // Best effort: Heimdall never sends this, and a bootloader that ignores it must not turn an
+    // already completed transfer into a failure (or stall for a minute).
+    if (!odin_command(0x64, 0x01, nullptr, 0, rsp, USB_TIMEOUT_QUERY, 1)) {
+        log_warn("ResetFlashCount got no reply; continuing.");
+        return true;
+    }
     return odin_fail_check(rsp, "ResetFlashCount", false);
 }
 
@@ -904,13 +913,17 @@ auto UsbDevice::flash_partition_stream_compressed(std::istream& stream, uint64_t
         if (last) {
             this_seq_decomp = total_decompressed - prev_decomp + this_seq_decomp;
         }
-        if (this_seq_decomp == 0) this_seq_decomp = static_cast<uint32_t>(total_decompressed);
+        if (this_seq_decomp == 0) this_seq_decomp = std::min<uint64_t>(total_decompressed, 0xFFFFFFFFULL);
 
         if (large_partition) {
             uint64_t rem = this_seq_decomp % 512;
             if (rem != 0) this_seq_decomp += 512 - rem;
         }
 
+        if (this_seq_decomp > 0xFFFFFFFFULL) {
+            log_error("Decompressed sequence size does not fit in 32 bits");
+            return false;
+        }
         if (!odin_end_sequence_flash_compressed(pit_entry, static_cast<uint32_t>(this_seq_decomp), last ? 1U : 0U, efs_clear, boot_update)) return false;
     }
 

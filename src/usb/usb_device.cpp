@@ -107,15 +107,18 @@ auto UsbDevice::send_zlp(int timeout_ms) -> bool {
     return libusb_bulk_transfer(handle, endpoint_out, nullptr, 0, &actual, timeout_ms) == 0;
 }
 
-auto UsbDevice::bulk_read_once(void* data, size_t size, int* actual_length, int timeout_ms) -> bool {
-    for (int attempt = 0; attempt < USB_RETRY_COUNT; ++attempt) {
+auto UsbDevice::bulk_read_once(void* data, size_t size, int* actual_length, int timeout_ms, int max_attempts,
+                               bool log_failures) -> bool {
+    if (max_attempts < 1) max_attempts = 1;
+    if (max_attempts > USB_RETRY_COUNT) max_attempts = USB_RETRY_COUNT;
+    for (int attempt = 0; attempt < max_attempts; ++attempt) {
         int err = libusb_bulk_transfer(handle, endpoint_in, static_cast<unsigned char*>(data), clamp_size_to_int(size),
                                        actual_length, timeout_ms);
         if (err == 0) return true;
         if (err == LIBUSB_ERROR_NO_DEVICE) return false;
         if (err == LIBUSB_ERROR_PIPE) (void) libusb_clear_halt(handle, endpoint_in);
-        log_error(std::format("USB bulk read failed (error: {})", static_cast<int>(err)));
-        if (attempt < USB_RETRY_COUNT - 1)
+        if (log_failures) log_error(std::format("USB bulk read failed (error: {})", static_cast<int>(err)));
+        if (attempt < max_attempts - 1)
             std::this_thread::sleep_for(std::chrono::milliseconds(retry_backoff_ms(attempt)));
     }
     return false;
@@ -143,10 +146,21 @@ struct InterfaceCandidate {
     uint8_t num_endpoints = 0;
 };
 
-static auto find_best_interface(libusb_device* dev, const UsbSelectionCriteria& criteria) -> InterfaceCandidate {
+static auto find_best_interface(libusb_device* dev, const UsbSelectionCriteria& criteria,
+                                bool* config_unreadable = nullptr) -> InterfaceCandidate {
     InterfaceCandidate best;
     libusb_config_descriptor* config = nullptr;
-    if (libusb_get_active_config_descriptor(dev, &config) != 0 || (config == nullptr)) return best;
+    // Heimdall reads configuration index 0. The *active* configuration is unavailable while a
+    // device is half-enumerated (typical for Download Mode right after plugging in), so fall back.
+    int cfg_rc = libusb_get_active_config_descriptor(dev, &config);
+    if (cfg_rc != 0 || (config == nullptr)) {
+        config = nullptr;
+        cfg_rc = libusb_get_config_descriptor(dev, 0, &config);
+    }
+    if (cfg_rc != 0 || (config == nullptr)) {
+        if (config_unreadable != nullptr) *config_unreadable = true;
+        return best;
+    }
 
     for (int i = 0; i < config->bNumInterfaces; ++i) {
         const libusb_interface* inter = &config->interface[i];
@@ -194,6 +208,23 @@ auto UsbDevice::open_device(const std::string& specific_path) -> bool {
 }
 
 auto UsbDevice::open_device(const std::string& specific_path, const UsbSelectionCriteria& criteria) -> bool {
+    last_criteria = criteria;
+    last_path = specific_path;
+    reset_attempted = false;
+
+    // A Download Mode device can still be (re-)enumerating when we first look at it. Give it a few
+    // seconds instead of failing on the first scan.
+    for (int attempt = 0; attempt < USB_OPEN_SCAN_ATTEMPTS; ++attempt) {
+        if (open_device_once(specific_path, criteria)) return true;
+        if (!scan_retryable || attempt == USB_OPEN_SCAN_ATTEMPTS - 1) break;
+        log_verbose("Device present but not ready yet; scanning again...");
+        std::this_thread::sleep_for(std::chrono::milliseconds(USB_OPEN_SCAN_DELAY_MS));
+    }
+    return false;
+}
+
+auto UsbDevice::open_device_once(const std::string& specific_path, const UsbSelectionCriteria& criteria) -> bool {
+    scan_retryable = false;
     last_open_error = UsbOpenError::None;
     last_open_libusb_err = 0;
 
@@ -230,6 +261,7 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
     libusb_device* target = nullptr;
     InterfaceCandidate chosen_if;
     bool saw_candidate_vendor = false;
+    bool saw_unreadable_download_device = false;
 
     for (ssize_t i = 0; i < cnt; ++i) {
         libusb_device* dev = device_list[i];
@@ -250,8 +282,12 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
         if (criteria.has_pid && pid != criteria.pid) continue;
         if (!specific_path.empty() && usb_path_for_device(dev) != specific_path) continue;
 
-        InterfaceCandidate cand = find_best_interface(dev, criteria);
-        if (cand.score < 0) continue;
+        bool config_unreadable = false;
+        InterfaceCandidate cand = find_best_interface(dev, criteria, &config_unreadable);
+        if (cand.score < 0) {
+            if (config_unreadable && is_known_download_pid(pid)) saw_unreadable_download_device = true;
+            continue;
+        }
 
         const bool pid_known = is_known_download_pid(pid);
         const bool cdc_data = (cand.interface_class == 0x0A);
@@ -269,8 +305,16 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
     }
 
     if (target == nullptr) {
-        last_open_error = saw_candidate_vendor ? UsbOpenError::NotDownloadMode : UsbOpenError::NoDevice;
-        log_warn("No compatible device found. Ensure the device is connected and in Download Mode.");
+        if (saw_unreadable_download_device) {
+            last_open_error = UsbOpenError::Other;
+            scan_retryable = true;
+            log_warn("A Samsung Download Mode device was found but its USB descriptors cannot be read "
+                     "(the device is still enumerating or keeps resetting). Check the cable/port and re-enter Download Mode.");
+        } else {
+            last_open_error = saw_candidate_vendor ? UsbOpenError::NotDownloadMode : UsbOpenError::NoDevice;
+            scan_retryable = saw_candidate_vendor;
+            log_warn("No compatible device found. Ensure the device is connected and in Download Mode.");
+        }
         return false;
     }
 
@@ -295,7 +339,7 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
     }
 
     const int kernel_driver_state = libusb_kernel_driver_active(handle, interface_number);
-    if (kernel_driver_state < 0) {
+    if (kernel_driver_state < 0 && kernel_driver_state != LIBUSB_ERROR_NOT_SUPPORTED) {
         last_open_libusb_err = kernel_driver_state;
         last_open_error = (kernel_driver_state == LIBUSB_ERROR_ACCESS) ? UsbOpenError::AccessDenied : UsbOpenError::Other;
         log_error("Failed to claim USB interface", kernel_driver_state);
@@ -317,20 +361,13 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
     }
 
     const int claim_err = libusb_claim_interface(handle, interface_number);
-    if (claim_err == 0 && alt_setting >= 0) {
-        int alt_err = libusb_set_interface_alt_setting(handle, interface_number, alt_setting);
+    // Claiming an interface already selects alternate setting 0, and Heimdall-era bootloaders may
+    // reject an explicit SET_INTERFACE for it. Only switch when a non-default setting was chosen,
+    // and treat a failure as a warning (the interface is already usable in its default setting).
+    if (claim_err == 0 && alt_setting > 0) {
+        const int alt_err = libusb_set_interface_alt_setting(handle, interface_number, alt_setting);
         if (alt_err < 0) {
-            last_open_libusb_err = alt_err;
-            last_open_error = UsbOpenError::Other;
-            log_error("Failed to set USB interface alt setting", alt_err);
-            libusb_release_interface(handle, interface_number);
-            if (kernel_driver_detached) {
-                (void) libusb_attach_kernel_driver(handle, interface_number);
-                kernel_driver_detached = false;
-            }
-            libusb_close(handle);
-            handle = nullptr;
-            return false;
+            log_warn(std::format("Failed to set USB interface alt setting (libusb error {}); continuing with the default setting", alt_err));
         }
     }
     if (claim_err < 0) {
@@ -355,6 +392,7 @@ auto UsbDevice::open_device(const std::string& specific_path, const UsbSelection
         << ", EP OUT: 0x" << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(endpoint_out) << std::dec
         << ", OUT wMaxPacketSize: " << endpoint_out_max_packet;
     log_info(oss.str());
+    last_path = usb_path_for_device(target);
     return true;
 }
 
@@ -419,7 +457,53 @@ auto UsbDevice::receive_packet(void* data, size_t size, int* actual_length, bool
 
 auto UsbDevice::handshake() -> bool {
     log_info("Starting handshake");
+    if (odin_handshake()) return true;
+
+    // Some bootloaders (seen on A32, T500, S6 edge) stay silent when a previous session left them in an
+    // odd state. A USB reset before the next attempt brings them back. This is only done after a
+    // failed handshake, never unconditionally.
+    if (reset_attempted) return false;
+    log_warn("No handshake reply; resetting the USB device and retrying once.");
+    if (!reset_and_reopen()) return false;
+
+    log_info("Starting handshake (after USB reset)");
     return odin_handshake();
+}
+
+auto UsbDevice::reset_and_reopen() -> bool {
+    if (handle == nullptr) return false;
+    reset_attempted = true;
+
+    const std::string path = last_path;
+    const UsbSelectionCriteria criteria = last_criteria;
+
+    libusb_release_interface(handle, interface_number);
+    const int rc = libusb_reset_device(handle);
+    if (rc != 0 && rc != LIBUSB_ERROR_NOT_FOUND) {
+        log_warn(std::format("USB reset failed (libusb error {})", rc));
+    }
+
+    // After a reset the device may re-enumerate under a new address; drop the stale handle first.
+    if (kernel_driver_detached) {
+        (void) libusb_attach_kernel_driver(handle, interface_number);
+        kernel_driver_detached = false;
+    }
+    libusb_close(handle);
+    handle = nullptr;
+    if (device_list != nullptr) {
+        libusb_free_device_list(device_list, 1);
+        device_list = nullptr;
+    }
+
+    for (int attempt = 0; attempt < USB_OPEN_SCAN_ATTEMPTS; ++attempt) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        if (open_device_once(path, criteria)) return true;
+        // Address changed: accept the device only if exactly one candidate matches.
+        const std::vector<std::string> candidates = list_download_devices(criteria);
+        if (candidates.size() == 1 && candidates.front() != path && open_device_once(candidates.front(), criteria))
+            return true;
+    }
+    return false;
 }
 
 auto UsbDevice::request_device_type() -> bool {
@@ -465,8 +549,15 @@ auto UsbDevice::list_download_devices(const UsbSelectionCriteria& criteria) -> s
 
         if (criteria.has_pid && pid != criteria.pid) continue;
 
-        InterfaceCandidate cand = find_best_interface(dev, criteria);
-        if (cand.score < 0) continue;
+        bool config_unreadable = false;
+        InterfaceCandidate cand = find_best_interface(dev, criteria, &config_unreadable);
+        if (cand.score < 0) {
+            // Like `heimdall detect`, still report a known Download Mode VID:PID whose descriptors
+            // cannot be read right now, so the user sees it instead of "no devices".
+            if (config_unreadable && is_known_download_pid(pid) && !criteria.has_interface)
+                result.push_back(usb_path_for_device(dev));
+            continue;
+        }
 
         const bool pid_known = is_known_download_pid(pid);
         const bool cdc_data = (cand.interface_class == 0x0A);

@@ -18,6 +18,7 @@
 #include "firmware/tar_md5_trailer.h"
 #include "core/logger.h"
 
+#include <cstdint>
 #include <iostream>
 #include <vector>
 #include <cstdlib>
@@ -31,7 +32,7 @@
 #include <sstream>
 #include <limits>
 #include <format>
-#include <print>
+#include "core/print_compat.h"
 #include <filesystem>
 #include <lz4frame.h>
 
@@ -109,6 +110,32 @@ auto parse_octal_u64(const char* field, size_t len, uint64_t& out) -> bool {
 
     if (!any) {
         out = 0;
+    }
+    return true;
+}
+
+// Sizes of 8 GiB and above do not fit the 11 octal digits of a ustar size field. GNU tar (and Samsung's
+// packaging tools) then store them in base-256: first byte 0x80, followed by a big-endian value.
+auto parse_tar_size(const char* field, size_t len, uint64_t& out) -> bool {
+    if ((field == nullptr) || len == 0) {
+        out = 0;
+        return true;
+    }
+    const auto marker = static_cast<unsigned char>(field[0]);
+    if ((marker & 0x80U) == 0) {
+        return parse_octal_u64(field, len, out);
+    }
+    if (marker != 0x80U) {
+        return false; // 0xFF marks a negative number, which is never a valid size.
+    }
+
+    out = 0;
+    for (size_t i = 1; i < len; ++i) {
+        const auto b = static_cast<unsigned char>(field[i]);
+        if ((out >> 56) != 0) {
+            return false; // would overflow 64 bits
+        }
+        out = (out << 8) | b;
     }
     return true;
 }
@@ -644,6 +671,8 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
 
     std::string pending_gnu_long_name;
     std::string pending_pax_path;
+    bool has_pending_pax_size = false;
+    uint64_t pending_pax_size = 0;
 
     char header[512];
     while (true) {
@@ -672,12 +701,18 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
         }
 
         uint64_t data_size = 0;
-        if (!parse_octal_u64(header + 124, 12, data_size)) {
+        if (!parse_tar_size(header + 124, 12, data_size)) {
             log_error("Invalid TAR size field");
             return ExitCode::Firmware;
         }
 
         const char typeflag = header[156];
+
+        // A preceding PAX extended header may override the size of the next entry.
+        if (has_pending_pax_size && typeflag != 'x' && typeflag != 'g' && typeflag != 'L') {
+            data_size = pending_pax_size;
+            has_pending_pax_size = false;
+        }
 
         std::string filename;
         if (!pending_gnu_long_name.empty()) {
@@ -782,6 +817,22 @@ auto process_tar_file(const std::string& tar_path, UsbDevice& usb_device, const 
                         const std::string val = kv.substr(eq + 1);
                         if (key == "path") {
                             pending_pax_path = sanitize_tar_name(val);
+                        } else if (key == "size" && typeflag == 'x') {
+                            uint64_t v = 0;
+                            bool ok = !val.empty();
+                            for (const char c : val) {
+                                if (c < '0' || c > '9' || (v > (UINT64_MAX - 9) / 10)) {
+                                    ok = false;
+                                    break;
+                                }
+                                v = v * 10 + static_cast<uint64_t>(c - '0');
+                            }
+                            if (!ok) {
+                                log_error("Invalid PAX size record");
+                                return ExitCode::Firmware;
+                            }
+                            pending_pax_size = v;
+                            has_pending_pax_size = true;
                         }
                     }
                 }
