@@ -14,7 +14,16 @@
 #define USB_RETRY_COUNT 5
 #define USB_TIMEOUT_BULK 120000
 #define USB_TIMEOUT_CONTROL 10000
+#define USB_TIMEOUT_HANDSHAKE 2000
+// Heimdall waits 100 ms for empty (zero-length) transfers; some bootloaders (e.g. the Galaxy S5)
+// never acknowledge the first one, so do not stall for the full command timeout.
+#define USB_TIMEOUT_ZLP 100
+#define USB_TIMEOUT_QUERY 3000
+#define USB_OPEN_SCAN_ATTEMPTS 6
+#define USB_OPEN_SCAN_DELAY_MS 500
 
+// Normal Android (MTP) mode. Never a Download Mode device, even if it exposes a CDC data interface.
+static constexpr uint16_t SAMSUNG_NORMAL_MODE_PID = 0x6860;
 static constexpr std::array<uint16_t, 6> SAMSUNG_DOWNLOAD_PIDS{{0x6601, 0x685D, 0x68C3, 0x68EF, 0x4EEE, 0x4EEF}};
 
 struct UsbSelectionCriteria {
@@ -46,6 +55,11 @@ class UsbDevice {
     UsbOpenError last_open_error = UsbOpenError::None;
     int last_open_libusb_err = 0;
 
+    std::string last_path;
+    UsbSelectionCriteria last_criteria;
+    bool reset_attempted = false;
+    bool scan_retryable = false;
+
     int odin_flash_timeout_ms = 180000;
     int odin_flash_packet_size = 1048576;
     int odin_flash_sequence_count = 30;
@@ -76,12 +90,15 @@ class UsbDevice {
     auto build_lz4_decompressed_index(std::istream& stream, uint64_t compressed_size,
                                       std::vector<std::pair<uint64_t,uint64_t>>& index) -> bool;
     auto odin_command(uint32_t cmd, uint32_t subcmd, const void* payload, size_t payload_size,
-                      std::vector<unsigned char>& rsp, int timeout_ms) -> bool;
+                      std::vector<unsigned char>& rsp, int timeout_ms, int read_attempts = USB_RETRY_COUNT) -> bool;
     static auto odin_fail_check(const std::vector<unsigned char>& rsp, const std::string& context,
                                 bool allow_progress, int32_t expected_id = -1) -> bool;
 
     auto bulk_write_all(const void* data, size_t size, int timeout_ms) -> bool;
-    auto bulk_read_once(void* data, size_t size, int* actual_length, int timeout_ms) -> bool;
+    auto bulk_read_once(void* data, size_t size, int* actual_length, int timeout_ms,
+                        int max_attempts = USB_RETRY_COUNT, bool log_failures = true) -> bool;
+    auto open_device_once(const std::string& specific_path, const UsbSelectionCriteria& criteria) -> bool;
+    auto reset_and_reopen() -> bool;
     auto send_zlp(int timeout_ms) -> bool;
     auto send_empty_transfer() -> bool;
     auto receive_empty_transfer() -> bool;
@@ -103,6 +120,7 @@ class UsbDevice {
     auto request_device_type() -> bool;
     auto begin_session() -> bool;
     auto end_session() -> bool;
+    auto reset_link() -> bool;
     auto request_pit(PitTable& pit_table) -> bool;
     auto send_pit(const std::vector<unsigned char>& pit_data) -> bool;
     auto receive_pit_table(PitTable& pit_table) -> bool;

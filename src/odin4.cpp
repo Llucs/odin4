@@ -88,6 +88,12 @@ static auto verify_firmware_compatibility(const OdinConfig& cfg, const std::stri
         log_verbose("Device type is empty; skipping filename compatibility checks.");
         return true;
     }
+    // The bootloader reports a numeric code, not a model name, so there is nothing to compare
+    // against firmware file names unless the value actually looks like a model string.
+    if (std::ranges::none_of(device_type, [](unsigned char c) { return std::isalpha(c) != 0; })) {
+        log_verbose("Device type is numeric; skipping filename compatibility checks.");
+        return true;
+    }
 
     std::string dt = device_type;
     std::erase_if(dt, [](unsigned char c) { return (std::isspace(c) != 0) || c == '\\' || c == '/' || c == '-'; });
@@ -168,27 +174,27 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
     }
     log_info("Handshake successful.");
 
-    // Phase 3: query identity/capability information used by later compatibility checks.
-    if (!usb.request_device_type()) {
-        log_error("Failed to query device type.");
-        return OdinExitCode::Protocol;
-    }
-
-    const std::string device_type = usb.get_device_type();
-    if (!device_type.empty()) {
-        log_info(std::format("Device type: {}", device_type));
-    }
-
-    if (has_any_firmware_files(cfg)) {
-        if (!verify_firmware_compatibility(cfg, device_type)) {
-            return OdinExitCode::Pit;
-        }
-    }
-
+    // Phase 3: begin the session first (same order as Heimdall). Bootloaders that do not implement
+    // the device-type query used to stall here for about a minute, before the session even started.
     if (has_any_firmware_files(cfg)) {
         if (!usb.begin_session()) {
             log_error("Failed to begin session.");
             return OdinExitCode::Protocol;
+        }
+
+        // Phase 4: informational identity query. Heimdall never sends it, and an unanswered request can
+        // leave an older bootloader out of sync, so only ask when the user wants verbose output
+        // (short timeout, never fatal).
+        if (cfg.verbose || cfg.debug) {
+            (void) usb.request_device_type();
+        }
+        const std::string device_type = usb.get_device_type();
+        if (!device_type.empty()) {
+            log_info(std::format("Device type: {}", device_type));
+        }
+        if (!verify_firmware_compatibility(cfg, device_type)) {
+            usb.end_session();
+            return OdinExitCode::Pit;
         }
 
         PitTable pit;
@@ -223,6 +229,9 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
             }
             ExitCode rc = process_tar_file(item.second, usb, pit, !cfg.dry_run, cfg.allow_unknown, cfg.efs_clear, cfg.boot_update);
             if (rc != ExitCode::Success) {
+                if (!cfg.dry_run && rc == ExitCode::Protocol) {
+                    log_error("Flash stopped. Restart the device into Download Mode before trying again.");
+                }
                 usb.end_session();
                 return static_cast<OdinExitCode>(rc);
             }
@@ -231,6 +240,11 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
         if (!usb.end_session()) {
             log_error("Failed to end session.");
             return OdinExitCode::Protocol;
+        }
+
+        // The device stays in Download Mode after a check; reset the link so the next run can talk to it.
+        if (cfg.dry_run) {
+            (void) usb.reset_link();
         }
     }
 
