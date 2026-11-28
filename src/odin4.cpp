@@ -28,7 +28,7 @@
 #include <format>
 #include <filesystem>
 
-#define ODIN4_VERSION "7.3.0-a46321b"
+#define ODIN4_VERSION "7.3.1-ed47ba2"
 
 auto odin4_get_version() -> const char* {
     return ODIN4_VERSION;
