@@ -514,8 +514,8 @@ auto UsbDevice::odin_end_sequence_flash_compressed(const PitEntry& pit_entry, ui
         w32(4, compressed_size);
         w32(8, pit_entry.binary_type);
         w32(12, pit_entry.device_type);
-        w32(16, 0U);
-        w32(20, (is_last != 0U) ? 1U : 0U);
+        w32(16, (is_last != 0U) ? 1U : 0U); // end-of-file flag, as in Heimdall's modem packet
+        w32(20, 0U);
         w32(24, 0U);
         w32(28, 0U);
     } else {
@@ -575,8 +575,8 @@ auto UsbDevice::odin_end_sequence_flash(const PitEntry& pit_entry, uint32_t real
         w32(4, real_size);
         w32(8, pit_entry.binary_type);
         w32(12, pit_entry.device_type);
-        w32(16, 0U);
-        w32(20, (is_last != 0U) ? 1U : 0U);
+        w32(16, (is_last != 0U) ? 1U : 0U); // end-of-file flag, as in Heimdall's modem packet
+        w32(20, 0U);
         w32(24, 0U);
         w32(28, 0U);
     } else {
@@ -670,7 +670,7 @@ auto UsbDevice::odin_dump_pit(std::vector<unsigned char>& pit_out) -> bool {
 }
 
 auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, const PitEntry& pit_entry,
-                                       bool large_partition, bool efs_clear, bool boot_update) -> bool {
+                                       bool /*large_partition*/, bool efs_clear, bool boot_update) -> bool {
     if (!odin_request_file_flash()) return false;
 
     const uint64_t sequence_bytes =
@@ -697,11 +697,9 @@ auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
 
     for (uint32_t i = 0; i < sequences; ++i) {
         const bool last = (i + 1 == sequences);
+        // Report the exact byte count, like Heimdall (sequenceEffectiveByteCount). Padding it to 512 bytes
+        // makes some bootloaders fail on sparse images (Write, code -4). Compressed transfers keep padding.
         uint32_t real_size = last ? last_sequence : static_cast<uint32_t>(sequence_bytes);
-        if (large_partition) {
-            uint32_t rem = real_size % 512;
-            if (rem != 0) real_size += 512 - rem;
-        }
         uint32_t aligned_size = real_size;
         if (aligned_size % static_cast<uint32_t>(odin_flash_packet_size) != 0) {
             aligned_size += static_cast<uint32_t>(odin_flash_packet_size) -
@@ -728,7 +726,10 @@ auto UsbDevice::flash_partition_stream(std::istream& stream, uint64_t size, cons
             total_sent += static_cast<uint64_t>(to_read);
         }
 
-        if (!odin_end_sequence_flash(pit_entry, real_size, last ? 1U : 0U, efs_clear, boot_update)) return false;
+        if (!odin_end_sequence_flash(pit_entry, real_size, last ? 1U : 0U, efs_clear, boot_update)) {
+            log_error(std::format("Sequence {} of {} failed ({} bytes)", i + 1, sequences, real_size));
+            return false;
+        }
     }
 
     return odin_reset_flash_count();

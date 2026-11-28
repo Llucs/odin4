@@ -92,7 +92,7 @@ auto UsbDevice::bulk_write_all(const void* data, size_t size, int timeout_ms) ->
         }
         if (offset == size) {
             if (odin_supports_zlp && endpoint_out_max_packet != 0 && (size % endpoint_out_max_packet) == 0) {
-                if (!send_zlp(timeout_ms)) odin_supports_zlp = false;
+                if (!send_zlp(std::min(timeout_ms, USB_TIMEOUT_ZLP))) odin_supports_zlp = false;
             }
             return true;
         }
@@ -290,7 +290,7 @@ auto UsbDevice::open_device_once(const std::string& specific_path, const UsbSele
         }
 
         const bool pid_known = is_known_download_pid(pid);
-        const bool cdc_data = (cand.interface_class == 0x0A);
+        const bool cdc_data = (cand.interface_class == 0x0A) && pid != SAMSUNG_NORMAL_MODE_PID;
 
         if (!criteria.has_pid && !criteria.has_vid) {
             if (!pid_known && !cdc_data) continue;
@@ -470,6 +470,18 @@ auto UsbDevice::handshake() -> bool {
     return odin_handshake();
 }
 
+// After EndSession the bootloader ignores everything until the USB link is reset; resetting leaves the
+// device able to accept the next run (e.g. after --check-only, which does not reboot it).
+auto UsbDevice::reset_link() -> bool {
+    if (handle == nullptr) return false;
+    const int err = libusb_reset_device(handle);
+    if (err != 0 && err != LIBUSB_ERROR_NOT_FOUND) {
+        log_warn(std::format("USB reset failed (libusb error {})", err));
+        return false;
+    }
+    return true;
+}
+
 auto UsbDevice::reset_and_reopen() -> bool {
     if (handle == nullptr) return false;
     reset_attempted = true;
@@ -560,7 +572,7 @@ auto UsbDevice::list_download_devices(const UsbSelectionCriteria& criteria) -> s
         }
 
         const bool pid_known = is_known_download_pid(pid);
-        const bool cdc_data = (cand.interface_class == 0x0A);
+        const bool cdc_data = (cand.interface_class == 0x0A) && pid != SAMSUNG_NORMAL_MODE_PID;
         if (!criteria.has_pid && !criteria.has_vid) {
             if (!pid_known && !cdc_data) continue;
         }

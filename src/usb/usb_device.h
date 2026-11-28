@@ -15,10 +15,15 @@
 #define USB_TIMEOUT_BULK 120000
 #define USB_TIMEOUT_CONTROL 10000
 #define USB_TIMEOUT_HANDSHAKE 2000
+// Heimdall waits 100 ms for empty (zero-length) transfers; some bootloaders (e.g. the Galaxy S5)
+// never acknowledge the first one, so do not stall for the full command timeout.
+#define USB_TIMEOUT_ZLP 100
 #define USB_TIMEOUT_QUERY 3000
 #define USB_OPEN_SCAN_ATTEMPTS 6
 #define USB_OPEN_SCAN_DELAY_MS 500
 
+// Normal Android (MTP) mode. Never a Download Mode device, even if it exposes a CDC data interface.
+static constexpr uint16_t SAMSUNG_NORMAL_MODE_PID = 0x6860;
 static constexpr std::array<uint16_t, 6> SAMSUNG_DOWNLOAD_PIDS{{0x6601, 0x685D, 0x68C3, 0x68EF, 0x4EEE, 0x4EEF}};
 
 struct UsbSelectionCriteria {
@@ -115,6 +120,7 @@ class UsbDevice {
     auto request_device_type() -> bool;
     auto begin_session() -> bool;
     auto end_session() -> bool;
+    auto reset_link() -> bool;
     auto request_pit(PitTable& pit_table) -> bool;
     auto send_pit(const std::vector<unsigned char>& pit_data) -> bool;
     auto receive_pit_table(PitTable& pit_table) -> bool;

@@ -229,6 +229,9 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
             }
             ExitCode rc = process_tar_file(item.second, usb, pit, !cfg.dry_run, cfg.allow_unknown, cfg.efs_clear, cfg.boot_update);
             if (rc != ExitCode::Success) {
+                if (!cfg.dry_run && rc == ExitCode::Protocol) {
+                    log_error("Flash stopped. Restart the device into Download Mode before trying again.");
+                }
                 usb.end_session();
                 return static_cast<OdinExitCode>(rc);
             }
@@ -237,6 +240,11 @@ static auto run_for_device(const OdinConfig& cfg) -> OdinExitCode {
         if (!usb.end_session()) {
             log_error("Failed to end session.");
             return OdinExitCode::Protocol;
+        }
+
+        // The device stays in Download Mode after a check; reset the link so the next run can talk to it.
+        if (cfg.dry_run) {
+            (void) usb.reset_link();
         }
     }
 
